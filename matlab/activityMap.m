@@ -1,4 +1,4 @@
-function [iclustup, isort] = activityMap(S, ops)
+function [iclustup, isort, Vout] = activityMap(S, ops)
 % sorts the matrix S (neurons by time) along the first axis
 % ops.nC = 30, number of clusters to use 
 % ops.iPC = 1:100, number of PCs to use 
@@ -23,15 +23,14 @@ if ops.useGPU
 end
 S = S - mean(S,2);
 
+% initialize sortings by top PC
+[U Sv V1] = svdecon(S);
 if isempty(ops.isort)
-   % initialize sortings by top PC 
-    [U Sv V] = svdecon(S);       
-    if isempty(ops.isort)
-        [~, isort] = sort(U(:,1), 'descend');
-    end    
-    iPC = ops.iPC;
-    S = U(:, iPC) * Sv(iPC, iPC);
+    [~, isort] = sort(U(:,1), 'descend');
 end
+iPC = ops.iPC;
+S = U(:, iPC) * Sv(iPC, iPC);
+
 
 [NN, nPC] = size(S);
 
@@ -67,6 +66,7 @@ iclustup = gather_try(iclustup);
 [~, isort] = sort(iclustup);
 iclustup = iclustup/ops.upsamp;
 
+Vout = V1(:,iPC) * V;
 
 end
 
