@@ -1,4 +1,4 @@
-function [isort1, isort2, Sm] = doubleMap(S, ops)
+function [isort1, isort2, Sm] = activityMap3(S, ops)
 % sorts the matrix S (neurons by time) along the first axis
 % ops.nC = 30, number of clusters to use 
 % ops.iPC = 1:100, number of PCs to use 
@@ -35,30 +35,29 @@ end
 
 [NN, NT] = size(S);
 
+
+
 iclust1        = zeros(NN, 1);
 iclust1(isort1) = ceil(linspace(1e-5, nC(1), NN));
-iclust2        = zeros(NT, 1);
-iclust2(isort2) = ceil(linspace(1e-5, nC(2), NT));
 
 S = S(isort1, isort2);
 ss = [NN NT]./nC;
 
-Sm = my_conv2(S, ss/5);        
-    
-% annealing schedule for embedding smoothness
+
+Sm = my_conv2(S, ss/5);           
 sig1 = [linspace(nC(1)/10, 1,100) ones(1,50)];
-sig2 = [linspace(nC(2)/10, 1,100) ones(1,50)];
-
-
 Km1 = getUpsamplingKernel(nC(1), ops.sigUp, ops.upsamp);
-Km2 = getUpsamplingKernel(nC(2), ops.sigUp, ops.upsamp);
-
-tic
 for t = 1:numel(sig1)
     iresort1 = recluster(Sm, nC(1), sig1(t), iclust1, Km1, ops);
     iclust1(iresort1) = ceil(linspace(1e-5, nC(1), NN));    
     isort1 = isort1(iresort1);
-    
+end
+
+iclust2        = zeros(NT, 1);
+iclust2(isort2) = ceil(linspace(1e-5, nC(2), NT));
+sig2 = [linspace(nC(2)/10, 1,100) ones(1,50)];
+Km2 = getUpsamplingKernel(nC(2), ops.sigUp, ops.upsamp);
+for t = 1:numel(sig1)
     iresort2 = recluster(Sm', nC(2), sig2(t), iclust2, Km2, ops);
     iclust2(iresort2) = ceil(linspace(1e-5, nC(2), NT));    
     isort2 = isort2(iresort2);    
