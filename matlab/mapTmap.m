@@ -16,11 +16,11 @@ ops.nC = ops.nCall(2);
 [~, isort2, ~] = activityMap(S', ops);
 toc
 
-Sm = my_conv2(S(:, isort2), 10, 2);
+Sm = my_conv2(S(:, isort2), 5, 2);
 ops.nC = ops.nCall(1);
 [~, isort1, ~] = activityMap(Sm, ops);
 
-% Sm = my_conv2(Sm(isort1, :), 1, 10);
+Sm = my_conv2(Sm(isort1, :), 10, 1);
 
 toc
 
