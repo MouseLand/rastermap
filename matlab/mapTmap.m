@@ -21,6 +21,7 @@ ops.nC = ops.nCall(1);
 [~, isort1, ~] = activityMap(Sm, ops);
 
 Sm = my_conv2(Sm(isort1, :), 10, 1);
+Sm = zscore(Sm, 1, 2);
 
 toc
 
