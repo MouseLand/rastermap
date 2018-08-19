@@ -1,7 +1,7 @@
 from map import map
 
-def main(S,ops=None,u=None,sv=None):
-    isort2,V = map(S.T,ops,u,sv)
+def main(S,ops=None,u=None,sv=None,v=None):
+    isort2,V = map(S.T,ops,v,sv)
     Sm = S - S.mean(axis=1)
     Sm = gaussian_filter1d(Sm,5,axis=1)
     isort1,V = map(Sm,ops,u,sv)

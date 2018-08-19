@@ -23,8 +23,8 @@ def map(S, ops=None, u=None, sv=None):
     if (u is None) or (sv is None):
         # compute svd and keep iPC's of data
         u,sv,v = np.linalg.svd(S, full_matrices=0)
-        isort = np.argsort(u[:,0]).astype(np.int32)
-    v = u.T @ S
+    isort = np.argsort(u[:,0]).astype(np.int32)
+    v     = u.T @ S
 
     iPC = ops['iPC']
     S = u[:,iPC] @ np.diag(sv[iPC])
@@ -57,9 +57,9 @@ def map(S, ops=None, u=None, sv=None):
     vsmooth = V.T @ v[iPC,:]
     return isort, vsmooth
 
-def main(S,ops=None,u=None,sv=None):
-    isort2,V = map(S.T,ops,u,sv)
-    Sm = S - S.mean(axis=1)
+def main(S,ops=None,u=None,sv=None,v=None):
+    isort2,V = map(S.T,ops,v,sv)
+    Sm = S - S.mean(axis=1)[:,np.newaxis]
     Sm = gaussian_filter1d(Sm,5,axis=1)
     isort1,V = map(Sm,ops,u,sv)
     ns = 0.02 * Sm.shape[0]
