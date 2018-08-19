@@ -25,5 +25,4 @@ imagesc(zscore(Sm, 1, 2), [-3 10])
 
 % imagesc(zscore(Sm(:, isortback), 1, 2), [-3 10])
 
-colormap(viridis)
 %%
