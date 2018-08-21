@@ -53,7 +53,7 @@ import rastermap
 
 ### Installation
 
-You can just use the github folder as outlined above or you can pip install the package:
+You can just download the github folder as outlined above or you can pip install the package:
 ```
 pip install rastermap
 ```
