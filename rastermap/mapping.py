@@ -26,7 +26,9 @@ def map(S, ops=None, u=None, sv=None):
     S = S - S.mean(axis=1)[:,np.newaxis]
     if (u is None) or (sv is None):
         # compute svd and keep iPC's of data
-        sv,u = eigsh(S @ S.T, k=200)
+        nmin = min([S.shape[0],S.shape[1]])
+        nmin = np.minimum(nmin-1, ops['iPC'].max())
+        sv,u = eigsh(S @ S.T, k=nmin)
         v = S.T @ u
     isort = np.argsort(u[:,0]).astype(np.int32)
 
@@ -72,7 +74,9 @@ def map(S, ops=None, u=None, sv=None):
 
 def main(S,ops=None,u=None,sv=None,v=None):
     if u is None:
-        sv,u = eigsh(S @ S.T, k=200)
+        nmin = min([S.shape[0],S.shape[1]])
+        nmin = np.minimum(nmin-1, ops['iPC'].max())
+        sv,u = eigsh(S @ S.T, k=nmin)
         sv = sv**0.5
         v = S.T @ u
     isort2 = map(S.T,ops,v,sv)
