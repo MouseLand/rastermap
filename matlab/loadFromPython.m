@@ -1,14 +1,14 @@
 % load from python spks and check out results
 
-S = readNPY('../../bigdat/spks.npy');
-iscell = readNPY('../../bigdat/iscell.npy');
+S = readNPY('/media/carsen/DATA1/BootCamp/mesoscope_cortex/spks.npy');
+iscell = readNPY('/media/carsen/DATA1/BootCamp/mesoscope_cortex/iscell.npy');
 S = S(logical(iscell(:,1)),:);
 
-%% map in neurons
+%% full algorithm
+[isort1, isort2, Sm] = mapTmap(S);
+imagesc(Sm(:,1000:3000),[0,5])
+
+%% run map in neurons without smoothing across time sorting
 [iclustup, isort, Vout] = activityMap(S);
-
 %%
-Sm = my_conv2(S(isort,:)-mean(S(isort,:),2), 10, 1);
-
-%%
-imagesc(zscore(Sm, 1, 2), [0 3])
+imagesc(zscore(S(isort,:), 1, 2), [0 3])
