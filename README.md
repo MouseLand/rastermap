@@ -2,7 +2,7 @@
 
 This algorithm computes a 2D continuous sorting of neural activity. It assumes that the spike matrix `S` is neurons by timepoints. We have a python 3 and a matlab implementation.
 
-Here is what the output looks like for a segment of a mesoscope recording (2.5Hz sampling rate):
+Here is what the output looks like for a segment of a mesoscope recording (2.5Hz sampling rate) (sorted in neural space, but not time space):
 
 ![rastersorted](example.png)
 
