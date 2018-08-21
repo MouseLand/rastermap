@@ -11,6 +11,7 @@ Here is an example using the algorithm (also see this [jupyter-notebook](rasterm
 ```
 from rastermap import rastermap # <-- if pip installed
 import numpy as np
+from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as plt
 
 # load data (S is neurons x time)
