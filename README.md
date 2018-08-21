@@ -1,6 +1,6 @@
 # rastermap
 
-This algorithm computes a 2D continuous sorting of neural activity. It assumes that the spike matrix `S` is neurons by timepoints.
+This algorithm computes a 2D continuous sorting of neural activity. It assumes that the spike matrix `S` is neurons by timepoints. We have a python 3 and a matlab implementation.
 
 Here is what the output looks like for a segment of a mesoscope recording (2.5Hz sampling rate):
 
