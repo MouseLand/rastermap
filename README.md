@@ -22,7 +22,18 @@ S = S[iscell[:,0].astype(bool),:]
 
 # run rastermap 
 # (will take ~ 30s for 6000 neurons x 20000 timepts on a laptop)
-isort1,isort2, = rastermap.main(S)
+# these are the default options, you can change them and input them to the function
+ops = {'nclust': 30, # number of clusters
+       'iPC': np.arange(0,200).astype(np.int32), # number of PCs to use for mapping algorithm
+       'upsamp': 100, # upsampling factor for embedding position
+       'sigUp': 1, # standard deviation for kriging upsampling
+       'equal': False # whether or not clusters should be of equal size (recommended False!)
+       }
+# user options
+isort1,isort2 = rastermap.main(S,ops)
+
+# if you just want to use the defaults
+isort1,isort2 = rastermap.main(S)
 
 # sort neurons and smooth across neurons and zscore in time
 # smoothing will take ~ 10s depending on data size
