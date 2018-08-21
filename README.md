@@ -4,7 +4,7 @@ This algorithm computes a 2D continuous sorting of neural activity. It assumes t
 
 Here is what the output looks like for a segment of a recording:
 
-Here is an example using the algorithm (see jupyter notebooks in rastermap for more examples)
+Here is an example using the algorithm (also see this [jupyter-notebook](rastermap/run_rastermap.ipynb))
 
 ```
 from rastermap import rastermap # <-- if pip installed
