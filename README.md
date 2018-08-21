@@ -9,7 +9,7 @@ Here is what the output looks like for a segment of a mesoscope recording (2.5Hz
 Here is an example using the algorithm (also see this [jupyter-notebook](rastermap/run_rastermap.ipynb))
 
 ```
-from rastermap import rastermap # <-- if pip installed
+from rastermap import mapping # <-- if pip installed
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as plt
@@ -30,10 +30,10 @@ ops = {'nclust': 30, # number of clusters
        'equal': False # whether or not clusters should be of equal size (recommended False!)
        }
 # user options
-isort1,isort2 = rastermap.main(S,ops)
+isort1,isort2 = mapping.main(S,ops)
 
 # if you just want to use the defaults
-isort1,isort2 = rastermap.main(S)
+isort1,isort2 = mapping.main(S)
 
 # sort neurons and smooth across neurons and zscore in time
 # smoothing will take ~ 10s depending on data size
@@ -59,7 +59,7 @@ If you don't pip install the package, you can also run it using the path to this
 ```
 import sys
 sys.path.insert(0, '/media/carsen/DATA2/github/rastermap/rastermap/')
-import rastermap
+import mapping
 ```
 
 ### Installation
