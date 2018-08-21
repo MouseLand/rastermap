@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="rastermap",
-    version="0.0.1",
+    version="0.0.2",
     author="Marius Pachitariu and Carsen Stringer",
     author_email="carsen.stringer@gmail.com",
     description="Unsupervised clustering algorithm for 2D data",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/MouseLand/suite2p",
+    url="https://github.com/MouseLand/rastermap",
     packages=setuptools.find_packages(),
 	install_requires = ['numpy', 'scipy'],
     include_package_data=True,
