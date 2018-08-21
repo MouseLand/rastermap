@@ -1,6 +1,8 @@
 from scipy.ndimage import gaussian_filter1d
 from scipy.sparse.linalg import eigsh
+from scipy.stats import zscore
 import numpy as np
+import time
 
 def upsampled_kernel(nclust, sig, upsamp):
     xs = np.arange(0,nclust)
@@ -71,13 +73,12 @@ def map(S, ops=None, u=None, sv=None):
 def main(S,ops=None,u=None,sv=None,v=None):
     if u is None:
         sv,u = eigsh(S @ S.T, k=200)
+        sv = sv**0.5
         v = S.T @ u
     isort2 = map(S.T,ops,v,sv)
     Sm = S - S.mean(axis=1)[:,np.newaxis]
-    Sm = gaussian_filter1d(Sm,5,axis=1)
+    Sm = gaussian_filter1d(Sm,3,axis=1)
     isort1 = map(Sm,ops,u,sv)
-    #ns = 0.02 * Sm.shape[0]
-    #Sm = gaussian_filter1d(Sm[isort1,:],ns,axis=1)
     return isort1,isort2
 
 if __name__ == "__main__":
