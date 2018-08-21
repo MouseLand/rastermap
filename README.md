@@ -2,6 +2,8 @@
 
 This algorithm computes a 2D continuous sorting of neural activity. It assumes that the spike matrix `S` is neurons by timepoints.
 
+Here is what the output looks like for a segment of a recording:
+
 Here is an example using the algorithm (see jupyter notebooks in rastermap for more examples)
 
 ```
@@ -28,9 +30,14 @@ Sm = zscore(Sm, axis=1)
 # (optional) smooth in time
 Sm = gaussian_filter1d(Sm, 1, axis=1)
 
-# view your neural map :)
-plt.figure(figsize=(12,16))
-plt.imshow(Sm[:1000,:3000],vmin=0,vmax=5,aspect='auto')
+# view neuron sorting :)
+fs = 2.5 # sampling rate of data in Hz
+sp = Sm[:,1000:3000]
+plt.figure(figsize=(16,12))
+ax=plt.imshow(sp,vmin=0,vmax=3,aspect='auto',extent=[0,sp.shape[1]/fs, 0,sp.shape[0]])
+plt.xlabel('time (s)', fontsize=18)
+plt.ylabel('neurons', fontsize=18)
+plt.show()
 
 ```
 
@@ -44,4 +51,8 @@ import rastermap
 ### Requirements
 
 This package was written for Python 3 and relies on **numpy** and **scipy**. The Python3.x Anaconda distributions will contain all the dependencies.
+
+### Matlab
+
+The matlab code needs to be cleaned up but the main function is `mapTmap.m`.
 
