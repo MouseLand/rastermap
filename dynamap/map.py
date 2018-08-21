@@ -1,4 +1,5 @@
 from scipy.ndimage import gaussian_filter1d
+from scipy.sparse.linalg import eigsh
 import numpy as np
 
 def upsampled_kernel(nclust, sig, upsamp):
@@ -17,20 +18,18 @@ def map(S, ops=None, u=None, sv=None):
                'iPC': np.arange(0,200).astype(np.int32), # number of PCs to use
                'upsamp': 100, # upsampling factor for embedding position
                'sigUp': 1, # standard deviation for upsampling
-               'equal': True # whether or not clusters should be of equal size
+               'equal': False # whether or not clusters should be of equal size
                }
 
     S = S - S.mean(axis=1)[:,np.newaxis]
     if (u is None) or (sv is None):
         # compute svd and keep iPC's of data
-        u,sv,v = np.linalg.svd(S, full_matrices=0)
+        sv,u = eigsh(S @ S.T, k=200)
+        v = S.T @ u
     isort = np.argsort(u[:,0]).astype(np.int32)
 
     iPC = ops['iPC']
-    print(u.shape)
-    print(iPC<u.shape[1])
-    iPC = iPC[iPC<u.shape[1]]
-    print(iPC)
+    iPC = iPC[iPC<sv.size]
     S = u[:,iPC] @ np.diag(sv[iPC])
     NN,nPC = S.shape
     nclust = int(ops['nclust'])
@@ -50,8 +49,8 @@ def map(S, ops=None, u=None, sv=None):
             iclustup = np.argmax(cv @ Km.T, axis=1)
             isort = np.argsort(iclustup)
             V = S[isort,:]
-            V = np.reshape(V[:nn*nclust,:], (nn,nclust,V.shape[1])).sum(axis=1).flatten()
-            print(V.shape)
+            V = np.reshape(V[:nn*nclust,:], (nn,nclust,V.shape[1])).sum(axis=0)
+            V = V.T
         else:
             V = np.zeros((nPC,nclust), np.float32)
             for j in range(0,nclust):
@@ -71,14 +70,15 @@ def map(S, ops=None, u=None, sv=None):
 
 def main(S,ops=None,u=None,sv=None,v=None):
     if u is None:
-        u,sv,v = np.linalg.svd(S, full_matrices=0)
+        sv,u = eigsh(S @ S.T, k=200)
+        v = S.T @ u
     isort2 = map(S.T,ops,v,sv)
     Sm = S - S.mean(axis=1)[:,np.newaxis]
     Sm = gaussian_filter1d(Sm,5,axis=1)
     isort1 = map(Sm,ops,u,sv)
-    ns = 0.02 * Sm.shape[0]
-    Sm = gaussian_filter1d(Sm[isort1,:],ns,axis=1)
-    return Sm,isort1,isort2
+    #ns = 0.02 * Sm.shape[0]
+    #Sm = gaussian_filter1d(Sm[isort1,:],ns,axis=1)
+    return isort1,isort2
 
 if __name__ == "__main__":
     main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
