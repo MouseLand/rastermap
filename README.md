@@ -51,6 +51,13 @@ sys.path.insert(0, '/media/carsen/DATA2/github/rastermap/rastermap/')
 import rastermap
 ```
 
+### Installation
+
+You can just use the github folder as outlined above or you can pip install the package:
+```
+pip install rastermap
+```
+
 ### Requirements
 
 This package was written for Python 3 and relies on **numpy** and **scipy**. The Python3.x Anaconda distributions will contain all the dependencies.
