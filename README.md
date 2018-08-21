@@ -75,5 +75,5 @@ This package was written for Python 3 and relies on **numpy** and **scipy**. The
 
 ### Matlab
 
-The matlab code needs to be cleaned up but the main function is `mapTmap.m`.
+The matlab code needs to be cleaned up but the main function to call is `mapTmap.m`. This function is used in the example script `loadFromPython.m`.
 
