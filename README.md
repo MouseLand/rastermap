@@ -55,7 +55,7 @@ plt.show()
 
 ```
 
-If you don't pip install the package, you can also run it using the path to this github folder
+If you don't pip install the package, you can also run it using the path to your local github folder
 ```
 import sys
 sys.path.insert(0, '/media/carsen/DATA2/github/rastermap/rastermap/')
