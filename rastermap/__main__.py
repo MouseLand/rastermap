@@ -12,4 +12,4 @@ if __name__ == '__main__':
 
     if len(args.S)>0:
         S = np.load(args.S)
-        rastermap.main(S)
+        mapping.main(S)
