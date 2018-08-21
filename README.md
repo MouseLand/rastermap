@@ -3,6 +3,7 @@
 This algorithm computes a 2D continuous sorting of neural activity. It assumes that the spike matrix `S` is neurons by timepoints.
 
 Here is what the output looks like for a segment of a recording:
+![rastersorted][example.png]
 
 Here is an example using the algorithm (also see this [jupyter-notebook](rastermap/run_rastermap.ipynb))
 
