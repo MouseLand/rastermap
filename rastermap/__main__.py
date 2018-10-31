@@ -1,9 +1,11 @@
-from rastermap import mapping
+from rastermap import RMAP
 import numpy as np
+import argparse
 
 def main():
     S = np.load('spks.npy')
-    mapping.main(S)
+    model = RMAP()
+    return model.fit_transform(S)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='spikes')
@@ -12,4 +14,6 @@ if __name__ == '__main__':
 
     if len(args.S)>0:
         S = np.load(args.S)
-        mapping.main(S)
+        model = RMAP()
+        embedding = model.fit_transform(S)
+        np.save('embedding.npy', embedding)
