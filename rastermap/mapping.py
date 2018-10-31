@@ -61,7 +61,7 @@ def upsampled_kernel(nclust, sig, upsamp, dims):
 
 class RMAP:
     """rastermap embedding algorithm
-    Rastermap first takes the top iPC's of the data, and then embeds them into
+    Rastermap first takes the specified PCs of the data, and then embeds them into
     n_X clusters. It returns upsampled cluster identities (n_X*upsamp).
     Clusters are also computed across Y (n_Y) and smoothed, to help with fitting.
 
@@ -134,7 +134,7 @@ class RMAP:
         # this will be a 1-D fit
         isort2 = []
         if self.n_Y > 0:
-            isort2, iclustup = self.map(v[:,iPC] @ np.diag(sv[iPC]), 1, self.n_Y, v[:,0])
+            isort2, iclustup = self._map(v[:,iPC] @ np.diag(sv[iPC]), 1, self.n_Y, v[:,0])
             X = gaussian_filter1d(X[:, isort2], self.sig_Y, axis=1)
             X -= X.mean(axis=1)[:,np.newaxis]
             u,sv,v = svdecon(X, k=nmin)
@@ -156,7 +156,7 @@ class RMAP:
                 init_sort = u[:,:self.n_components]
 
         # now sort in X
-        isort1, iclustup = self.map(Xlowd, self.n_components, self.n_X, init_sort)
+        isort1, iclustup = self._map(Xlowd, self.n_components, self.n_X, init_sort)
         self.isort2 = isort2
         self.isort1 = isort1
         self.embedding = iclustup
@@ -218,7 +218,7 @@ class RMAP:
             print('ERROR: need to fit model first before you can embed new points')
         return iclustup
 
-    def map(self, X, dims, nclust, u):
+    def _map(self, X, dims, nclust, u):
         NN,nPC = X.shape
         nn = int(np.floor(NN/nclust)) # number of neurons per cluster
         nclust0 = nclust
@@ -294,8 +294,8 @@ def main(X,ops=None,u=None,sv=None,v=None):
         sv,u = eigsh(X @ X.T, k=nmin)
         sv = sv**0.5
         v = X.T @ u
-    isort2,iclust2 = map(X.T,ops,v,sv)
+    isort2,iclust2 = _map(X.T,ops,v,sv)
     Xm = X - X.mean(axis=1)[:,np.newaxis]
     Xm = gaussian_filter1d(Xm,3,axis=1)
-    isort1,iclust1 = map(Xm,ops,u,sv)
+    isort1,iclust1 = _map(Xm,ops,u,sv)
     return isort1,isort2
