@@ -29,7 +29,7 @@ def upsampled_kernel(nclust, sig, upsamp, dims):
     Km = K1 @ np.linalg.inv(K0 + 0.001 * np.eye(nclust))
     return Km
 
-def map(S, ops=None, u=None, sv=None):
+def map(S, usort, ops=None, u=None, sv=None):
     if ops is None:
         ops = {'nclust': 30, # number of clusters
                'iPC': np.arange(0,200).astype(np.int32), # number of PCs to use
@@ -45,7 +45,7 @@ def map(S, ops=None, u=None, sv=None):
         nmin = np.minimum(nmin-1, ops['iPC'].max())
         sv,u = eigsh(S @ S.T, k=nmin)
         v = S.T @ u
-    isort = np.argsort(u[:,1]).astype(np.int32)
+    isort = np.argsort(usort).astype(np.int32)
     iPC = ops['iPC']
     iPC = iPC[iPC<sv.size]
     S = u[:,iPC] @ np.diag(sv[iPC])
