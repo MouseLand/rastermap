@@ -1,9 +1,18 @@
-from scipy.ndimage import gaussian_filter1d, gaussian_filter
+from scipy.ndimage import gaussian_filter1d
 from scipy.sparse.linalg import eigsh
 from scipy.stats import zscore
 import math
 import numpy as np
 import time
+
+
+def distances(x, y):
+    # x and y are n_components by number of data points
+    ds = np.zeros((x.shape[1], y.shape[1]))
+    for j in range(self.n_components):
+        ds += dwrap(x[j][:,np.newaxis] - y[j], 1.)**2
+    ds = np.sqrt(ds)
+    return ds
 
 def create_ND_basis(dims, nclust, K):
     # recursively call this function until we fill out S
@@ -13,7 +22,8 @@ def create_ND_basis(dims, nclust, K):
         for k in range(K):
            S[k, :] = np.sin(math.pi + (k+1)%2 * math.pi/2 + 2*math.pi/nclust * (xs+0.5) * int((1+k)/2))
         S /= np.sum(S**2, axis = 1)[:, np.newaxis]**.5
-        fxx = np.arange(K)
+        fxx = np.floor((np.arange(K)+1)/2).astype('int')
+        #fxx = np.arange(K).astype('int')
     else:
         S0, fy = create_ND_basis(dims-1, nclust, K)
         Kx, fx = create_ND_basis(1, nclust, K)
@@ -22,7 +32,8 @@ def create_ND_basis(dims, nclust, K):
         for kx in range(K):
             for ky in range(S0.shape[0]):
                 S[ky,kx,:,:] = np.outer(S0[ky, :], Kx[kx, :])
-                fxx[ky,kx] = fy[ky] + fx[kx]
+                # fxx[ky,kx] = fy[ky] + fx[kx]
+                fxx[ky,kx] = max(fy[ky], fx[kx]) + min(fy[ky], fx[kx])/1000.
         S = np.reshape(S, (K*S0.shape[0], nclust*S0.shape[1]))
     fxx = fxx.flatten()
     ix = np.argsort(fxx)
@@ -77,8 +88,8 @@ def upsample(cmap, dims, nclust, upsamp):
     xid = np.argmax(upC, axis=1)
     cmax = np.amax(upC, axis=1) + mu
     dxs = M1[:, xid]
-    xs = (iclust + dxs)%nclust
-    xs = xs / nclust
+    xs = (iclust + dxs)/nclust
+    xs = xs%1.
     return xs, cmax
 
 
@@ -159,18 +170,17 @@ class Rastermap:
 
     """
     def __init__(self, n_components=2, n_X = -1, n_Y = 0,
-                 iPC=np.arange(0,400).astype(np.int32),
+                 nPC = 400,
                  sig_Y=1.0, init='pca', alpha = 1., K = 1.,
                  mode = 'basic'):
 
         self.n_components = n_components
         self.alpha = alpha
         self.K     = K
-        self.iPC = iPC
+        self.nPC = nPC
         self.sig_Y = sig_Y
         self.init = init
         self.mode = mode
-        self.feats_mode = 'pca' # rmap1d
         self.n_Y = n_Y
         if n_X>0:
             self.n_X = n_X
@@ -191,17 +201,15 @@ class Rastermap:
         if (u is None) or (sv is None) or (v is None):
             # compute svd and keep iPC's of data
             nmin = min([X.shape[0],X.shape[1]])
-            nmin = np.minimum(nmin-1, self.iPC.max()+1)
+            nmin = np.minimum(nmin-1, self.nPC+1)
             u,sv,v = svdecon(X, k=nmin)
-        iPC = self.iPC
-        iPC = iPC[iPC<sv.size]
-        self.iPC = iPC
+        self.nPC = sv.size
 
         # first smooth in Y (if n_Y > 0)
         # this will be a 1-D fit
         isort2 = []
         if self.n_Y > 0:
-            isort2, iclustup = self._map(v[:,iPC] @ np.diag(sv[iPC]), 1, self.n_Y, v[:,0])
+            isort2, iclustup = self._map(v @ np.diag(sv), 1, self.n_Y, v[:,0])
             X = gaussian_filter1d(X[:, isort2], self.sig_Y, axis=1)
             X -= X.mean(axis=1)[:,np.newaxis]
             u,sv,v = svdecon(X, k=nmin)
@@ -217,9 +225,15 @@ class Rastermap:
                 X[j] = Xall[j] @ self.v
         else:
             NN = X.shape[0]
+            X = X @ self.v
 
         if self.init=='pca':
             init_sort = u[:NN,:self.n_components]
+            if False:
+                ix = init_sort>0
+                iy = init_sort<0
+                init_sort[ix] = init_sort[ix] - 100.
+                init_sort[iy] = init_sort[iy] + 100.
         elif self.init=='random':
             init_sort = np.random.permutation(NN)[:,np.newaxis]
             for j in range(1,self.n_components):
@@ -245,17 +259,6 @@ class Rastermap:
         """
         self.fit(X, u, sv, v)
         return self.embedding
-
-    def distances(self, x, y):
-        if x.shape[0] != self.n_components:
-            x = np.reshape(x, (self.n_components, -1))
-        if y.shape[0] != self.n_components:
-            y = np.reshape(y, (self.n_components, -1))
-        ds = np.zeros((x.shape[1], y.shape[1]))
-        for j in range(self.n_components):
-            ds += dwrap(x[j][:,np.newaxis] - y[j], 1.)**2
-        ds = np.sqrt(ds)
-        return ds
 
     def transform(self, X):
         """ if already fit, can add new points and see where they fall"""
@@ -303,10 +306,20 @@ class Rastermap:
             iclust[j] = np.floor(nclust * np.argsort(u[:,j]).astype(np.float32)/NN)
             xid = nclust * xid + iclust[j]
         xid = xid.astype('int').flatten()
-        SALL, fxx = create_ND_basis(dims, nclust, int(np.ceil(2/3 * nclust)))
+        nfreqs = np.ceil(2/3 * nclust)
+        nfreqs = int(2 * np.floor(nfreqs/2)+1)
+        SALL, fxx = create_ND_basis(dims, nclust, nfreqs)
         print(SALL.shape)
         tic = time.time()
-        ncomps_anneal = np.concatenate((np.linspace(4,SALL.shape[0],30), SALL.shape[0]*np.ones(20)), axis=0).astype('int')
+
+        ncomps_anneal = (np.arange(1, nfreqs, 2)**2).astype('int')
+        ncomps_anneal = np.tile(ncomps_anneal, (2,1)).T.flatten()
+        ncomps_anneal = np.concatenate((ncomps_anneal[1:10], ncomps_anneal[3:10], ncomps_anneal[5:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
+        #ncomps_anneal = np.concatenate((ncomps_anneal[1:5], ncomps_anneal[1:10], ncomps_anneal[3:], SALL.shape[0]*np.ones(10)), axis=0).astype('int')
+        #ncomps_anneal = np.concatenate((ncomps_anneal[1:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
+        #ncomps_anneal = np.concatenate((np.linspace(4,SALL.shape[0],30), SALL.shape[0]*np.ones(20)), axis=0).astype('int')
+        #ncomps_anneal = SALL.shape[0]*np.ones(50).astype('int')
+
         xnorm = (X**2).sum(axis=1)[:,np.newaxis]
         E = np.zeros(len(ncomps_anneal)+1)
         print('time; iteration;  explained PC variance')
@@ -357,7 +370,7 @@ class Rastermap:
 def main(X,ops=None,u=None,sv=None,v=None):
     if u is None:
         nmin = min([X.shape[0],X.shape[1]])
-        nmin = np.minimum(nmin-1, ops['iPC'].max())
+        nmin = np.minimum(nmin-1, ops['nPC'])
         sv,u = eigsh(X @ X.T, k=nmin)
         sv = sv**0.5
         v = X.T @ u
