@@ -5,6 +5,31 @@ import math
 import numpy as np
 import time
 
+def create_ND_basis(dims, nclust, K):
+    # recursively call this function until we fill out S
+    if dims==1:
+        xs = np.arange(0,nclust)
+        S = np.ones((K, nclust), 'float32')
+        for k in range(K):
+           S[k, :] = np.sin(math.pi + (k+1)%2 * math.pi/2 + 2*math.pi/nclust * (xs+0.5) * int((1+k)/2))
+        S /= np.sum(S**2, axis = 1)[:, np.newaxis]**.5
+        fxx = np.arange(K)
+    else:
+        S0, fy = create_ND_basis(dims-1, nclust, K)
+        Kx, fx = create_ND_basis(1, nclust, K)
+        S = np.zeros((S0.shape[0], K, S0.shape[1], nclust), np.float64)
+        fxx = np.zeros((S0.shape[0], K))
+        for kx in range(K):
+            for ky in range(S0.shape[0]):
+                S[ky,kx,:,:] = np.outer(S0[ky, :], Kx[kx, :])
+                fxx[ky,kx] = fy[ky] + fx[kx]
+        S = np.reshape(S, (K*S0.shape[0], nclust*S0.shape[1]))
+    fxx = fxx.flatten()
+    ix = np.argsort(fxx)
+    S = S[ix, :]
+    fxx = fxx[ix]
+    return S, fxx
+
 def svdecon(X, k=100):
     NN, NT = X.shape
     if NN>NT:
@@ -25,6 +50,38 @@ def svdecon(X, k=100):
         V = V/(V**2).sum(axis=0)**.5
     return U, Sv, V
 
+def upsample(cmap, nclust, Km, upsamp, flag):
+    N = cmap.shape[0]
+    xid = np.argmax(cmap, axis=1)
+    iclustup = xid
+    iclustx,iclusty = np.unravel_index(iclustup, (nclust,nclust))
+    cmap = np.reshape(cmap, (N, nclust, nclust))
+    ys, xs = np.meshgrid(np.arange(-2,3), np.arange(-2,3))
+    iclustY = iclusty[:, np.newaxis, np.newaxis] + ys
+    iclustX = iclustx[:, np.newaxis, np.newaxis] + xs
+
+    iclustX = iclustX%nclust
+    iclustY = iclustY%nclust
+
+    iN = np.arange(N)[:, np.newaxis, np.newaxis] + np.zeros((5,5))
+    C0 = cmap[iN.flatten().astype('int'), iclustX.flatten().astype('int'), iclustY.flatten().astype('int')]
+    C0 = np.reshape(C0, (N, 5*5))
+    mu = C0.mean(axis=1)
+    C0 -= mu[:, np.newaxis]
+
+    upC = C0 @ Km.T
+    xid = np.argmax(upC, axis=1)
+    cmax = np.amax(upC, axis=1) + mu
+    iclustx0,iclusty0 = np.unravel_index(xid, (4*upsamp+1,4*upsamp+1))
+
+    iclustx0 = iclustx0/upsamp - 2.
+    iclusty0 = iclusty0/upsamp - 2.
+
+    if flag:
+        iclustx = iclustx + iclustx0
+        iclusty = iclusty + iclusty0
+    return iclustx, iclusty, cmax
+
 def dwrap(kx,nc):
     '''compute a wrapped distance'''
     q1 = np.mod(kx, nc)
@@ -37,8 +94,8 @@ def upsampled_kernel(nclust, sig, upsamp, dims):
     else:
         nclust0 = nclust
     xs = np.arange(0,nclust0)
-    xn = np.linspace(0, nclust0, nclust0 * upsamp + 1)
-    xn = xn[:-1]
+    xn = np.linspace(0, nclust0-1, (nclust0-1) * upsamp + 1)
+    #xn = xn[:-1]
     if dims==2:
         xs,ys = np.meshgrid(xs,xs)
         xs = np.vstack((xs.flatten(),ys.flatten()))
@@ -51,14 +108,32 @@ def upsampled_kernel(nclust, sig, upsamp, dims):
     d1 = np.zeros((xn.shape[1],nclust),np.float32)
     for n in range(dims):
         q1  = xs[n,:][:,np.newaxis] - xs[n,:]
-        d0  += dwrap(q1, nclust0)**2
+        #d0  += dwrap(q1, nclust0)**2
+        d0  += q1**2
         q1  = xn[n,:][:,np.newaxis] - xs[n,:]
-        d1  += dwrap(q1, nclust0)**2
+        #d1  += dwrap(q1, nclust0)**2
+        d1  += q1**2
 
     K0 = np.exp(-d0/sig**2)
     K1 = np.exp(-d1/sig**2)
-    Km = K1 @ np.linalg.inv(K0 + 0.01 * np.eye(nclust))
+    Km = K1 @ np.linalg.inv(K0 + .01 * np.eye(nclust))
     return Km
+
+def _getSup(self, iclustx, iclusty, K, nclust, isort, nu):
+    NN = len(iclustx)
+    S0 = np.ones((K, K, NN), np.float32)
+
+    for kx in range(K):
+        for ky in range(K):
+            #y = (ky+1)%2 * math.pi/2 + 2*math.pi/nclust * (iclusty+0.5) * int((1+ky)/2)
+            #x = (kx+1)%2 * math.pi/2 + 2*math.pi/nclust * (iclustx+0.5) * int((1+kx)/2)
+            #S0[ky, kx, :]  = np.sin(x) * np.sin(y) /nu[kx]/nu[ky]
+            y = math.pi * (iclusty+0.5) *  ky/nclust
+            x = math.pi * (iclustx+0.5) *  kx/nclust
+            S0[ky, kx, :]  = np.cos(x) * np.cos(y) /nu[kx]/nu[ky]
+    S0 = np.reshape(S0, (K**2, NN))
+    S0 = S0[isort,:]
+    return S0
 
 class RMAP:
     """rastermap embedding algorithm
@@ -288,7 +363,7 @@ class RMAP:
             iclustup = np.vstack((iclustx,iclusty)).T
         return isort, iclustup
 
-class rastermap:
+class Rastermap:
     """rastermap embedding algorithm
     Rastermap first takes the specified PCs of the data, and then embeds them into
     n_X clusters. It returns upsampled cluster identities (n_X*upsamp).
@@ -327,23 +402,24 @@ class rastermap:
     isort2 : sorting along second dimension of matrix (if n_Y > 0)
 
     """
-    def __init__(self, n_components=1, n_X=30, n_Y=100,
-                 iPC=np.arange(0,200).astype(np.int32),
-                 upsamp=25, sig_upsamp=1.0, sig_Y=1.0,
-                 sig_anneal=np.concatenate((np.linspace(6,1,60), 1*np.ones(40)), axis=0),
-                 #ncomps_anneal=np.concatenate((np.linspace(1,5,60), 5*np.ones(40)), axis=0),
-                 ncomps_anneal=np.concatenate((np.linspace(1,7,60), 7*np.ones(40)), axis=0),
-                 init='pca'):
+    def __init__(self, n_components=2, n_X = -1, n_Y = 0,
+                 iPC=np.arange(0,400).astype(np.int32),
+                 sig_Y=1.0, init='pca', alpha = 1., K = 1.,
+                 mode = 'powerlaw'):
+
         self.n_components = n_components
-        self.n_X = n_X
-        self.n_Y = n_Y
+        self.alpha = alpha
+        self.K     = K
         self.iPC = iPC
-        self.upsamp = upsamp
-        self.sig_upsamp = sig_upsamp
         self.sig_Y = sig_Y
-        self.sig_anneal = sig_anneal.astype(np.float32)
-        self.ncomps_anneal = ncomps_anneal.astype(np.int32)
         self.init = init
+        self.mode = 'powerlaw'
+        self.feats_mode = 'pca' # rmap1d
+        self.n_Y = n_Y
+        if n_X>0:
+            self.n_X = n_X
+        else:
+            self.n_X  = np.ceil(1600**(1/n_components)).astype('int')
 
     def fit(self, X, u=None, sv=None, v=None):
         """Fit X into an embedded space.
@@ -419,17 +495,18 @@ class rastermap:
                 # reduce dimensionality of X
                 X = X @ self.v
                 nclust = self.n_X
-                upsamp = int(self.upsamp ** 0.5)
-                Km = upsampled_kernel(nclust**2, self.sig_upsamp, upsamp, dims)
 
-                smap = (X @ self.A.T) @ self.S
-                nmap = np.sum(self.S * ((self.A @ self.A.T) @ self.S), axis=0)
-                cmap = np.maximum(0, smap)**2 / nmap
+                A = self.A
+                S = self.S
+                AtS = A.T @ S
+                vnorm   = np.sum(S * (A @ AtS), axis=0)[np.newaxis,:]
+                cv      = X @ AtS
+                cmap    = np.maximum(0., cv)**2 / vnorm
 
-                iclustup = np.argmax(np.sqrt(cmap) @ Km.T, axis=1)
-                n   = nclust * upsamp
-                iclustx,iclusty = np.unravel_index(iclustup, (n,n))
+                Km = upsampled_kernel(5**2, self.sig_upsamp, 10, dims)
+                iclustx, iclusty, cmax = upsample(np.sqrt(cmap), nclust, Km, 10, True)
                 iclustup = np.vstack((iclustx,iclusty)).T
+
 
 #                if dims==2:
 #                    nclust = np.sqrt(self.S.shape[1]).astype('int')
@@ -445,115 +522,71 @@ class rastermap:
             print('ERROR: need to fit model first before you can embed new points')
         return iclustup
 
-    def _create_2D_basis(self, K, nclust):
-        Kx = self._create_1D_basis(K, nclust)
-        Kx = Kx.T
-        S = np.zeros((2*K+1, 2*K+1, nclust, nclust), np.float32)
-        f = np.zeros((2*K+1, 2*K+1))
-        for kx in range(2*K+1):
-            for ky in range(2*K+1):
-                S[ky,kx,:,:] = np.outer(Kx[:,ky], Kx[:,kx])
-                f[ky,kx] = ky + kx
-        isort = np.argsort(f.flatten())
-        S = np.reshape(S, ((2*K+1)**2, nclust**2))
-        S = S[isort,:]
-        #S = S / (1 + np.arange(S.shape[0]))[:, np.newaxis]**.5
-        #S = S[int(((2*K+1)**2-1)/2):, :]
-        return S
-
-    def _create_3D_basis(self, K, nclust):
-        Kx = self._create_1D_basis(K, nclust)
-        Kx = Kx.T
-        S = np.zeros((2*K+1, 2*K+1, 2*K+1, nclust, nclust, nclust), np.float32)
-        for kx in range(2*K+1):
-            for ky in range(2*K+1):
-                for kz in range(2*K+1):
-                    S[kz,ky,kx,:,:,:] = np.outer(Kx[:,ky], Kx[:,kx])[:,:, np.newaxis] * Kx[:, kz]
-        S = np.reshape(S, ((2*K+1)**3, nclust**3))
-        return S
-
-    def _create_1D_basis(self, K, nclust):
-        xs = np.arange(0,nclust)
-        Kx = np.ones((nclust, 2*K+1), 'float32')
-        for k in range(K):
-            Kx[:,2*k+1] = np.sin(2*math.pi * (xs+0.5) *  (1+k)/nclust)
-            Kx[:,2*k+2] = np.cos(2*math.pi * (xs+0.5) *  (1+k)/nclust)
-        Kx /= np.sum(Kx**2, axis=0)**.5
-        S = Kx.T
+    def _create_2D_basis0(self, K, nclust):
+        xs,ys = np.meshgrid(np.arange(nclust), np.arange(nclust))
+        S = np.zeros((nclust, nclust, nclust, nclust), np.float64)
+        x0 = np.arange(nclust)
+        sig = 1.
+        for kx in range(nclust):
+            for ky in range(nclust):
+                ds = dwrap(xs - x0[kx], nclust)**2 + dwrap(ys - x0[ky], nclust)**2
+                S[ky, kx, :, :] = np.exp(-ds**.5/sig)
+        S = np.reshape(S, (nclust**2, nclust**2))
+        U, Sv, S = svdecon(S, k = K)
+        S = S.T
         return S
 
     def _map(self, X, dims, nclust, u):
         NN,nPC = X.shape
-        upsamp = self.upsamp
         # initialize 1D clusters as nodes of 1st PC
-        if dims==1:
-            xid = np.floor(nclust * np.argsort(u).astype(np.float32)/NN)
-        elif dims==2:
-            #nclust = int(nclust * upsamp**.5)
-            xc = np.floor(nclust * np.argsort(u[:,0]).astype(np.float32)/NN)
-            yc = np.floor(nclust * np.argsort(u[:,1]).astype(np.float32)/NN)
-            xid = yc + xc * nclust
-            upsamp = int(self.upsamp ** 0.5)
-        elif dims==3:
-            xc = np.floor(nclust * np.argsort(u[:,0]).astype(np.float32)/NN)
-            yc = np.floor(nclust * np.argsort(u[:,1]).astype(np.float32)/NN)
-            zc = np.floor(nclust * np.argsort(u[:,2]).astype(np.float32)/NN)
-            xid = zc + nclust * (yc + xc * nclust)
+        iclust = np.zeros((dims, NN))
+        xid = np.zeros(NN)
+        for j in range(dims):
+            iclust[j] = np.floor(nclust * np.argsort(u[:,j]).astype(np.float32)/NN)
+            xid = nclust * xid + iclust[j]
         xid = xid.astype('int').flatten()
-
-        n_comps = 9
-        if dims==2:
-            SALL = self._create_2D_basis(n_comps, nclust)
-        elif dims==1:
-            SALL = self._create_1D_basis(n_comps, nclust)
-        elif dims==3:
-            SALL = self._create_3D_basis(n_comps, nclust)
-
-        #X = (X - X.mean(axis=1)[:,np.newaxis]) / X.var(axis=1)[:,np.newaxis] ** 0.5
+        SALL, fxx = create_ND_basis(dims, nclust, int(np.ceil(2/3 * nclust)))
+        print(SALL.shape)
         tic = time.time()
-        xmap = np.ones(NN, np.float32)
-        ncomps_anneal = np.concatenate((np.linspace(4,SALL.shape[0],60), SALL.shape[0]*np.ones(40)), axis=0).astype('int')
-        lam = .00
+        ncomps_anneal = np.concatenate((np.linspace(4,SALL.shape[0],30), SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         xnorm = (X**2).sum(axis=1)[:,np.newaxis]
-        if dims==2:
-            Km = upsampled_kernel(nclust**2, self.sig_upsamp, upsamp, dims)
-
+        E = np.zeros(len(ncomps_anneal))
         for t,nc in enumerate(ncomps_anneal):
             # get basis functions
             S = SALL[:nc, :]
-            S0 = S[:, xid]  #* xmap
-            eweights = (S0.T @ S)
-            #print(np.mean(np.diag(xtx)))
-            #xty = (S0 @ X) /NN
-            #A = np.linalg.solve(xtx + lam * np.eye(nc),  xty)
-            A = S0 @ X
-            #A /= np.sum(A**2, axis=1)[:, np.newaxis]**.5
-
-            vnorm   = np.sum(S * ((A @ A.T) @ S), axis=0)[np.newaxis,:]
-            cv      = (X @ A.T) @ S
-            vnorm   = vnorm + xnorm * eweights**2 - 2*eweights * cv
+            S0 = S[:, xid]
+            A  = S0 @ X
+            if self.mode == 'powerlaw':
+                nA  = np.sum(A**2, axis=1)**.5 * (self.K + np.arange(nc))**(self.alpha/2)
+            else:
+                nA = np.ones(A.shape[0])
+            A        /= nA[:, np.newaxis]
+            eweights = (S0.T / nA) @ S
+            AtS     = A.T @ S
+            vnorm   = np.sum(S * (A @ AtS), axis=0)[np.newaxis,:]
+            cv      = X @ AtS
+            vnorm   = vnorm + xnorm  * eweights**2 - 2*eweights * cv
             cv      = cv - xnorm * eweights
             cmap    = np.maximum(0., cv)**2 / vnorm
+            xid     = np.argmax(cmap, axis=1)
+            E[t]    = np.nanmean(np.amax(cmap, axis=1))
+            if t%10==0 or t==(ncomps_anneal.size-1):
+                print('iter %d; self-corr: %4.4f; time: %2.2f s'%(t, E[t], time.time()-tic))
 
-            #smap = (X @ A.T) @ S - xnorm * eweights
-            #nmap = np.sum(S * ((A @ A.T) @ S), axis=0)
-            #xmap = np.maximum(0, smap[np.arange(NN), xid]) / nmap[xid]
-            # cmap = np.maximum(0, smap)**2 / nmap
-
-            xid = np.argmax(cmap, axis=1)
-            xmap = np.maximum(0, cv[np.arange(NN), xid]) / vnorm[np.arange(NN), xid]
-            cost = np.amax(cmap, axis=1)
-            #print(np.amax(xid))
-            if t%10==0 or t==self.sig_anneal.size-1:
-                print('iter %d; 0/1-clusts: %d; self-corr: %4.4f; time: %2.2f s'%(t, np.isnan(cost).sum(), np.nanmean(cost), time.time()-tic))
-
-        iclustup = np.argmax(np.sqrt(cmap) @ Km.T, axis=1)
-        isort = np.argsort(iclustup)
+        self.E = E
         if dims==2:
-            n = nclust * upsamp
-            iclustx,iclusty = np.unravel_index(iclustup, (n,n))
+            Km = upsampled_kernel(5**2, 1.0, 10, dims)
+            iclustx, iclusty, cmax = upsample(np.sqrt(cmap), nclust, Km, 10, True)
+            isort = np.argsort(xid)
             iclustup = np.vstack((iclustx,iclusty)).T
             print(iclustup.shape)
+
+        #Km = upsampled_kernel(nclust**2, self.sig_upsamp, 5, dims)
+        #iclustup = np.argmax(np.sqrt(cmap) @ Km.T, axis=1)
+        #n = nclust * 5+1
+        #isort = np.argsort(iclustup)
+        #iclustx,iclusty = np.unravel_index(iclustup, (n,n))
+        #iclustup = np.vstack((iclustx,iclusty)).T
 
         #if dims==2:
             #nclust = int(nclust * upsamp**.5)
@@ -584,6 +617,7 @@ class rastermap:
         self.S = S
         self.A = A
         self.cmap = cmap
+        self.xid = xid
         #isort = np.argsort(iclustup)
         #if dims==2:
             #iclustx,iclusty = np.unravel_index(iclustup, (nclust,nclust))
