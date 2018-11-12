@@ -1,5 +1,6 @@
 from rastermap import Rastermap
 from rastermap import gui
+from scipy.stats import zscore
 import numpy as np
 import argparse
 import os
@@ -30,6 +31,7 @@ if __name__ == '__main__':
                 S = S[iscell, :]
                 print('iscell found and used to select neurons in S')
         print(S.shape)
+        S = zscore(S,axis=1)
         model = Rastermap(ops['n_components'], ops['n_X'], ops['n_Y'], ops['nPC'],
                           ops['sig_Y'], ops['init'], ops['alpha'], ops['K'])
         model.fit(S)
