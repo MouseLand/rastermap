@@ -252,7 +252,12 @@ class MainW(QtGui.QMainWindow):
             cumsum = np.cumsum(np.concatenate((np.zeros((1,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
             N = 10
             sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
+            sp_smoothed = zscore(sp_smoothed, axis=1)
+            sp_smoothed -= 3
+            sp_smoothed /= 10
+
         return sp_smoothed
+
 
     def plot_activity(self):
         sp_smoothed = self.smooth_activity()
