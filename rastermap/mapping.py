@@ -232,16 +232,21 @@ class Rastermap:
             X = X @ self.v
 
         if self.init=='pca':
-            init_sort = u[:NN,:self.n_components]
+            init_sort = np.argsort(u[:NN, :self.n_components], axis=0)
+            #init_sort = u[:NN,:self.n_components]
             if False:
-                ix = init_sort>0
-                iy = init_sort<0
+                ix = init_sort > 0
+                iy = init_sort < 0
                 init_sort[ix] = init_sort[ix] - 100.
                 init_sort[iy] = init_sort[iy] + 100.
         elif self.init=='random':
             init_sort = np.random.permutation(NN)[:,np.newaxis]
             for j in range(1,self.n_components):
                 init_sort = np.concatenate((init_sort, np.random.permutation(NN)[:,np.newaxis]), axis=-1)
+        else:
+            init_sort = self.init
+        if self.n_components==1 and init_sort.ndim==1:
+            init_sort = init_sort[:,np.newaxis]
 
         # now sort in X
         isort1, iclustup = self._map(X, self.n_components, self.n_X, init_sort)
@@ -314,7 +319,7 @@ class Rastermap:
         iclust = np.zeros((dims, NN))
         xid = np.zeros(NN)
         for j in range(dims):
-            iclust[j] = np.floor(nclust * np.argsort(u[:,j]).astype(np.float32)/NN)
+            iclust[j] = np.floor(nclust * u[:,j].astype(np.float32)/NN)
             xid = nclust * xid + iclust[j]
         xid = xid.astype('int').flatten()
         nfreqs = np.ceil(2/3 * nclust)

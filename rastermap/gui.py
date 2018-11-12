@@ -271,15 +271,27 @@ class MainW(QtGui.QMainWindow):
 
     def ROI_selection(self):
         self.colormat = np.zeros((0,10,3), dtype=np.int64)
-        if len(self.Rselected) > 0:
-            if len(self.Rselected) > 4:
-                self.Ur = np.zeros((len(self.Rselected), self.U.shape[1]), dtype=np.float32)
+        lROI = len(self.Rselected)
+        if lROI > 0:
+            if lROI > 4:
+                self.Ur = np.zeros((lROI, self.U.shape[1]), dtype=np.float32)
                 for r,rc in enumerate(self.Rselected):
                     self.Ur[r,:] = self.U[rc,:].mean(axis=0)
-                model = Rastermap(n_components=1, n_X=min(10,len(self.Rselected)))
+                model = Rastermap(n_components=1, n_X=20, init=np.arange(0,lROI).astype(np.int32))
                 y     = model.fit_transform(self.Ur)
+                y     = y.flatten()
                 rsort = np.argsort(y)
-                self.selected = np.array([item for sublist in self.Rselected[rsort] for item in sublist])
+                print(rsort)
+                self.ROIs = [self.ROIs[i] for i in rsort]
+                self.Rselected = [self.Rselected[i] for i in rsort]
+                self.Rcolors = [self.Rcolors[i] for i in rsort]
+                #self.Rcolors = [y for x,y in sorted(zip(self.Rcolors, rsort))]
+                self.selected = np.array([item for sublist in self.Rselected for item in sublist])
+                #for r in rsort:
+                #    for d in self.Rselected[r]:
+                #        self.selected.append(d)
+                #self.selected = np.array(self.selected).astype(np.int32)
+                #print(self.selected)
             else:
                 self.selected = np.array([item for sublist in self.Rselected for item in sublist])
             self.colormat = np.concatenate(self.Rcolors, axis=0)
