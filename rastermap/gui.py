@@ -253,7 +253,7 @@ class MainW(QtGui.QMainWindow):
             N = 10
             sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
             sp_smoothed = zscore(sp_smoothed, axis=1)
-            sp_smoothed -= 3
+            sp_smoothed += 1
             sp_smoothed /= 9
         return sp_smoothed
 
@@ -488,8 +488,8 @@ class MainW(QtGui.QMainWindow):
 
             self.p0.clear()
             self.sp = zscore(self.X, axis=1)
-            self.sp -= 2
-            self.sp /= 12
+            self.sp += 1
+            self.sp /= 9
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.ROI_selection()
             self.enable_loaded()
@@ -541,7 +541,7 @@ class MainW(QtGui.QMainWindow):
                     print('using iscell.npy in folder')
             self.p0.clear()
             self.sp = zscore(self.X, axis=1)
-            self.sp -= 3
+            self.sp += 1
             self.sp /= 9
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.embedding = y
