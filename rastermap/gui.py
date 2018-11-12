@@ -57,7 +57,7 @@ class MainW(QtGui.QMainWindow):
         self.setGeometry(25, 25, 1600, 1000)
         self.setWindowTitle("Rastermap")
         icon_path = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), "logo/logo.png"
+            os.path.dirname(os.path.realpath(__file__)), "logo.png"
         )
         app_icon = QtGui.QIcon()
         app_icon.addFile(icon_path, QtCore.QSize(16, 16))
@@ -254,10 +254,8 @@ class MainW(QtGui.QMainWindow):
             sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
             sp_smoothed = zscore(sp_smoothed, axis=1)
             sp_smoothed -= 3
-            sp_smoothed /= 10
-
+            sp_smoothed /= 9
         return sp_smoothed
-
 
     def plot_activity(self):
         sp_smoothed = self.smooth_activity()
@@ -544,7 +542,7 @@ class MainW(QtGui.QMainWindow):
             self.p0.clear()
             self.sp = zscore(self.X, axis=1)
             self.sp -= 3
-            self.sp /= 10
+            self.sp /= 9
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.embedding = y
             self.embedded = True
@@ -598,7 +596,7 @@ def run():
     # Always start by initializing Qt (only once per application)
     app = QtGui.QApplication(sys.argv)
     icon_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "logo/logo.png"
+        os.path.dirname(os.path.realpath(__file__)), "logo.png"
     )
     app_icon = QtGui.QIcon()
     app_icon.addFile(icon_path, QtCore.QSize(16, 16))
