@@ -1,4 +1,5 @@
 from rastermap import RMAP
+from rastermap import gui
 import numpy as np
 import argparse
 
@@ -10,6 +11,7 @@ def main():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='spikes')
     parser.add_argument('--S', default=[], type=str, help='spiking matrix')
+    parser.add_argument('--ops', default=[], type=str, help='options file')
     args = parser.parse_args()
 
     if len(args.S)>0:
@@ -17,3 +19,5 @@ if __name__ == '__main__':
         model = RMAP()
         embedding = model.fit_transform(S)
         np.save('embedding.npy', embedding)
+    else:
+        gui.run()
