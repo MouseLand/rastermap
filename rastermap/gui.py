@@ -179,13 +179,18 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(addROI, 18, 0, 1, 1)
         addROI = QtGui.QLabel("<font color='white'>delete an ROI by ALT click</font>")
         self.l0.addWidget(addROI, 19, 0, 1, 1)
-
-        self.returnOrig = QtGui.QPushButton("save ROIs")
-        self.returnOrig.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
-        self.returnOrig.clicked.connect(self.ROI_selection)
-        self.returnOrig.setStyleSheet(self.styleInactive)
-        self.returnOrig.setEnabled(False)
-        self.l0.addWidget(self.returnOrig, 21, 0, 1, 1)
+        self.updateROI = QtGui.QPushButton("update plot (ENTER)")
+        self.updateROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
+        self.updateROI.clicked.connect(self.ROI_selection)
+        self.updateROI.setStyleSheet(self.styleInactive)
+        self.updateROI.setEnabled(False)
+        self.l0.addWidget(self.updateROI, 20, 0, 1, 1)
+        self.saveROI = QtGui.QPushButton("save ROIs")
+        self.saveROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
+        self.saveROI.clicked.connect(self.ROI_save)
+        self.saveROI.setStyleSheet(self.styleInactive)
+        self.saveROI.setEnabled(False)
+        self.l0.addWidget(self.saveROI, 21, 0, 1, 1)
 
         # add slider for levels
         self.sl = QtGui.QSlider(QtCore.Qt.Vertical)
@@ -219,10 +224,10 @@ class MainW(QtGui.QMainWindow):
         self.Rcolors = []
         self.embedded = False
 
-        self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/embedding.npy'
+        #self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/embedding.npy'
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
         #self.fname = 'C:/Users/carse/github/TX4/spks.npy'
-        self.load_proc(self.fname)
+        #self.load_proc(self.fname)
 
         self.show()
         self.win.show()
@@ -273,11 +278,9 @@ class MainW(QtGui.QMainWindow):
         self.win.scene().showExportDialog()
 
     def keyPressEvent(self, event):
-        if event.modifiers() != QtCore.Qt.ControlModifier:
-            if event.key() == QtCore.Qt.Key_Return:
-                if 0:
-                    if len(self.imerge) > 1:
-                        self.merge_cells()
+        if event.key() == QtCore.Qt.Key_Return:
+            if self.updateROI.isEnabled:
+                self.ROI_selection()
 
     def ROI_selection(self):
         self.colormat = np.zeros((0,10,3), dtype=np.int64)
@@ -313,13 +316,12 @@ class MainW(QtGui.QMainWindow):
         self.plot_activity()
         self.plot_colorbar()
 
-    def ROI_add(self):
-        self.p0.removeItem(self.l0)
-        self.ROIs.append(gROI(self.posROI,self.prect, self))
+    def ROI_add(self, pos, prect):
+        self.ROIs.append(gROI(pos, prect, self))
         self.Rselected.append(self.ROIs[-1].selected)
         self.Rcolors.append(np.reshape(np.tile(self.ROIs[-1].color, 10 * self.Rselected[-1].size),
                             (self.Rselected[-1].size, 10, 3)))
-        self.ROI_selection()
+        #self.ROI_selection()
 
     def ROI_remove(self, p):
         p = np.array(p)
@@ -331,10 +333,25 @@ class MainW(QtGui.QMainWindow):
                 del self.Rselected[n]
                 del self.Rcolors[n]
                 break
-        self.ROI_selection()
+        #self.ROI_selection()
+
+    def ROI_save(self):
+        name = QtGui.QFileDialog.getSaveFileName(self,'ROI name (*.npy)')
+        name = name[0]
+        self.proc['ROIs'] = []
+        for r in self.ROIs:
+            self.proc['ROIs'].append({'pos': r.pos, 'prect': r.prect})
+        np.save(name, self.proc)
 
     def enable_loaded(self):
         self.runRMAP.setEnabled(True)
+
+    def enable_embedded(self):
+        self.updateROI.setEnabled(True)
+        self.saveROI.setEnabled(True)
+        self.updateROI.setStyleSheet(self.styleUnpressed)
+        self.saveROI.setStyleSheet(self.styleUnpressed)
+
 
     def mouse_moved_embedding(self, pos):
         if self.embedded:
@@ -417,7 +434,8 @@ class MainW(QtGui.QMainWindow):
                         elif self.endROI:
                             self.posROI[2,:] = [x,y]
                             self.endROI = False
-                            self.ROI_add()
+                            self.p0.removeItem(self.l0)
+                            self.ROI_add(self.posROI, self.prect)
                         elif event.modifiers() == QtCore.Qt.ShiftModifier:
                             self.startROI = True
                             self.posROI[0,:] = [x,y]
@@ -450,11 +468,12 @@ class MainW(QtGui.QMainWindow):
         self.filebase = name[0]
         try:
             X = np.load(self.fname)
+            print(X.shape)
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
-            print('ERROR: this is not a *.npy file :( ')
+            print('ERROR: this is not a *.npy array :( ')
             X = None
-        if X is not None:
+        if X is not None and X.ndim > 1:
             iscell, file_iscell = self.load_iscell()
             self.file_iscell = None
             self.X = X
@@ -489,7 +508,7 @@ class MainW(QtGui.QMainWindow):
     def load_proc(self, name=None):
         if name is None:
             name = QtGui.QFileDialog.getOpenFileName(
-                self, "Open embedding.npy", filter="embedding.npy"
+                self, "Open processed file", filter="*.npy"
                 )
             self.fname = name[0]
             name = self.fname
@@ -499,10 +518,11 @@ class MainW(QtGui.QMainWindow):
         try:
             proc = np.load(name)
             proc = proc.item()
-            X    = np.load(proc['filename'])
-            self.filebase = proc['filename']
-            y    = proc['embedding']
-            usv  = proc['usv']
+            self.proc = proc
+            X    = np.load(self.proc['filename'])
+            self.filebase = self.proc['filename']
+            y    = self.proc['embedding']
+            usv  = self.proc['usv']
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
             print('ERROR: this is not a *.npy file :( ')
@@ -518,22 +538,27 @@ class MainW(QtGui.QMainWindow):
                     print('using iscell.npy in folder')
             self.p0.clear()
             self.sp = zscore(self.X, axis=1)
-            self.sp -= 1
-            self.sp /= 8
+            self.sp -= 3
+            self.sp /= 10
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.embedding = y
             self.embedded = True
+            self.enable_loaded()
+            self.enable_embedded()
             self.usv = usv
             self.U   = usv[0] @ np.diag(usv[1])
             ineur = 0
             self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
                                          symbol='x', size=14, pen=pg.mkPen(color=(255,255,255)))
             self.p0.addItem(self.xp)
+            # if ROIs saved
+            if 'ROIs' in self.proc:
+                for r in self.proc['ROIs']:
+                    self.ROI_add(r['pos'], r['prect'])
             self.plot_embedding()
             self.plot_activity()
             self.ROI_selection()
             self.plot_colorbar()
-            self.enable_loaded()
             self.show()
             self.loaded = True
 

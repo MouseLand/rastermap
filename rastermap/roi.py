@@ -17,7 +17,7 @@ class gROI():
     '''
     def __init__(self, pos, prect, parent=None):
         self.prect = prect
-        self.line = pos[:2,:]
+        self.pos = pos
         #self.slope = (pos[1,1] - pos[0,1]) / (pos[1,0] - pos[0,0])
         #self.yint  = pos[1,0] - self.slope * pos[0,0]
         self.color = np.random.randint(255,size=(3,))
@@ -25,7 +25,7 @@ class gROI():
                                 width=3,
                                 style=QtCore.Qt.SolidLine)
         self.ROIplot = pg.PlotDataItem(self.prect[:,0], self.prect[:,1], pen=self.pen)
-        self.dotplot = pg.ScatterPlotItem(pos=self.line[0,:][np.newaxis], pen=self.pen, symbol='+')
+        self.dotplot = pg.ScatterPlotItem(pos=self.pos[0,:][np.newaxis], pen=self.pen, symbol='+')
         parent.p0.addItem(self.ROIplot)
         parent.p0.addItem(self.dotplot)
         pts = self.inROI(parent.embedding)
@@ -36,9 +36,9 @@ class gROI():
 
     def orthproj(self, p):
         # center at origin
-        vproj = self.line[1,:] - self.line[0,:]
+        vproj = self.pos[1,:] - self.pos[0,:]
         vproj = vproj[np.newaxis,:]
-        p   = p - self.line[0,:][np.newaxis,:]
+        p   = p - self.pos[0,:][np.newaxis,:]
         pproj = (vproj.T @ vproj) / (vproj**2).sum() @ p.T
         pdist = (pproj**2).sum(axis=0)
         return pdist
