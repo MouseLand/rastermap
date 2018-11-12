@@ -201,7 +201,7 @@ class Rastermap:
         if (u is None) or (sv is None) or (v is None):
             # compute svd and keep iPC's of data
             nmin = min([X.shape[0],X.shape[1]])
-            nmin = np.minimum(nmin-1, self.nPC+1)
+            nmin = np.minimum(nmin-1, self.nPC)
             u,sv,v = svdecon(X, k=nmin)
         self.nPC = sv.size
 

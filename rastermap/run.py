@@ -82,7 +82,6 @@ class RunWindow(QtGui.QDialog):
         self.layout.addWidget(QtGui.QLabel("."),19,7,1,1)
         self.layout.addWidget(QtGui.QLabel("."),19,8,1,1)
 
-
         self.layout.setColumnStretch(4,10)
         self.runButton = QtGui.QPushButton('RUN')
         self.runButton.clicked.connect(lambda: self.run_RMAP(parent))
@@ -110,7 +109,11 @@ class RunWindow(QtGui.QDialog):
         np.save('ops.npy', self.ops)
         print('Running rastermap!')
         print('starting process')
-        self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s'%parent.filebase)
+        if parent.file_iscell is not None:
+            self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s --iscell %s'%(parent.filebase, parent.file_iscell))
+        else:
+            self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s'%parent.filebase)
+
 
     def stop(self):
         self.finish = False

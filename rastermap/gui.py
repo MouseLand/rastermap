@@ -10,6 +10,7 @@ from scipy.stats import zscore
 from matplotlib import cm
 from rastermap.roi import gROI
 import rastermap.run
+from rastermap import Rastermap
 
 def triangle_area(p):
     area = 0.5 * np.abs(p[0,0] * p[1,1] - p[0,0] * p[2,1] +
@@ -174,17 +175,17 @@ class MainW(QtGui.QMainWindow):
 
         # self.key_on(self.win.scene().keyPressEvent)
 
-        addROI = QtGui.QLabel("<font color='white'>add a region by SHIFT + click</font>")
-        self.l0.addWidget(addROI, 18, 0, 1, 2)
-        addROI = QtGui.QLabel("<font color='white'>delete a region by ALT + click inside</font>")
-        self.l0.addWidget(addROI, 19, 0, 1, 2)
+        addROI = QtGui.QLabel("<font color='white'>add an ROI by SHIFT click</font>")
+        self.l0.addWidget(addROI, 18, 0, 1, 1)
+        addROI = QtGui.QLabel("<font color='white'>delete an ROI by ALT click</font>")
+        self.l0.addWidget(addROI, 19, 0, 1, 1)
 
-        self.returnOrig = QtGui.QPushButton("return to original data")
+        self.returnOrig = QtGui.QPushButton("save ROIs")
         self.returnOrig.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.returnOrig.clicked.connect(self.ROI_selection)
         self.returnOrig.setStyleSheet(self.styleInactive)
         self.returnOrig.setEnabled(False)
-        self.l0.addWidget(self.returnOrig, 22, 0, 1, 2)
+        self.l0.addWidget(self.returnOrig, 21, 0, 1, 1)
 
         # add slider for levels
         self.sl = QtGui.QSlider(QtCore.Qt.Vertical)
@@ -196,10 +197,10 @@ class MainW(QtGui.QMainWindow):
         self.sl.valueChanged.connect(self.levelchange)
         self.sl.setTracking(False)
         self.sat = 1.0
-        self.l0.addWidget(self.sl,20,5,5,1)
+        self.l0.addWidget(self.sl,24,2,5,1)
         qlabel = VerticalLabel(text='saturation')
         #qlabel.setStyleSheet('color: white;')
-        self.l0.addWidget(qlabel,21,6,3,1)
+        self.l0.addWidget(qlabel,25,3,3,1)
 
         # ------ CHOOSE CELL-------
         #self.ROIedit = QtGui.QLineEdit(self)
@@ -214,6 +215,8 @@ class MainW(QtGui.QMainWindow):
         self.posROI = np.zeros((3,2))
         self.prect = np.zeros((5,2))
         self.ROIs = []
+        self.Rselected = []
+        self.Rcolors = []
         self.embedded = False
 
         #self.fname = '/media/carsen/DATA2/Github/TX4/spks.npy'
@@ -238,14 +241,11 @@ class MainW(QtGui.QMainWindow):
         self.p0.addItem(self.se)
 
     def plot_activity(self):
-        sp = zscore(self.X[self.selected, :], axis=1)
-        sp -= 2
-        sp /= 12
-        self.img.setImage(sp)
+        self.img.setImage(self.sp[self.selected, :])
         self.img.setLevels([0,self.sat])
-        self.p1.setXRange(0, sp.shape[1], padding=0)
-        self.p1.setYRange(0, sp.shape[0], padding=0)
-        self.p1.setLimits(xMin=0,xMax=sp.shape[1],yMin=0,yMax=sp.shape[0])
+        self.p1.setXRange(0, self.sp.shape[1], padding=0)
+        self.p1.setYRange(0, self.selected.size, padding=0)
+        self.p1.setLimits(xMin=0,xMax=self.sp.shape[1],yMin=0,yMax=self.selected.size)
         self.show()
         self.win.show()
 
@@ -270,14 +270,19 @@ class MainW(QtGui.QMainWindow):
                         self.merge_cells()
 
     def ROI_selection(self):
-        self.selected = np.zeros((0,), dtype=np.int64)
         self.colormat = np.zeros((0,10,3), dtype=np.int64)
-        if len(self.ROIs) > 0:
-            for roi in self.ROIs:
-                self.selected = np.concatenate((self.selected, roi.selected))
-                colors = np.reshape(np.tile(roi.color, 10 * roi.selected.size),
-                                    (roi.selected.size, 10, 3))
-                self.colormat = np.concatenate((self.colormat, colors))
+        if len(self.Rselected) > 0:
+            if len(self.Rselected) > 4:
+                self.Ur = np.zeros((len(self.Rselected), self.U.shape[1]), dtype=np.float32)
+                for r,rc in enumerate(self.Rselected):
+                    self.Ur[r,:] = self.U[rc,:].mean(axis=0)
+                model = Rastermap(n_components=1, n_X=min(10,len(self.Rselected)))
+                y     = model.fit_transform(self.Ur)
+                rsort = np.argsort(y)
+                self.selected = np.array([item for sublist in self.Rselected[rsort] for item in sublist])
+            else:
+                self.selected = np.array([item for sublist in self.Rselected for item in sublist])
+            self.colormat = np.concatenate(self.Rcolors, axis=0)
         else:
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.colormat = 255*np.ones((self.X.shape[0],10,3), dtype=np.int32)
@@ -289,6 +294,9 @@ class MainW(QtGui.QMainWindow):
     def ROI_add(self):
         self.p0.removeItem(self.l0)
         self.ROIs.append(gROI(self.posROI,self.prect, self))
+        self.Rselected.append(self.ROIs[-1].selected)
+        self.Rcolors.append(np.reshape(np.tile(self.ROIs[-1].color, 10 * self.Rselected[-1].size),
+                            (self.Rselected[-1].size, 10, 3)))
         self.ROI_selection()
 
     def ROI_remove(self, p):
@@ -298,6 +306,8 @@ class MainW(QtGui.QMainWindow):
             if ptrue.shape[0] > 0:
                 self.ROIs[n].remove(self)
                 del self.ROIs[n]
+                del self.Rselected[n]
+                del self.Rcolors[n]
                 break
         self.ROI_selection()
 
@@ -423,14 +433,36 @@ class MainW(QtGui.QMainWindow):
             print('ERROR: this is not a *.npy file :( ')
             X = None
         if X is not None:
-            self.p0.clear()
-
+            iscell, file_iscell = self.load_iscell()
             self.X = X
+            if iscell is not None:
+                if iscell.size == self.X.shape[0]:
+                    self.X = self.X[iscell, :]
+                    self.file_iscell = file_iscell
+                    print('using iscell.npy in folder')
+                else:
+                    self.file_iscell = None
+            self.p0.clear()
+            self.sp = zscore(self.X, axis=1)
+            self.sp -= 2
+            self.sp /= 12
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.ROI_selection()
             self.enable_loaded()
             self.show()
             self.loaded = True
+
+    def load_iscell(self):
+        basename,filename = os.path.split(self.filebase)
+        try:
+            iscell = np.load(basename + "/iscell.npy")
+            probcell = iscell[:, 1]
+            iscell = iscell[:, 0].astype(np.bool)
+            file_iscell = basename + "/iscell.npy"
+        except (ValueError, OSError, RuntimeError, TypeError, NameError):
+            iscell = None
+            file_iscell = None
+        return iscell, file_iscell
 
     def load_proc(self, name=None):
         if name is None:
@@ -448,16 +480,30 @@ class MainW(QtGui.QMainWindow):
             X    = np.load(proc['filename'])
             self.filebase = proc['filename']
             y    = proc['embedding']
+            usv  = proc['usv']
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
             print('ERROR: this is not a *.npy file :( ')
             X = None
         if X is not None:
-            self.p0.clear()
+            iscell, file_iscell = self.load_iscell()
             self.X = X
+            if iscell is not None:
+                if iscell.size == self.X.shape[0]:
+                    self.X = self.X[iscell, :]
+                    self.file_iscell = file_iscell
+                    print('using iscell.npy in folder')
+                else:
+                    self.file_iscell = None
+            self.p0.clear()
+            self.sp = zscore(self.X, axis=1)
+            self.sp -= 1
+            self.sp /= 9
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.embedding = y
             self.embedded = True
+            self.usv = usv
+            self.U   = usv[0] @ np.diag(usv[1])
             ineur = 0
             self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
                                          symbol='x', size=14, pen=pg.mkPen(color=(255,255,255)))
