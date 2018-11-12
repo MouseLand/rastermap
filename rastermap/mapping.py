@@ -252,10 +252,7 @@ class Rastermap:
         isort1, iclustup = self._map(X, self.n_components, self.n_X, init_sort)
         self.isort2 = isort2
         self.isort1 = isort1
-        if iclustup.ndim > 1:
-            self.embedding = iclustup.T
-        else:
-            self.embedding = iclustup.flatten()
+        self.embedding = iclustup
         return self
 
     def fit_transform(self, X, u=None, sv=None, v=None):

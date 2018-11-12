@@ -149,7 +149,7 @@ class MainW(QtGui.QMainWindow):
         self.p1 = self.win.addPlot(row=0, col=2,
                                    rowspan=2, invertY=True, padding=0)
         self.p1.setMouseEnabled(x=True, y=False)
-        self.img = pg.ImageItem()
+        self.img = pg.ImageItem(autoDownsample=False)
         colormap = cm.get_cmap("viridis")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
@@ -219,10 +219,10 @@ class MainW(QtGui.QMainWindow):
         self.Rcolors = []
         self.embedded = False
 
-        #self.fname = '/media/carsen/DATA2/Github/TX4/spks.npy'
+        self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/embedding.npy'
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
         #self.fname = 'C:/Users/carse/github/TX4/spks.npy'
-        #self.load_proc()
+        self.load_proc(self.fname)
 
         self.show()
         self.win.show()
@@ -240,8 +240,18 @@ class MainW(QtGui.QMainWindow):
         self.se.addPoints(spots)
         self.p0.addItem(self.se)
 
+    def smooth_activity(self):
+        if self.sp.shape[0] == self.selected.size:
+            sp_smoothed = self.sp
+        else:
+            cumsum = np.cumsum(np.concatenate((np.zeros((1,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
+            N = 10
+            sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
+        return sp_smoothed
+
     def plot_activity(self):
-        self.img.setImage(self.sp[self.selected, :])
+        sp_smoothed = self.smooth_activity()
+        self.img.setImage(sp_smoothed)
         self.img.setLevels([0,self.sat])
         self.p1.setXRange(0, self.sp.shape[1], padding=0)
         self.p1.setYRange(0, self.selected.size, padding=0)
@@ -479,7 +489,7 @@ class MainW(QtGui.QMainWindow):
     def load_proc(self, name=None):
         if name is None:
             name = QtGui.QFileDialog.getOpenFileName(
-                self, "Open proc.npy", filter="*.npy"
+                self, "Open embedding.npy", filter="embedding.npy"
                 )
             self.fname = name[0]
             name = self.fname
@@ -510,7 +520,7 @@ class MainW(QtGui.QMainWindow):
             self.p0.clear()
             self.sp = zscore(self.X, axis=1)
             self.sp -= 1
-            self.sp /= 9
+            self.sp /= 8
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.embedding = y
             self.embedded = True
