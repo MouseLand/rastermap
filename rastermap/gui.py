@@ -35,6 +35,24 @@ def rect_from_line(p,d):
     prect[-1,:] = prect[0,:]
     return prect
 
+class Slider(QtGui.QSlider):
+    def __init__(self, bid, parent=None):
+        super(self.__class__, self).__init__()
+        initval = [0,100]
+        self.bid = bid
+        self.setMinimum(0)
+        self.setMaximum(100)
+        self.setValue(initval[bid])
+        self.setTickPosition(QtGui.QSlider.TicksLeft)
+        self.setTickInterval(10)
+        self.valueChanged.connect(lambda: self.level_change(parent,bid))
+        self.setTracking(False)
+
+    def level_change(self, parent, bid):
+        parent.sat[bid] = float(self.value())/100
+        parent.img.setLevels([parent.sat[0],parent.sat[1]])
+        parent.win.show()
+
 # custom vertical label
 class VerticalLabel(QtGui.QWidget):
     def __init__(self, text=None):
@@ -176,36 +194,36 @@ class MainW(QtGui.QMainWindow):
         # self.key_on(self.win.scene().keyPressEvent)
 
         addROI = QtGui.QLabel("<font color='white'>add an ROI by SHIFT click</font>")
-        self.l0.addWidget(addROI, 18, 0, 1, 1)
-        addROI = QtGui.QLabel("<font color='white'>delete an ROI by ALT click</font>")
         self.l0.addWidget(addROI, 19, 0, 1, 1)
+        addROI = QtGui.QLabel("<font color='white'>delete an ROI by ALT click</font>")
+        self.l0.addWidget(addROI, 20, 0, 1, 1)
+        addROI = QtGui.QLabel("<font color='white'>delete last-drawn ROI by DELETE</font>")
+        self.l0.addWidget(addROI, 21, 0, 1, 1)
         self.updateROI = QtGui.QPushButton("update plot (ENTER)")
         self.updateROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.updateROI.clicked.connect(self.ROI_selection)
         self.updateROI.setStyleSheet(self.styleInactive)
         self.updateROI.setEnabled(False)
-        self.l0.addWidget(self.updateROI, 20, 0, 1, 1)
+        self.l0.addWidget(self.updateROI, 22, 0, 1, 1)
         self.saveROI = QtGui.QPushButton("save ROIs")
         self.saveROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.saveROI.clicked.connect(self.ROI_save)
         self.saveROI.setStyleSheet(self.styleInactive)
         self.saveROI.setEnabled(False)
-        self.l0.addWidget(self.saveROI, 21, 0, 1, 1)
+        self.l0.addWidget(self.saveROI, 23, 0, 1, 1)
 
+        #satlab = QtGui.QLabel("<font color='white'>saturation</font>")
+        #self.l0.addWidget(satlab, 23, 1, 1, 1)
         # add slider for levels
-        self.sl = QtGui.QSlider(QtCore.Qt.Vertical)
-        self.sl.setMinimum(0)
-        self.sl.setMaximum(100)
-        self.sl.setValue(100)
-        self.sl.setTickPosition(QtGui.QSlider.TicksLeft)
-        self.sl.setTickInterval(10)
-        self.sl.valueChanged.connect(self.levelchange)
-        self.sl.setTracking(False)
-        self.sat = 1.0
-        self.l0.addWidget(self.sl,24,2,5,1)
-        qlabel = VerticalLabel(text='saturation')
-        #qlabel.setStyleSheet('color: white;')
-        self.l0.addWidget(qlabel,25,3,3,1)
+        self.sl = []
+        txt = ["lower saturation", 'upper saturation']
+        self.sat = [0,1]
+        for j in range(2):
+            self.sl.append(Slider(j, self))
+            self.l0.addWidget(self.sl[j],28,1+2*j,5,1)
+            qlabel = VerticalLabel(text=txt[j])
+            #qlabel.setStyleSheet('color: white;')
+            self.l0.addWidget(qlabel,28,2+2*j,5,1)
 
         # ------ CHOOSE CELL-------
         #self.ROIedit = QtGui.QLineEdit(self)
@@ -220,6 +238,7 @@ class MainW(QtGui.QMainWindow):
         self.posROI = np.zeros((3,2))
         self.prect = np.zeros((5,2))
         self.ROIs = []
+        self.ROIorder = []
         self.Rselected = []
         self.Rcolors = []
         self.embedded = False
@@ -229,12 +248,6 @@ class MainW(QtGui.QMainWindow):
         #self.fname = 'C:/Users/carse/github/TX4/spks.npy'
         #self.load_proc(self.fname)
 
-        self.show()
-        self.win.show()
-
-    def levelchange(self):
-        self.sat = float(self.sl.value())/100
-        self.img.setLevels([0,self.sat])
         self.show()
         self.win.show()
 
@@ -260,7 +273,7 @@ class MainW(QtGui.QMainWindow):
     def plot_activity(self):
         sp_smoothed = self.smooth_activity()
         self.img.setImage(sp_smoothed)
-        self.img.setLevels([0,self.sat])
+        self.img.setLevels([self.sat[0],self.sat[1]])
         self.p1.setXRange(0, self.sp.shape[1], padding=0)
         self.p1.setYRange(0, self.selected.size, padding=0)
         self.p1.setLimits(xMin=0,xMax=self.sp.shape[1],yMin=0,yMax=self.selected.size)
@@ -284,6 +297,9 @@ class MainW(QtGui.QMainWindow):
         if event.key() == QtCore.Qt.Key_Return:
             if self.updateROI.isEnabled:
                 self.ROI_selection()
+        elif event.key() == QtCore.Qt.Key_Delete:
+            if len(self.ROIs) > 0:
+                self.ROI_delete()
 
     def ROI_selection(self):
         self.colormat = np.zeros((0,10,3), dtype=np.int64)
@@ -298,6 +314,10 @@ class MainW(QtGui.QMainWindow):
                 y     = y.flatten()
                 rsort = np.argsort(y)
                 print(rsort)
+                roiorder = []
+                for r in self.ROIorder:
+                    roiorder.append((rsort==r).nonzero()[0][0])
+                self.ROIorder = roiorder
                 self.ROIs = [self.ROIs[i] for i in rsort]
                 self.Rselected = [self.Rselected[i] for i in rsort]
                 self.Rcolors = [self.Rcolors[i] for i in rsort]
@@ -324,7 +344,20 @@ class MainW(QtGui.QMainWindow):
         self.Rselected.append(self.ROIs[-1].selected)
         self.Rcolors.append(np.reshape(np.tile(self.ROIs[-1].color, 10 * self.Rselected[-1].size),
                             (self.Rselected[-1].size, 10, 3)))
+        self.ROIorder.append(len(self.ROIs)-1)
         #self.ROI_selection()
+
+    def ROI_delete(self):
+        n = self.ROIorder[-1]
+        for i,r in enumerate(self.ROIorder):
+            if r > n:
+                self.ROIorder[i] = self.ROIorder[i] - 1
+        if len(self.ROIs) > 0:
+            self.ROIs[n].remove(self)
+            del self.ROIs[n]
+            del self.Rselected[n]
+            del self.Rcolors[n]
+            del self.ROIorder[-1]
 
     def ROI_remove(self, p):
         p = np.array(p)
@@ -354,7 +387,6 @@ class MainW(QtGui.QMainWindow):
         self.saveROI.setEnabled(True)
         self.updateROI.setStyleSheet(self.styleUnpressed)
         self.saveROI.setStyleSheet(self.styleUnpressed)
-
 
     def mouse_moved_embedding(self, pos):
         if self.embedded:
@@ -556,8 +588,9 @@ class MainW(QtGui.QMainWindow):
             self.p0.addItem(self.xp)
             # if ROIs saved
             if 'ROIs' in self.proc:
-                for r in self.proc['ROIs']:
-                    self.ROI_add(r['pos'], r['prect'])
+                for r,roi in enumerate(self.proc['ROIs']):
+                    self.ROI_add(roi['pos'], roi['prect'])
+
             self.plot_embedding()
             self.plot_activity()
             self.ROI_selection()
