@@ -367,27 +367,32 @@ class MainW(QtGui.QMainWindow):
 
     def ROI_delete(self):
         n = self.ROIorder[-1]
+        if len(self.ROIs) > 0:
+            self.delete(n)
+
+    def delete(self, n):
+        self.ROIs[n].remove(self)
+        del self.ROIs[n]
+        del self.Rselected[n]
+        del self.Rcolors[n]
         for i,r in enumerate(self.ROIorder):
             if r > n:
                 self.ROIorder[i] = self.ROIorder[i] - 1
-        if len(self.ROIs) > 0:
-            self.ROIs[n].remove(self)
-            del self.ROIs[n]
-            del self.Rselected[n]
-            del self.Rcolors[n]
-            del self.ROIorder[-1]
+        self.ROIorder.remove(n)
 
     def ROI_remove(self, p):
-        p = np.array(p)
-        for n in range(len(self.ROIs)-1,-1,-1):
-            ptrue = self.ROIs[n].inROI(p)
-            if ptrue.shape[0] > 0:
-                self.ROIs[n].remove(self)
-                del self.ROIs[n]
-                del self.Rselected[n]
-                del self.Rcolors[n]
-                break
-        #self.ROI_selection()
+        if len(p) > 1:
+            for n in range(len(self.ROIs)-1,-1,-1):
+                ptrue = self.ROIs[n].inROI(np.array(p))
+                if ptrue.shape[0] > 0:
+                    self.delete(n)
+                    break
+        elif len(p)==1:
+            p = int(p[0])
+            for n in range(len(self.ROIs)-1,-1,-1):
+                if self.selected[p] in self.ROIs[n].selected:
+                    self.delete(n)
+                    break
 
     def ROI_save(self):
         name = QtGui.QFileDialog.getSaveFileName(self,'ROI name (*.npy)')
@@ -489,8 +494,18 @@ class MainW(QtGui.QMainWindow):
 
                 elif x == self.p1:
                     iplot = 1
+                    y = self.p1.vb.mapSceneToView(event.scenePos()).y()
+                    ineur = min(self.colormat.shape[0]-1, max(0, int(np.floor(y))))
                     if event.double():
                         self.zoom_plot(iplot)
+                    elif event.modifiers() == QtCore.Qt.AltModifier:
+                        self.ROI_remove([y])
+                elif x == self.p3:
+                    iplot = 2
+                    y = self.p3.vb.mapSceneToView(event.scenePos()).y()
+                    ineur = min(self.colormat.shape[0]-1, max(0, int(np.floor(y))))
+                    if event.modifiers() == QtCore.Qt.AltModifier:
+                        self.ROI_remove([y])
 
     def zoom_plot(self, iplot):
         if iplot == 0:
