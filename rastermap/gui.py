@@ -334,10 +334,28 @@ class MainW(QtGui.QMainWindow):
         else:
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.colormat = 255*np.ones((self.X.shape[0],10,3), dtype=np.int32)
+
         self.colormat[:,-1,:] = 0
         self.colormat_plot = self.colormat.copy()
         self.plot_activity()
         self.plot_colorbar()
+
+    def update_selected(self, ineur):
+        # add bar to colorbar
+        NN = self.colormat.shape[0]
+        nrange = np.round(float(NN)/500)
+        ineur_range = ineur
+        if nrange > 0:
+            ineur_range = ineur + np.arange(-1*nrange, nrange).astype(np.int32)
+            ineur_range[(ineur_range < 0)] = 0
+            ineur_range[(ineur_range > NN-1)] = NN-1
+        self.colormat_plot = self.colormat.copy()
+        self.colormat_plot[ineur_range,:,:] = np.zeros((10,3)).astype(int)
+        self.plot_colorbar()
+        # x point on embedding
+        if self.embedded:
+            ineur = self.selected[ineur]
+            self.xp.setData(pos=self.embedding[ineur,:][np.newaxis,:])
 
     def ROI_add(self, pos, prect):
         self.ROIs.append(gROI(pos, prect, self))
@@ -427,15 +445,7 @@ class MainW(QtGui.QMainWindow):
                 ineur = min(self.colormat.shape[0]-1, max(0, int(np.floor(y))))
                 self.update_selected(ineur)
 
-    def update_selected(self, ineur):
-        # add bar to colorbar
-        self.colormat_plot = self.colormat.copy()
-        self.colormat_plot[ineur,:,:] = np.zeros((10,3)).astype(int)
-        self.plot_colorbar()
-        # x point on embedding
-        if self.embedded:
-            ineur = self.selected[ineur]
-            self.xp.setData(pos=self.embedding[ineur,:][np.newaxis,:])
+
 
     def plot_clicked(self, event):
         """left-click chooses a cell, right-click flips cell to other view"""
@@ -584,7 +594,8 @@ class MainW(QtGui.QMainWindow):
             self.U   = usv[0] @ np.diag(usv[1])
             ineur = 0
             self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
-                                         symbol='x', size=14, pen=pg.mkPen(color=(255,255,255)))
+                                         symbol='x', pen=pg.mkPen(color=(255,0,0,255), width=3),
+                                         brush=pg.mkBrush(color=(255,0,0,255)), size=14)
             self.p0.addItem(self.xp)
             # if ROIs saved
             if 'ROIs' in self.proc:
