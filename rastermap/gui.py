@@ -194,12 +194,12 @@ class MainW(QtGui.QMainWindow):
         # self.key_on(self.win.scene().keyPressEvent)
 
         addROI = QtGui.QLabel("<font color='white'>add an ROI by SHIFT click</font>")
-        self.l0.addWidget(addROI, 19, 0, 1, 1)
+        self.l0.addWidget(addROI, 19, 0, 1, 2)
         addROI = QtGui.QLabel("<font color='white'>delete an ROI by ALT click</font>")
-        self.l0.addWidget(addROI, 20, 0, 1, 1)
+        self.l0.addWidget(addROI, 20, 0, 1, 2)
         addROI = QtGui.QLabel("<font color='white'>delete last-drawn ROI by DELETE</font>")
-        self.l0.addWidget(addROI, 21, 0, 1, 1)
-        self.updateROI = QtGui.QPushButton("update plot (ENTER)")
+        self.l0.addWidget(addROI, 21, 0, 1, 2)
+        self.updateROI = QtGui.QPushButton("update plot (SPACE)")
         self.updateROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.updateROI.clicked.connect(self.ROI_selection)
         self.updateROI.setStyleSheet(self.styleInactive)
@@ -212,6 +212,16 @@ class MainW(QtGui.QMainWindow):
         self.saveROI.setEnabled(False)
         self.l0.addWidget(self.saveROI, 23, 0, 1, 1)
 
+        addROI = QtGui.QLabel("<font color='white'>y-smoothing</font>")
+        self.l0.addWidget(addROI, 28, 0, 1, 1)
+        self.smooth = QtGui.QLineEdit(self)
+        self.smooth.setValidator(QtGui.QIntValidator(0, 500))
+        self.smooth.setText("10")
+        self.smooth.setFixedWidth(45)
+        self.smooth.setAlignment(QtCore.Qt.AlignRight)
+        self.smooth.returnPressed.connect(self.plot_activity)
+        self.l0.addWidget(self.smooth, 28, 1, 1, 1)
+
         #satlab = QtGui.QLabel("<font color='white'>saturation</font>")
         #self.l0.addWidget(satlab, 23, 1, 1, 1)
         # add slider for levels
@@ -220,10 +230,11 @@ class MainW(QtGui.QMainWindow):
         self.sat = [0,1]
         for j in range(2):
             self.sl.append(Slider(j, self))
-            self.l0.addWidget(self.sl[j],28,1+2*j,5,1)
+            self.l0.addWidget(self.sl[j],28,2+2*j,5,1)
             qlabel = VerticalLabel(text=txt[j])
             #qlabel.setStyleSheet('color: white;')
-            self.l0.addWidget(qlabel,28,2+2*j,5,1)
+            self.l0.addWidget(qlabel,28,3+2*j,5,1)
+
 
         # ------ CHOOSE CELL-------
         #self.ROIedit = QtGui.QLineEdit(self)
@@ -263,11 +274,12 @@ class MainW(QtGui.QMainWindow):
             sp_smoothed = self.sp
         else:
             cumsum = np.cumsum(np.concatenate((np.zeros((1,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
-            N = 10
-            sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
-            sp_smoothed = zscore(sp_smoothed, axis=1)
-            sp_smoothed += 1
-            sp_smoothed /= 9
+            N = int(self.smooth.text())
+            if N > 1:
+                sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
+                sp_smoothed = zscore(sp_smoothed, axis=1)
+                sp_smoothed += 1
+                sp_smoothed /= 9
         return sp_smoothed
 
     def plot_activity(self):
@@ -294,7 +306,7 @@ class MainW(QtGui.QMainWindow):
         self.win.scene().showExportDialog()
 
     def keyPressEvent(self, event):
-        if event.key() == QtCore.Qt.Key_Return:
+        if event.key() == QtCore.Qt.Key_Space:
             if self.updateROI.isEnabled:
                 self.ROI_selection()
         elif event.key() == QtCore.Qt.Key_Delete:
@@ -339,6 +351,7 @@ class MainW(QtGui.QMainWindow):
         self.colormat_plot = self.colormat.copy()
         self.plot_activity()
         self.plot_colorbar()
+        self.win.show()
 
     def update_selected(self, ineur):
         # add bar to colorbar
