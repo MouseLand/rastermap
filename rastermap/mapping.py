@@ -209,7 +209,7 @@ class Rastermap:
         # this will be a 1-D fit
         isort2 = []
         if self.n_Y > 0:
-            isort2, iclustup = self._map(v @ np.diag(sv), 1, self.n_Y, v[:,0])
+            isort2, iclustup = self._map(v @ np.diag(sv), 1, self.n_Y, v[:,0][:,np.newaxis])
             X = gaussian_filter1d(X[:, isort2], self.sig_Y, axis=1)
             X -= X.mean(axis=1)[:,np.newaxis]
             u,sv,v = svdecon(X, k=nmin)
@@ -243,7 +243,10 @@ class Rastermap:
         isort1, iclustup = self._map(X, self.n_components, self.n_X, init_sort)
         self.isort2 = isort2
         self.isort1 = isort1
-        self.embedding = iclustup
+        if iclustup.ndim > 1:
+            self.embedding = iclustup.T
+        else:
+            self.embedding = iclustup.flatten()
         return self
 
     def fit_transform(self, X, u=None, sv=None, v=None):
@@ -278,6 +281,10 @@ class Rastermap:
                 print('ERROR: new points do not have as many features as original data')
         else:
             print('ERROR: need to fit model first before you can embed new points')
+        if iclustup.ndim > 1:
+            iclustup = iclustup.T
+        else:
+            iclustup = iclustup.flatten()
         return iclustup
 
     def _create_2D_basis0(self, K, nclust):

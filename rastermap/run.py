@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from PyQt5 import QtGui, QtCore
 
 ### custom QDialog which allows user to fill in ops and run suite2p!
@@ -13,7 +14,7 @@ class RunWindow(QtGui.QDialog):
         self.win.setLayout(self.layout)
 
         # default ops
-        self.ops = {'n_components': 2, 'n_X': 30, 'n_Y': 100, 'alpha': 0, 'K': 1,
+        self.ops = {'n_components': 2, 'n_X': 40, 'n_Y': 0, 'alpha': 1, 'K': 1,
                     'nPC': 200, 'sig_Y': 2, 'init': 'pca'}
 
         keys = ['n_components','n_X','n_Y','alpha','K','nPC','sig_Y','init']
@@ -84,7 +85,7 @@ class RunWindow(QtGui.QDialog):
 
         self.layout.setColumnStretch(4,10)
         self.runButton = QtGui.QPushButton('RUN')
-        self.runButton.clicked.connect(lambda: self.run_S2P(parent))
+        self.runButton.clicked.connect(lambda: self.run_RMAP(parent))
         self.layout.addWidget(self.runButton,19,0,1,1)
         #self.runButton.setEnabled(False)
         self.textEdit = QtGui.QTextEdit()
@@ -103,12 +104,13 @@ class RunWindow(QtGui.QDialog):
         self.stopButton.clicked.connect(self.stop)
 
     def run_RMAP(self, parent):
+        self.finish = True
+        self.error = False
         self.save_text()
         np.save('ops.npy', self.ops)
         print('Running rastermap!')
         print('starting process')
-        print(self.db)
-        self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s'%self.fname)
+        self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s'%parent.filebase)
 
     def stop(self):
         self.finish = False
@@ -117,18 +119,17 @@ class RunWindow(QtGui.QDialog):
     def started(self):
         self.runButton.setEnabled(False)
         self.stopButton.setEnabled(True)
-        self.cleanButton.setEnabled(False)
 
     def finished(self, parent):
         self.runButton.setEnabled(True)
         self.stopButton.setEnabled(False)
         if self.finish and not self.error:
-            self.cleanButton.setEnabled(True)
             cursor = self.textEdit.textCursor()
             cursor.movePosition(cursor.End)
             cursor.insertText('Opening in GUI (can close this window)\n')
-            parent.fname = os.path.join(self.db['save_path0'], 'suite2p', 'plane0','stat.npy')
-            parent.load_proc()
+            basename,fname = os.path.split(parent.fname)
+            parent.fname = os.path.join(basename, 'embedding.npy')
+            parent.load_proc(parent.fname)
         elif not self.error:
             cursor = self.textEdit.textCursor()
             cursor.movePosition(cursor.End)
@@ -137,10 +138,6 @@ class RunWindow(QtGui.QDialog):
             cursor = self.textEdit.textCursor()
             cursor.movePosition(cursor.End)
             cursor.insertText('Interrupted by error (not finished)\n')
-        if self.batch:
-            self.f += 1
-            if self.f < len(self.opslist):
-                self.run_S2P(parent)
 
     def save_text(self):
         for k in range(len(self.editlist)):
@@ -178,10 +175,11 @@ class LineEdit(QtGui.QLineEdit):
         else:
             if type(okey) is float:
                 okey = float(self.text())
-            elif type(okey) is int or bool:
-                okey = int(self.text())
             elif type(okey) is str:
                 okey = self.text()
+            elif type(okey) is int or bool:
+                okey = int(self.text())
+
         return okey
 
     def set_text(self,ops):

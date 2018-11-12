@@ -1,3 +1,3 @@
-from rastermap.mapping import RMAP
+from rastermap.mapping import Rastermap
 
 name = "rastermap"

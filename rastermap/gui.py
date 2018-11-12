@@ -24,7 +24,7 @@ def dist_to_line(p):
 
 def rect_from_line(p,d):
     dline = ((p[1,0] - p[0,0])**2 + (p[1,1] - p[0,1])**2)**0.5
-    theta = np.pi/2 - np.arctan((p[1,1] - p[0,1]) / (p[1,0] - p[0,0]))
+    theta = np.pi/2 - np.arctan((p[1,1] - p[0,1]) / (p[1,0] - p[0,0] + 1e-5))
     prect = np.zeros((5,2))
     prect[0,:] = [p[1,0] + d * np.cos(theta), p[1,1] - d * np.sin(theta)]
     prect[1,:] = [p[1,0] - d * np.cos(theta), p[1,1] + d * np.sin(theta)]
@@ -33,6 +33,21 @@ def rect_from_line(p,d):
     prect[3,:] = [p[0,0] + d * np.cos(theta), p[0,1] - d * np.sin(theta)]
     prect[-1,:] = prect[0,:]
     return prect
+
+# custom vertical label
+class VerticalLabel(QtGui.QWidget):
+    def __init__(self, text=None):
+        super(self.__class__, self).__init__()
+        self.text = text
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        painter.setPen(QtCore.Qt.white)
+        painter.translate(0, 0)
+        painter.rotate(90)
+        if self.text:
+            painter.drawText(0, 0, self.text)
+        painter.end()
 
 class MainW(QtGui.QMainWindow):
     def __init__(self):
@@ -73,11 +88,11 @@ class MainW(QtGui.QMainWindow):
         self.runRMAP.setShortcut("Ctrl+R")
         self.runRMAP.triggered.connect(self.run_RMAP)
         self.addAction(self.runRMAP)
-        #self.runRMAP.setEnabled(False)
+        self.runRMAP.setEnabled(False)
         # load processed data
         loadProc = QtGui.QAction("&Load processed data", self)
         loadProc.setShortcut("Ctrl+P")
-        loadProc.triggered.connect(self.load_proc)
+        loadProc.triggered.connect(lambda: self.load_proc(name=None))
         self.addAction(loadProc)
         # load a behavioral trace
         self.loadBeh = QtGui.QAction(
@@ -125,7 +140,7 @@ class MainW(QtGui.QMainWindow):
         self.p3 = self.win.addPlot(row=0, col=1, rowspan=2)
         self.p3.setMouseEnabled(x=False,y=False)
         self.p3.setMenuEnabled(False)
-        self.colorimg = pg.ImageItem()
+        self.colorimg = pg.ImageItem(autoDownsample=True)
         self.p3.addItem(self.colorimg)
         self.p3.scene().sigMouseMoved.connect(self.mouse_moved_bar)
         #self.p3.hideAxis('bottom')
@@ -139,7 +154,7 @@ class MainW(QtGui.QMainWindow):
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
         lut = lut[0:-3,:]
         # apply the colormap
-        self.img.setLookupTable(lut)
+        #self.img.setLookupTable(lut)
         self.img.setLevels([0,1])
         self.p1.setMenuEnabled(False)
         self.p1.scene().contextMenuItem = self.p1
@@ -171,6 +186,21 @@ class MainW(QtGui.QMainWindow):
         self.returnOrig.setEnabled(False)
         self.l0.addWidget(self.returnOrig, 22, 0, 1, 2)
 
+        # add slider for levels
+        self.sl = QtGui.QSlider(QtCore.Qt.Vertical)
+        self.sl.setMinimum(0)
+        self.sl.setMaximum(100)
+        self.sl.setValue(100)
+        self.sl.setTickPosition(QtGui.QSlider.TicksLeft)
+        self.sl.setTickInterval(10)
+        self.sl.valueChanged.connect(self.levelchange)
+        self.sl.setTracking(False)
+        self.sat = 1.0
+        self.l0.addWidget(self.sl,20,5,5,1)
+        qlabel = VerticalLabel(text='saturation')
+        #qlabel.setStyleSheet('color: white;')
+        self.l0.addWidget(qlabel,21,6,3,1)
+
         # ------ CHOOSE CELL-------
         #self.ROIedit = QtGui.QLineEdit(self)
         #self.ROIedit.setValidator(QtGui.QIntValidator(0, 10000))
@@ -194,6 +224,12 @@ class MainW(QtGui.QMainWindow):
         self.show()
         self.win.show()
 
+    def levelchange(self):
+        self.sat = float(self.sl.value())/100
+        self.img.setLevels([0,self.sat])
+        self.show()
+        self.win.show()
+
     def plot_embedding(self):
         self.se = pg.ScatterPlotItem(size=4, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
         pos = self.embedding.T
@@ -203,13 +239,15 @@ class MainW(QtGui.QMainWindow):
 
     def plot_activity(self):
         sp = zscore(self.X[self.selected, :], axis=1)
-        sp -= sp.min()
-        sp /= sp.max()
+        sp -= 2
+        sp /= 12
         self.img.setImage(sp)
-        self.img.setLevels([0,1])
+        self.img.setLevels([0,self.sat])
         self.p1.setXRange(0, sp.shape[1], padding=0)
         self.p1.setYRange(0, sp.shape[0], padding=0)
         self.p1.setLimits(xMin=0,xMax=sp.shape[1],yMin=0,yMax=sp.shape[0])
+        self.show()
+        self.win.show()
 
     def plot_colorbar(self):
         nneur = self.colormat_plot.shape[0]
@@ -377,10 +415,9 @@ class MainW(QtGui.QMainWindow):
             self, "Open *.npy", filter="*.npy"
             )
         self.fname = name[0]
-        name = self.fname
-        print(name)
+        self.filebase = name[0]
         try:
-            X = np.load(name)
+            X = np.load(self.fname)
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
             print('ERROR: this is not a *.npy file :( ')
@@ -395,18 +432,22 @@ class MainW(QtGui.QMainWindow):
             self.show()
             self.loaded = True
 
-    def load_proc(self):
-        name = QtGui.QFileDialog.getOpenFileName(
-            self, "Open proc.npy", filter="*.npy"
-        )
-        self.fname = name[0]
-        name = self.fname
-        print(name)
+    def load_proc(self, name=None):
+        if name is None:
+            name = QtGui.QFileDialog.getOpenFileName(
+                self, "Open proc.npy", filter="*.npy"
+                )
+            self.fname = name[0]
+            name = self.fname
+            print(name)
+        else:
+            self.fname = name
         try:
             proc = np.load(name)
             proc = proc.item()
-            X    = proc.X
-            y    = proc.embedding
+            X    = np.load(proc['filename'])
+            self.filebase = proc['filename']
+            y    = proc['embedding']
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
             print('ERROR: this is not a *.npy file :( ')

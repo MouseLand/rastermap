@@ -1,7 +1,8 @@
-from rastermap import RMAP
+from rastermap import Rastermap
 from rastermap import gui
 import numpy as np
 import argparse
+import os
 
 def main():
     S = np.load('spks.npy')
@@ -16,8 +17,14 @@ if __name__ == '__main__':
 
     if len(args.S)>0:
         S = np.load(args.S)
-        model = RMAP()
+        print(S.shape)
+        ops = np.load(args.ops)
+        ops = ops.item()
+        model = Rastermap(ops['n_components'], ops['n_X'], ops['n_Y'], ops['nPC'],
+                          ops['sig_Y'], ops['init'], ops['alpha'], ops['K'])
         embedding = model.fit_transform(S)
-        np.save('embedding.npy', embedding)
+        proc  = {'embedding': embedding, 'ops': ops, 'filename': args.S}
+        basename, fname = os.path.split(args.S)
+        np.save(os.path.join(basename, 'embedding.npy'), proc)
     else:
         gui.run()
