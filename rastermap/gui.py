@@ -510,13 +510,12 @@ class MainW(QtGui.QMainWindow):
         if X is not None:
             iscell, file_iscell = self.load_iscell()
             self.X = X
+            self.file_iscell = None
             if iscell is not None:
                 if iscell.size == self.X.shape[0]:
                     self.X = self.X[iscell, :]
                     self.file_iscell = file_iscell
                     print('using iscell.npy in folder')
-                else:
-                    self.file_iscell = None
             self.p0.clear()
             self.sp = zscore(self.X, axis=1)
             self.sp -= 1
