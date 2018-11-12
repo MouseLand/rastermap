@@ -29,7 +29,7 @@ if __name__ == '__main__':
                 iscell = iscell.astype(np.bool)
             if iscell.size == S.shape[0]:
                 S = S[iscell, :]
-                print('iscell found and used to select neurons in S')
+                print('iscell found and used to select neurons')
         print(S.shape)
         S = zscore(S,axis=1)
         model = Rastermap(ops['n_components'], ops['n_X'], ops['n_Y'], ops['nPC'],
