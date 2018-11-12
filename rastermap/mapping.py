@@ -8,9 +8,12 @@ import time
 
 def distances(x, y):
     # x and y are n_components by number of data points
-    ds = np.zeros((x.shape[1], y.shape[1]))
-    for j in range(self.n_components):
-        ds += dwrap(x[j][:,np.newaxis] - y[j], 1.)**2
+    ds = np.zeros((x.shape[0], y.shape[0]))
+    if len(x.shape)==1:
+        x = np.reshape(x, (-1, 1))
+        y = np.reshape(y, (-1, 1))
+    for j in range(x.shape[1]):
+        ds += dwrap(x[:,j][:,np.newaxis] - y[:,j], 1.)**2
     ds = np.sqrt(ds)
     return ds
 
@@ -90,6 +93,7 @@ def upsample(cmap, dims, nclust, upsamp):
     dxs = M1[:, xid]
     xs = (iclust + dxs)/nclust
     xs = xs%1.
+    xs = xs.T
     return xs, cmax
 
 
@@ -312,7 +316,7 @@ class Rastermap:
         print(SALL.shape)
         tic = time.time()
 
-        ncomps_anneal = (np.arange(1, nfreqs, 2)**2).astype('int')
+        ncomps_anneal = (np.arange(1, nfreqs, 2)**dims).astype('int')
         ncomps_anneal = np.tile(ncomps_anneal, (2,1)).T.flatten()
         ncomps_anneal = np.concatenate((ncomps_anneal[1:10], ncomps_anneal[3:10], ncomps_anneal[5:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         #ncomps_anneal = np.concatenate((ncomps_anneal[1:5], ncomps_anneal[1:10], ncomps_anneal[3:], SALL.shape[0]*np.ones(10)), axis=0).astype('int')
@@ -353,7 +357,7 @@ class Rastermap:
             iclustup1, cmax = upsample(np.sqrt(cmapx[0]), dims, nclust, 10)
             iclustup2, cmax = upsample(np.sqrt(cmapx[1]), dims, nclust, 10)
             iclustup = np.concatenate((iclustup1[np.newaxis, :, :], iclustup2[np.newaxis, :, :]), axis=0)
-            isort = np.argsort(iclustup2[0])
+            isort = np.argsort(iclustup2[:,0])
             self.cmap = cmapx
         else:
             iclustup, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
