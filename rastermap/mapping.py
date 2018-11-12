@@ -253,7 +253,7 @@ class Rastermap:
         self.isort2 = isort2
         self.isort1 = isort1
         if iclustup.ndim > 1:
-            self.embedding = iclustup.T
+            self.embedding = iclustup
         else:
             self.embedding = iclustup.flatten()
         return self
