@@ -252,7 +252,7 @@ class MainW(QtGui.QMainWindow):
         self.win.show()
 
     def plot_embedding(self):
-        self.se = pg.ScatterPlotItem(size=4, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+        self.se = pg.ScatterPlotItem(size=4, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 70))
         pos = self.embedding.T
         spots = [{'pos': pos[:,i], 'data': 1} for i in range(pos.shape[1])] + [{'pos': [0,0], 'data': 1}]
         self.se.addPoints(spots)
@@ -593,16 +593,16 @@ class MainW(QtGui.QMainWindow):
             self.usv = usv
             self.U   = usv[0] @ np.diag(usv[1])
             ineur = 0
+            self.plot_embedding()
             self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
                                          symbol='x', pen=pg.mkPen(color=(255,0,0,255), width=3),
-                                         brush=pg.mkBrush(color=(255,0,0,255)), size=14)
+                                         size=12)#brush=pg.mkBrush(color=(255,0,0,255)), size=14)
             self.p0.addItem(self.xp)
             # if ROIs saved
             if 'ROIs' in self.proc:
                 for r,roi in enumerate(self.proc['ROIs']):
                     self.ROI_add(roi['pos'], roi['prect'])
 
-            self.plot_embedding()
             self.plot_activity()
             self.ROI_selection()
             self.plot_colorbar()
