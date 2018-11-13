@@ -86,13 +86,13 @@ class MainW(QtGui.QMainWindow):
         app_icon.addFile(icon_path, QtCore.QSize(256, 256))
         self.setWindowIcon(app_icon)
         self.setStyleSheet("QMainWindow {background: 'black';}")
-        self.stylePressed = ("QPushButton {Text-align: left; "
+        self.stylePressed = ("QPushButton { "
                              "background-color: rgb(100,50,100); "
                              "color:white;}")
-        self.styleUnpressed = ("QPushButton {Text-align: left; "
+        self.styleUnpressed = ("QPushButton { "
                                "background-color: rgb(50,50,50); "
                                "color:white;}")
-        self.styleInactive = ("QPushButton {Text-align: left; "
+        self.styleInactive = ("QPushButton { "
                               "background-color: rgb(50,50,50); "
                               "color:gray;}")
         self.loaded = False
@@ -150,13 +150,13 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(self.win, 0, 0, 38, 30)
         layout = self.win.ci.layout
         # --- embedding image
-        self.p0 = self.win.addPlot(row=0, col=0, lockAspect=True)
+        self.p0 = self.win.addPlot(row=0, col=0, rowspan=2, lockAspect=True)
         self.p0.setAspectLocked(ratio=1)
         self.p0.scene().sigMouseMoved.connect(self.mouse_moved_embedding)
         self.win.ci.layout.setRowStretchFactor(1, .1)
 
         # ---- colorbar
-        self.p3 = self.win.addPlot(row=0, col=1, rowspan=2)
+        self.p3 = self.win.addPlot(row=0, col=1, rowspan=3)
         self.p3.setMouseEnabled(x=False,y=False)
         self.p3.setMenuEnabled(False)
         self.colorimg = pg.ImageItem(autoDownsample=True)
@@ -164,7 +164,7 @@ class MainW(QtGui.QMainWindow):
         self.p3.scene().sigMouseMoved.connect(self.mouse_moved_bar)
         # --- activity image
         self.p1 = self.win.addPlot(row=0, col=2,
-                                   rowspan=2, invertY=True, padding=0)
+                                   rowspan=3, invertY=True, padding=0)
         self.p1.setMouseEnabled(x=True, y=False)
         self.img = pg.ImageItem(autoDownsample=False)
         self.p1.hideAxis('left')
@@ -181,46 +181,48 @@ class MainW(QtGui.QMainWindow):
         self.p1.scene().sigMouseMoved.connect(self.mouse_moved_activity)
 
         # bottom row for buttons
-        self.p2 = self.win.addViewBox(row=1, col=0)
+        self.p2 = self.win.addViewBox(row=2, col=0)
         self.p2.setMouseEnabled(x=False,y=False)
         self.p2.setMenuEnabled(False)
 
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
 
-        self.win.ci.layout.setColumnStretchFactor(0, 2)
+        self.win.ci.layout.setColumnStretchFactor(0, 1)
         self.win.ci.layout.setColumnStretchFactor(1, .1)
-        self.win.ci.layout.setColumnStretchFactor(2, 3)
+        #self.win.ci.layout.setColumnStretchFactor(2, 2)
 
         # self.key_on(self.win.scene().keyPressEvent)
-
+        rs = 25
         addROI = QtGui.QLabel("<font color='white'>add an ROI by SHIFT click</font>")
-        self.l0.addWidget(addROI, 19, 0, 1, 2)
+        self.l0.addWidget(addROI, rs+0, 0, 1, 2)
         addROI = QtGui.QLabel("<font color='white'>delete an ROI by ALT click</font>")
-        self.l0.addWidget(addROI, 20, 0, 1, 2)
+        self.l0.addWidget(addROI, rs+1, 0, 1, 2)
         addROI = QtGui.QLabel("<font color='white'>delete last-drawn ROI by DELETE</font>")
-        self.l0.addWidget(addROI, 21, 0, 1, 2)
-        self.updateROI = QtGui.QPushButton("update plot (SPACE)")
+        self.l0.addWidget(addROI, rs+2, 0, 1, 2)
+        addROI = QtGui.QLabel("<font color='white'>delete all ROIs by ALT-DELETE</font>")
+        self.l0.addWidget(addROI, rs+3, 0, 1, 2)
+        self.updateROI = QtGui.QPushButton("update (SPACE)")
         self.updateROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.updateROI.clicked.connect(self.ROI_selection)
         self.updateROI.setStyleSheet(self.styleInactive)
         self.updateROI.setEnabled(False)
-        self.l0.addWidget(self.updateROI, 22, 0, 1, 1)
+        self.l0.addWidget(self.updateROI, rs+4, 0, 1, 1)
         self.saveROI = QtGui.QPushButton("save ROIs")
         self.saveROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.saveROI.clicked.connect(self.ROI_save)
         self.saveROI.setStyleSheet(self.styleInactive)
         self.saveROI.setEnabled(False)
-        self.l0.addWidget(self.saveROI, 23, 0, 1, 1)
+        self.l0.addWidget(self.saveROI, rs+5, 0, 1, 1)
 
         addROI = QtGui.QLabel("<font color='white'>y-smoothing</font>")
-        self.l0.addWidget(addROI, 28, 0, 1, 1)
+        self.l0.addWidget(addROI, rs+6, 0, 1, 1)
         self.smooth = QtGui.QLineEdit(self)
         self.smooth.setValidator(QtGui.QIntValidator(0, 500))
         self.smooth.setText("10")
         self.smooth.setFixedWidth(45)
         self.smooth.setAlignment(QtCore.Qt.AlignRight)
         self.smooth.returnPressed.connect(self.plot_activity)
-        self.l0.addWidget(self.smooth, 28, 1, 1, 1)
+        self.l0.addWidget(self.smooth, rs+6, 1, 1, 1)
 
         #satlab = QtGui.QLabel("<font color='white'>saturation</font>")
         #self.l0.addWidget(satlab, 23, 1, 1, 1)
@@ -230,10 +232,10 @@ class MainW(QtGui.QMainWindow):
         self.sat = [0,1]
         for j in range(2):
             self.sl.append(Slider(j, self))
-            self.l0.addWidget(self.sl[j],28,2+2*j,5,1)
+            self.l0.addWidget(self.sl[j],rs+8-4*j,3,4,1)
             qlabel = VerticalLabel(text=txt[j])
             #qlabel.setStyleSheet('color: white;')
-            self.l0.addWidget(qlabel,28,3+2*j,5,1)
+            self.l0.addWidget(qlabel,rs+8-4*j,4,4,1)
 
 
         # ------ CHOOSE CELL-------
@@ -311,7 +313,11 @@ class MainW(QtGui.QMainWindow):
                 self.ROI_selection()
         elif event.key() == QtCore.Qt.Key_Delete:
             if len(self.ROIs) > 0:
-                self.ROI_delete()
+                if event.modifiers() == QtCore.Qt.AltModifier:
+                    for n in range(len(self.ROIs)):
+                        self.ROI_delete()
+                else:
+                    self.ROI_delete()
 
     def ROI_selection(self):
         self.colormat = np.zeros((0,10,3), dtype=np.int64)
@@ -380,8 +386,8 @@ class MainW(QtGui.QMainWindow):
         #self.ROI_selection()
 
     def ROI_delete(self):
-        n = self.ROIorder[-1]
         if len(self.ROIs) > 0:
+            n = self.ROIorder[-1]
             self.delete(n)
 
     def delete(self, n):
@@ -395,18 +401,19 @@ class MainW(QtGui.QMainWindow):
         self.ROIorder.remove(n)
 
     def ROI_remove(self, p):
-        if len(p) > 1:
-            for n in range(len(self.ROIs)-1,-1,-1):
-                ptrue = self.ROIs[n].inROI(np.array(p))
-                if ptrue.shape[0] > 0:
-                    self.delete(n)
-                    break
-        elif len(p)==1:
-            p = int(p[0])
-            for n in range(len(self.ROIs)-1,-1,-1):
-                if self.selected[p] in self.ROIs[n].selected:
-                    self.delete(n)
-                    break
+        if len(self.ROIs) > 0:
+            if len(p) > 1:
+                for n in range(len(self.ROIs)-1,-1,-1):
+                    ptrue = self.ROIs[n].inROI(np.array(p))
+                    if ptrue.shape[0] > 0:
+                        self.delete(n)
+                        break
+            elif len(p)==1:
+                p = int(p[0])
+                for n in range(len(self.ROIs)-1,-1,-1):
+                    if self.selected[p] in self.ROIs[n].selected:
+                        self.delete(n)
+                        break
 
     def ROI_save(self):
         name = QtGui.QFileDialog.getSaveFileName(self,'ROI name (*.npy)')
