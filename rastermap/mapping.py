@@ -231,7 +231,7 @@ class Rastermap:
             NN = X.shape[0]
             X = X @ self.v
 
-        if self.init=='pca':
+        if self.init == 'pca':
             init_sort = np.argsort(u[:NN, :self.n_components], axis=0)
             #init_sort = u[:NN,:self.n_components]
             if False:
@@ -239,7 +239,7 @@ class Rastermap:
                 iy = init_sort < 0
                 init_sort[ix] = init_sort[ix] - 100.
                 init_sort[iy] = init_sort[iy] + 100.
-        elif self.init=='random':
+        elif self.init == 'random':
             init_sort = np.random.permutation(NN)[:,np.newaxis]
             for j in range(1,self.n_components):
                 init_sort = np.concatenate((init_sort, np.random.permutation(NN)[:,np.newaxis]), axis=-1)
@@ -325,13 +325,20 @@ class Rastermap:
         print(SALL.shape)
         tic = time.time()
 
-        ncomps_anneal = (np.arange(1, nfreqs, 2)**dims).astype('int')
+        ncomps_anneal = (np.arange(3, nfreqs, 2)**dims).astype('int')
         ncomps_anneal = np.tile(ncomps_anneal, (2,1)).T.flatten()
-        ncomps_anneal = np.concatenate((ncomps_anneal[1:10], ncomps_anneal[3:10], ncomps_anneal[5:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
+        ncomps_anneal = np.concatenate((ncomps_anneal[:10], ncomps_anneal[2:10], ncomps_anneal[4:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         #ncomps_anneal = np.concatenate((ncomps_anneal[1:5], ncomps_anneal[1:10], ncomps_anneal[3:], SALL.shape[0]*np.ones(10)), axis=0).astype('int')
         #ncomps_anneal = np.concatenate((ncomps_anneal[1:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         #ncomps_anneal = np.concatenate((np.linspace(4,SALL.shape[0],30), SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         #ncomps_anneal = SALL.shape[0]*np.ones(50).astype('int')
+
+
+
+        # vscale = (self.K + fxx[:nc])**2
+
+        vscale = self.K + np.arange(len(fxx))
+        vscale[0] = np.inf
 
         xnorm = (X**2).sum(axis=1)[:,np.newaxis]
         E = np.zeros(len(ncomps_anneal)+1)
@@ -343,7 +350,9 @@ class Rastermap:
             S = SALL[:nc, :]
             S0 = S[:, xid]
             A  = S0 @ X
-            nA      = np.sum(A**2, axis=1)**.5 * (self.K + np.arange(nc))**(self.alpha/2)
+            nA      = np.sum(A**2, axis=1)**.5
+            #nA      = nA * (self.K + np.arange(nc))**(self.alpha/2)
+            nA      *= vscale[:nc]**(self.alpha/2)
             A        /= nA[:, np.newaxis]
             eweights = (S0.T / nA) @ S
             AtS     = A.T @ S

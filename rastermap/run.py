@@ -14,7 +14,7 @@ class RunWindow(QtGui.QDialog):
         self.win.setLayout(self.layout)
 
         # default ops
-        self.ops = {'n_components': 2, 'n_X': 40, 'n_Y': 0, 'alpha': 1, 'K': 1,
+        self.ops = {'n_components': 2, 'n_X': 40, 'n_Y': 0, 'alpha': 1., 'K': 1.,
                     'nPC': 200, 'sig_Y': 2, 'init': 'pca'}
 
         keys = ['n_components','n_X','n_Y','alpha','K','nPC','sig_Y','init']
