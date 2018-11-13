@@ -420,7 +420,7 @@ class MainW(QtGui.QMainWindow):
         name = name[0]
         self.proc['ROIs'] = []
         for r in self.ROIs:
-            self.proc['ROIs'].append({'pos': r.pos, 'prect': r.prect})
+            self.proc['ROIs'].append({'pos': r.pos, 'prect': r.prect, 'color': r.color})
         np.save(name, self.proc)
 
     def enable_loaded(self):
