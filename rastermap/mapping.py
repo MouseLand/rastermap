@@ -176,7 +176,7 @@ class Rastermap:
     def __init__(self, n_components=2, n_X = -1, n_Y = 0,
                  nPC = 400,
                  sig_Y=1.0, init='pca', alpha = 1., K = 1.,
-                 mode = 'basic'):
+                 mode = 'basic', verbose = True):
 
         self.n_components = n_components
         self.alpha = alpha
@@ -190,6 +190,8 @@ class Rastermap:
             self.n_X = n_X
         else:
             self.n_X  = np.ceil(1600**(1/n_components)).astype('int')
+
+        self.verbose = verbose
 
     def fit(self, X, u=None, sv=None, v=None):
         """Fit X into an embedded space.
@@ -322,7 +324,6 @@ class Rastermap:
         nfreqs = np.ceil(2/3 * nclust)
         nfreqs = int(2 * np.floor(nfreqs/2)+1)
         SALL, fxx = create_ND_basis(dims, nclust, nfreqs)
-        print(SALL.shape)
         tic = time.time()
 
         ncomps_anneal = (np.arange(3, nfreqs, 2)**dims).astype('int')
@@ -342,7 +343,8 @@ class Rastermap:
 
         xnorm = (X**2).sum(axis=1)[:,np.newaxis]
         E = np.zeros(len(ncomps_anneal)+1)
-        print('time; iteration;  explained PC variance')
+        if self.verbose:
+            print('time; iteration;  explained PC variance')
         if self.mode is 'parallel':
             cmapx = np.zeros((2, NN, nclust**dims), 'float32')
         for t,nc in enumerate(ncomps_anneal):
@@ -369,8 +371,10 @@ class Rastermap:
             if self.mode is 'parallel':
                 cmapx[t%2] = cmap
             if t%10==0:
-                print('%2.2fs    %2.0d        %4.4f'%(time.time()-tic, t, E[t]))
-        print('%2.2fs   final      %4.4f'%(time.time()-tic, E[t]))
+                if self.verbose:
+                    print('%2.2fs    %2.0d        %4.4f'%(time.time()-tic, t, E[t]))
+        if self.verbose:
+            print('%2.2fs   final      %4.4f'%(time.time()-tic, E[t]))
         if self.mode is 'parallel':
             iclustup1, cmax = upsample(np.sqrt(cmapx[0]), dims, nclust, 10)
             iclustup2, cmax = upsample(np.sqrt(cmapx[1]), dims, nclust, 10)
@@ -382,7 +386,8 @@ class Rastermap:
             isort = np.argsort(iclustup[0])
             self.cmap = cmap
         E[t+1] = np.nanmean(cmax**2)/np.nanmean(xnorm)
-        print('%2.2fs upsampled    %4.4f'%(time.time()-tic, E[t+1]))
+        if self.verbose:
+            print('%2.2fs upsampled    %4.4f'%(time.time()-tic, E[t+1]))
         self.E = E
         self.S = S
         self.A = A
