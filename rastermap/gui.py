@@ -162,12 +162,12 @@ class MainW(QtGui.QMainWindow):
         self.colorimg = pg.ImageItem(autoDownsample=True)
         self.p3.addItem(self.colorimg)
         self.p3.scene().sigMouseMoved.connect(self.mouse_moved_bar)
-        #self.p3.hideAxis('bottom')
         # --- activity image
         self.p1 = self.win.addPlot(row=0, col=2,
                                    rowspan=2, invertY=True, padding=0)
         self.p1.setMouseEnabled(x=True, y=False)
         self.img = pg.ImageItem(autoDownsample=False)
+        self.p1.hideAxis('left')
         colormap = cm.get_cmap("viridis")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
