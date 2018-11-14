@@ -15,12 +15,12 @@ class gROI():
     '''
     draw a line segment which is the gradient over which to plot the points
     '''
-    def __init__(self, pos, prect, parent=None):
+    def __init__(self, pos, prect, color, parent=None):
         self.prect = prect
         self.pos = pos
         #self.slope = (pos[1,1] - pos[0,1]) / (pos[1,0] - pos[0,0])
         #self.yint  = pos[1,0] - self.slope * pos[0,0]
-        self.color = np.random.randint(255,size=(3,))
+        self.color = color
         self.pen = pg.mkPen(pg.mkColor(self.color),
                                 width=3,
                                 style=QtCore.Qt.SolidLine)

@@ -319,37 +319,39 @@ class MainW(QtGui.QMainWindow):
                 else:
                     self.ROI_delete()
 
-    def ROI_selection(self):
+    def ROI_selection(self, loaded=False):
         self.colormat = np.zeros((0,10,3), dtype=np.int64)
         lROI = len(self.Rselected)
         if lROI > 0:
             self.selected = np.array([item for sublist in self.Rselected for item in sublist])
             self.colormat = np.concatenate(self.Rcolors, axis=0)
-            if lROI > 4:
-                self.Ur = np.zeros((lROI, self.U.shape[1]), dtype=np.float32)
-                ugood = np.zeros((lROI,)).astype(np.int32)
-                for r,rc in enumerate(self.Rselected):
-                    if len(rc) > 0:
-                        self.Ur[r,:] = self.U[rc,:].mean(axis=0)
-                        ugood[r] = 1
-                ugood = ugood.astype(bool)
-                if ugood.sum() > 4:
-                    model = Rastermap(n_components=1, n_X=20, init=np.arange(0,ugood.sum()).astype(np.int32))
-                    y     = model.fit_transform(self.Ur[ugood,:])
-                    y     = y.flatten()
-                    y2 = np.zeros((lROI,))
-                    y2[(ugood).nonzero()[0]] = y
-                    print(y2)
-                    rsort = np.argsort(y2)
-                    print(rsort)
-                    roiorder = []
-                    for r in self.ROIorder:
-                        roiorder.append((rsort==r).nonzero()[0][0])
-                    self.ROIorder = roiorder
-                    self.ROIs = [self.ROIs[i] for i in rsort]
-                    self.Rselected = [self.Rselected[i] for i in rsort]
-                    self.Rcolors = [self.Rcolors[i] for i in rsort]
-                    self.selected = np.array([item for sublist in self.Rselected for item in sublist])
+            if not loaded:
+                print('yo')
+                if lROI > 4:
+                    self.Ur = np.zeros((lROI, self.U.shape[1]), dtype=np.float32)
+                    ugood = np.zeros((lROI,)).astype(np.int32)
+                    for r,rc in enumerate(self.Rselected):
+                        if len(rc) > 0:
+                            self.Ur[r,:] = self.U[rc,:].mean(axis=0)
+                            ugood[r] = 1
+                    ugood = ugood.astype(bool)
+                    if ugood.sum() > 4:
+                        model = Rastermap(n_components=1, n_X=20, init=np.arange(0,ugood.sum()).astype(np.int32))
+                        y     = model.fit_transform(self.Ur[ugood,:])
+                        y     = y.flatten()
+                        y2 = np.zeros((lROI,))
+                        y2[(ugood).nonzero()[0]] = y
+                        print(y2)
+                        rsort = np.argsort(y2)
+                        print(rsort)
+                        roiorder = []
+                        for r in self.ROIorder:
+                            roiorder.append((rsort==r).nonzero()[0][0])
+                        self.ROIorder = roiorder
+                        self.ROIs = [self.ROIs[i] for i in rsort]
+                        self.Rselected = [self.Rselected[i] for i in rsort]
+                        self.Rcolors = [self.Rcolors[i] for i in rsort]
+                        self.selected = np.array([item for sublist in self.Rselected for item in sublist])
         else:
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.colormat = 255*np.ones((self.X.shape[0],10,3), dtype=np.int32)
@@ -377,8 +379,10 @@ class MainW(QtGui.QMainWindow):
             ineur = self.selected[ineur]
             self.xp.setData(pos=self.embedding[ineur,:][np.newaxis,:])
 
-    def ROI_add(self, pos, prect):
-        self.ROIs.append(gROI(pos, prect, self))
+    def ROI_add(self, pos, prect, color=None):
+        if color is None:
+            color =  np.random.randint(255,size=(3,))
+        self.ROIs.append(gROI(pos, prect, color, self))
         self.Rselected.append(self.ROIs[-1].selected)
         self.Rcolors.append(np.reshape(np.tile(self.ROIs[-1].color, 10 * self.Rselected[-1].size),
                             (self.Rselected[-1].size, 10, 3)))
@@ -629,19 +633,17 @@ class MainW(QtGui.QMainWindow):
             self.usv = usv
             self.U   = usv[0] @ np.diag(usv[1])
             ineur = 0
+            # if ROIs saved
+            if 'ROIs' in self.proc:
+                for r,roi in enumerate(self.proc['ROIs']):
+                    self.ROI_add(roi['pos'], roi['prect'], roi['color'])
+
+            self.ROI_selection(loaded=True)
             self.plot_embedding()
             self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
                                          symbol='x', pen=pg.mkPen(color=(255,0,0,255), width=3),
                                          size=12)#brush=pg.mkBrush(color=(255,0,0,255)), size=14)
             self.p0.addItem(self.xp)
-            # if ROIs saved
-            if 'ROIs' in self.proc:
-                for r,roi in enumerate(self.proc['ROIs']):
-                    self.ROI_add(roi['pos'], roi['prect'])
-
-            self.plot_activity()
-            self.ROI_selection()
-            self.plot_colorbar()
             self.show()
             self.loaded = True
 
