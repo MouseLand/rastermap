@@ -1,6 +1,6 @@
 from scipy.ndimage import gaussian_filter1d
 from scipy.sparse.linalg import eigsh
-from scipy.stats import zscore
+from scipy.stats import zscore, skew
 import math
 import numpy as np
 import time
@@ -17,19 +17,22 @@ def distances(x, y):
     ds = np.sqrt(ds)
     return ds
 
-def create_ND_basis(dims, nclust, K):
+def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
     if dims==1:
         xs = np.arange(0,nclust)
         S = np.ones((K, nclust), 'float32')
         for k in range(K):
-           S[k, :] = np.sin(math.pi + (k+1)%2 * math.pi/2 + 2*math.pi/nclust * (xs+0.5) * int((1+k)/2))
+            if flag:
+                S[k, :] = np.sin(math.pi + (k+1)%2 * math.pi/2 + 2*math.pi/nclust * (xs+0.5) * int((1+k)/2))
+            else:
+                S[k, :] = np.cos(math.pi/nclust * (xs+0.5) * k)
         S /= np.sum(S**2, axis = 1)[:, np.newaxis]**.5
         fxx = np.floor((np.arange(K)+1)/2).astype('int')
         #fxx = np.arange(K).astype('int')
     else:
-        S0, fy = create_ND_basis(dims-1, nclust, K)
-        Kx, fx = create_ND_basis(1, nclust, K)
+        S0, fy = create_ND_basis(dims-1, nclust, K, flag)
+        Kx, fx = create_ND_basis(1, nclust, K, flag)
         S = np.zeros((S0.shape[0], K, S0.shape[1], nclust), np.float64)
         fxx = np.zeros((S0.shape[0], K))
         for kx in range(K):
@@ -189,7 +192,7 @@ class Rastermap:
         if n_X>0:
             self.n_X = n_X
         else:
-            self.n_X  = np.ceil(1600**(1/n_components)).astype('int')
+            self.n_X  = min(100, np.ceil(1600**(1/n_components)).astype('int'))
 
         self.verbose = verbose
 
@@ -208,24 +211,25 @@ class Rastermap:
             # compute svd and keep iPC's of data
             nmin = min([X.shape[0],X.shape[1]])
             nmin = np.minimum(nmin-1, self.nPC)
-            u,sv,v = svdecon(X, k=nmin)
+            u,sv,v = svdecon(np.float64(X), k=nmin)
+            #u, sv, v = np.float32(u), np.float32(sv), np.float32(v)
         self.nPC = sv.size
 
         # first smooth in Y (if n_Y > 0)
         # this will be a 1-D fit
         isort2 = []
         if self.n_Y > 0:
-            isort2, iclustup = self._map(v @ np.diag(sv), 1, self.n_Y, v[:,0][:,np.newaxis])
+            vsort = np.argsort(v[:,0])[:,np.newaxis]
+            isort2, iclustup = self._map(v @ np.diag(sv), 1, self.n_Y, vsort)
             X = gaussian_filter1d(X[:, isort2], self.sig_Y, axis=1)
-            X -= X.mean(axis=1)[:,np.newaxis]
-            u,sv,v = svdecon(X, k=nmin)
+            u,sv,v = svdecon(np.float64(X), k=nmin)
 
         self.u = u
         self.sv = sv
         self.v = v
         if self.mode is 'parallel':
             NN = Xall.shape[1]
-            X = np.zeros((2, NN, u.shape[1]), 'float32')
+            X = np.zeros((2, NN, u.shape[1]), 'float64')
             for j in range(2):
                 Xall[j] -= Xall[j].mean(axis=-1)[:, np.newaxis]
                 X[j] = Xall[j] @ self.v
@@ -234,6 +238,7 @@ class Rastermap:
             X = X @ self.v
 
         if self.init == 'pca':
+            u = u * np.sign(skew(u, axis=0))
             init_sort = np.argsort(u[:NN, :self.n_components], axis=0)
             #init_sort = u[:NN,:self.n_components]
             if False:
@@ -315,15 +320,17 @@ class Rastermap:
             X = Xall[1]
         NN,nPC = X.shape
         # initialize 1D clusters as nodes of 1st PC
-        iclust = np.zeros((dims, NN))
         xid = np.zeros(NN)
         for j in range(dims):
-            iclust[j] = np.floor(nclust * u[:,j].astype(np.float32)/NN)
-            xid = nclust * xid + iclust[j]
+            iclust = np.floor(nclust * u[:,j].astype(np.float64)/NN)
+            xid = nclust * xid + iclust
         xid = xid.astype('int').flatten()
         nfreqs = np.ceil(2/3 * nclust)
         nfreqs = int(2 * np.floor(nfreqs/2)+1)
-        SALL, fxx = create_ND_basis(dims, nclust, nfreqs)
+        if dims>1:
+            SALL, fxx = create_ND_basis(dims, nclust, nfreqs, True)
+        else:
+            SALL, fxx = create_ND_basis(dims, nclust, nfreqs, False)
         tic = time.time()
 
         ncomps_anneal = (np.arange(3, nfreqs, 2)**dims).astype('int')
@@ -333,8 +340,6 @@ class Rastermap:
         #ncomps_anneal = np.concatenate((ncomps_anneal[1:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         #ncomps_anneal = np.concatenate((np.linspace(4,SALL.shape[0],30), SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         #ncomps_anneal = SALL.shape[0]*np.ones(50).astype('int')
-
-
 
         # vscale = (self.K + fxx[:nc])**2
 
@@ -383,7 +388,7 @@ class Rastermap:
             self.cmap = cmapx
         else:
             iclustup, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
-            isort = np.argsort(iclustup[0])
+            isort = np.argsort(iclustup[:,0])
             self.cmap = cmap
         E[t+1] = np.nanmean(cmax**2)/np.nanmean(xnorm)
         if self.verbose:
