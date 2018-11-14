@@ -352,11 +352,11 @@ class MainW(QtGui.QMainWindow):
                         self.Rselected = [self.Rselected[i] for i in rsort]
                         self.Rcolors = [self.Rcolors[i] for i in rsort]
                         self.selected = np.array([item for sublist in self.Rselected for item in sublist])
+                        self.colormat = np.concatenate(self.Rcolors, axis=0)
         else:
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.colormat = 255*np.ones((self.X.shape[0],10,3), dtype=np.int32)
 
-        self.colormat[:,-1,:] = 0
         self.colormat_plot = self.colormat.copy()
         self.plot_activity()
         self.plot_colorbar()
@@ -559,6 +559,14 @@ class MainW(QtGui.QMainWindow):
             print('ERROR: this is not a *.npy array :( ')
             X = None
         if X is not None and X.ndim > 1:
+            self.startROI = False
+            self.endROI = False
+            self.posROI = np.zeros((3,2))
+            self.prect = np.zeros((5,2))
+            self.ROIs = []
+            self.ROIorder = []
+            self.Rselected = []
+            self.Rcolors = []
             iscell, file_iscell = self.load_iscell()
             self.file_iscell = None
             self.X = X
@@ -613,6 +621,14 @@ class MainW(QtGui.QMainWindow):
             print('ERROR: this is not a *.npy file :( ')
             X = None
         if X is not None:
+            self.startROI = False
+            self.endROI = False
+            self.posROI = np.zeros((3,2))
+            self.prect = np.zeros((5,2))
+            self.ROIs = []
+            self.ROIorder = []
+            self.Rselected = []
+            self.Rcolors = []
             iscell, file_iscell = self.load_iscell()
             self.X = X
             self.file_iscell = None
@@ -636,7 +652,11 @@ class MainW(QtGui.QMainWindow):
             # if ROIs saved
             if 'ROIs' in self.proc:
                 for r,roi in enumerate(self.proc['ROIs']):
-                    self.ROI_add(roi['pos'], roi['prect'], roi['color'])
+                    if 'color' in roi:
+                        self.ROI_add(roi['pos'], roi['prect'], roi['color'])
+                    else:
+                        self.ROI_add(roi['pos'], roi['prect'],  np.random.randint(255,size=(3,)))
+
 
             self.ROI_selection(loaded=True)
             self.plot_embedding()
