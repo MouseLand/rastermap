@@ -12,7 +12,12 @@ Here is what the output looks like for a recording of 64,000 neurons in a larval
 
 ## Installation
 
-You can just download the github folder as outlined above or you can pip install the package:
+You can download the github folder and run the following inside the folder to start the GUI:
+```
+python -m rastermap
+```
+
+You can pip install the outdated package here (no GUI or 2D suppport):
 ```
 pip install rastermap
 ```
