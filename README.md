@@ -27,18 +27,18 @@ rastermap can be run the same way as the T-SNE embedding algorithm or other algo
 # >> from github <<
 import sys
 sys.path.append('/media/carsen/DATA2/Github/rastermap/rastermap/')
-from mapping import RMAP
+from mapping import Rastermap
 
 # >> from pip <<
-from rastermap import RMAP
+from rastermap import Rastermap
 
-model = RMAP(n_components=1, n_X=30, n_Y=100, iPC=np.arange(0,200).astype(np.int32), init='random')
+model = Rastermap(n_components=1, n_X=30, nPC=200, init='pca')
 
 # fit does not return anything, it adds attributes to model
-# attributes: embedding, isort1, isort2
+# attributes: embedding, u, s, v, isort1
 
 model.fit(sp)
-plt.imshow(sp[model.isort1, model.isort2])
+plt.imshow(sp[model.isort1, :])
 
 # fit_transform returns embedding (upsampled cluster identities)
 embedding = model.fit_transform(sp)
