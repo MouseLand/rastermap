@@ -19,7 +19,7 @@ pip install rastermap
 
 ## Using (python) rastermap
 
-rastermap can be run the same way as the T-SNE embedding algorithm or other algorithms in scikit-learn. **RMAP** is a class which has functions *fit*, *fit_transform*, and *transform* (embeds new points into original embedding).
+rastermap can be run the same way as the T-SNE embedding algorithm or other algorithms in scikit-learn. **Rastermap** is a class which has functions *fit*, *fit_transform*, and *transform* (embeds new points into original embedding).
 
 **(input should be n_samples x n_features like t-sne, etc)**
 
