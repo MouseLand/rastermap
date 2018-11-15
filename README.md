@@ -10,6 +10,9 @@ Here is what the output looks like for a recording of 64,000 neurons in a larval
 
 ![fishbrain](fish_GUI3.png)
 
+Rastermap runs faster than tSNE and UMAP, and works better in terms of finding correlated neighbors in neural data. The fish dataset (with 64,000 neurons and 5500 timepoints) took 259 seconds to process with Rastermap, and 3790 and 1706 with tSNE and UMAP respectively.
+![performance](rmap_perf.png)
+
 ## Installation
 
 You can just download the github folder as outlined above or you can pip install the package:
@@ -18,6 +21,21 @@ pip install rastermap
 ```
 
 ## Using (python) rastermap
+
+### Running in the GUI
+
+Save your data into an npy file that is just a matrix that is neurons x features. Then "Load data matrix". Next click "Run embedding algorithm" and run with TWO components if you want to visualize it in the GUI. The embedding will pop up in the GUI when it's done running, and save the embedding in the same folder as your data matrix with the name "embedding.npy". Loading the embedding:
+
+```
+import numpy as np
+model = np.load('embedding.npy')
+model = model.dict()
+y = model['embedding'] # neurons x n_components
+```
+
+To draw ROIs around points in the GUI, you draw lines and then resize them. The neurons' activity traces then show up on the right side of the GUI sorted along this "line axis" that you've drawn. To start drawing a line, hold down SHIFT and click for the first point, click for the endpoint, and then resize the box and click again to complete it. Do NOT hold down the mouse, that will just drag you all over the place :) To update the plot on the right with the selected cells on the left, hit the SPACE key. You can delete the last ROI with the DELETE button, or delete a specific ROI by clicking inside that ROI and holding down ALT. You can save the ROIs you've drawn with the "save ROIs" button
+
+### Running the code
 
 rastermap can be run the same way as the T-SNE embedding algorithm or other algorithms in scikit-learn. **Rastermap** is a class which has functions *fit*, *fit_transform*, and *transform* (embeds new points into original embedding).
 
