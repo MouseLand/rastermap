@@ -36,7 +36,7 @@ if __name__ == '__main__':
                           ops['sig_Y'], ops['init'], ops['alpha'], ops['K'])
         model.fit(S)
         proc  = {'embedding': model.embedding, 'usv': [model.u, model.sv, model.v],
-                 'ops': ops, 'filename': args.S}
+                 'cmap': model.cmap, 'A': model.A, 'ops': ops, 'filename': args.S}
         basename, fname = os.path.split(args.S)
         np.save(os.path.join(basename, 'embedding.npy'), proc)
     else:

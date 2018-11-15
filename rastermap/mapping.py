@@ -151,12 +151,12 @@ class Rastermap:
     -----------
     n_components : int, optional (default: 2)
         dimension of the embedding space
-    alpha: float, optional (default: 1.0)
+    alpha : float, optional (default: 1.0)
         exponent of the power law enforced on component n as: 1/(K+n)^alpha
-    K:    float, optional (default: 1.0)
+    K :  float, optional (default: 1.0)
         additive offset of the power law enforced on component n as: 1/(K+n)^alpha
-    n_X : int, optional (default: -1, i.e. auto)
-        number of Fourier components used. If -1, 2/3 of the Fourier modes are used for each dimension.
+    n_X :  int, optional (default: 40)
+        size of the grid on which the Fourier modes are rasterized
     n_Y : int, optional (default: 0, i.e. not used)
         number of Fourier components in Y: will be used to smooth data for better PCs
     nPC : int, optional (default: 400)
@@ -165,18 +165,9 @@ class Rastermap:
         can use 'pca', 'random', or a matrix n_samples x n_components
     verbose: bool (default: True)
         whether to output progress during optimization
-
-    Returns
-    ----------
-    embedding : array-like, shape (n_samples, n_components)
-        Stores the embedding vectors.
-    u,sv,v : singular value decomposition of data S, potentially with smoothing
-    isort1 : sorting along first dimension of matrix
-    isort2 : sorting along second dimension of matrix (if n_Y > 0)
-    cmap: correlation of each item with all locations in the embedding map (before upsampling)
-    A:    PC coefficients of each Fourier mode
     """
-    def __init__(self, n_components=2, n_X = -1, n_Y = 0,
+
+    def __init__(self, n_components=2, n_X = 40, n_Y = 0,
                  nPC = 400,
                  sig_Y=1.0, init='pca', alpha = 1., K = 1.,
                  mode = 'basic', verbose = True):
@@ -189,19 +180,26 @@ class Rastermap:
         self.init = init
         self.mode = mode
         self.n_Y = n_Y
-        if n_X>0:
-            self.n_X = n_X
-        else:
-            self.n_X  = min(100, np.ceil(1600**(1/n_components)).astype('int'))
-
         self.verbose = verbose
+        self.n_X = n_X
 
     def fit(self, X, u=None, sv=None, v=None):
         """Fit X into an embedded space.
-        Parameters
+        Inputs
         ----------
         X : array, shape (n_samples, n_features)
-        y : Ignored
+        u,s,v : svd decomposition of X (optional)
+
+        Assigns
+        ----------
+        embedding : array-like, shape (n_samples, n_components)
+            Stores the embedding vectors.
+        u,sv,v : singular value decomposition of data S, potentially with smoothing
+        isort1 : sorting along first dimension of matrix
+        isort2 : sorting along second dimension of matrix (if n_Y > 0)
+        cmap: correlation of each item with all locations in the embedding map (before upsampling)
+        A:    PC coefficients of each Fourier mode
+
         """
         if self.mode is 'parallel':
             Xall = X.copy()
@@ -265,12 +263,13 @@ class Rastermap:
     def fit_transform(self, X, u=None, sv=None, v=None):
         """Fit X into an embedded space and return that transformed
         output.
-        Parameters
+        Inputs
         ----------
         X : array, shape (n_samples, n_features). X contains a sample per row.
+
         Returns
         -------
-        X_new : array, shape (n_samples, n_components)
+        embedding : array, shape (n_samples, n_components)
             Embedding of the training data in low-dimensional space.
         """
         self.fit(X, u, sv, v)
