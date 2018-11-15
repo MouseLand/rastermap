@@ -19,6 +19,7 @@ def distances(x, y):
 
 def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
+    #flag = False
     if dims==1:
         xs = np.arange(0,nclust)
         S = np.ones((K, nclust), 'float32')
@@ -331,9 +332,11 @@ class Rastermap:
             SALL, fxx = create_ND_basis(dims, nclust, nfreqs, True)
         else:
             SALL, fxx = create_ND_basis(dims, nclust, nfreqs, False)
+        SALL = SALL[1:, :]
+        fxx = fxx[1:]
         tic = time.time()
 
-        ncomps_anneal = (np.arange(3, nfreqs, 2)**dims).astype('int')
+        ncomps_anneal = (np.arange(3, nfreqs, 2)**dims).astype('int')  - 1
         ncomps_anneal = np.tile(ncomps_anneal, (2,1)).T.flatten()
         ncomps_anneal = np.concatenate((ncomps_anneal[:10], ncomps_anneal[2:10], ncomps_anneal[4:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         #ncomps_anneal = np.concatenate((ncomps_anneal[1:5], ncomps_anneal[1:10], ncomps_anneal[3:], SALL.shape[0]*np.ones(10)), axis=0).astype('int')
@@ -343,8 +346,8 @@ class Rastermap:
 
         # vscale = (self.K + fxx[:nc])**2
 
-        vscale = self.K + np.arange(len(fxx))
-        vscale[0] = np.inf
+        vscale = 1 + self.K + np.arange(len(fxx))
+#        vscale[0] = np.inf
 
         xnorm = (X**2).sum(axis=1)[:,np.newaxis]
         E = np.zeros(len(ncomps_anneal)+1)
@@ -352,14 +355,15 @@ class Rastermap:
             print('time; iteration;  explained PC variance')
         if self.mode is 'parallel':
             cmapx = np.zeros((2, NN, nclust**dims), 'float32')
+
         for t,nc in enumerate(ncomps_anneal):
             # get basis functions
             S = SALL[:nc, :]
             S0 = S[:, xid]
             A  = S0 @ X
             nA      = np.sum(A**2, axis=1)**.5
-            #nA      = nA * (self.K + np.arange(nc))**(self.alpha/2)
             nA      *= vscale[:nc]**(self.alpha/2)
+            #nA = np.ones(nA.shape)
             A        /= nA[:, np.newaxis]
             eweights = (S0.T / nA) @ S
             AtS     = A.T @ S
