@@ -10,9 +10,6 @@ Here is what the output looks like for a recording of 64,000 neurons in a larval
 
 ![fishbrain](fish_GUI3.png)
 
-Rastermap runs faster than tSNE and UMAP, and works better in terms of finding correlated neighbors in neural data. The fish dataset (with 64,000 neurons and 5500 timepoints) took 259 seconds to process with Rastermap, and 3790 and 1706 with tSNE and UMAP respectively.
-![performance](rmap_perf.png)
-
 ## Installation
 
 You can just download the github folder as outlined above or you can pip install the package:
