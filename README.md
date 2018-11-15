@@ -12,14 +12,34 @@ Here is what the output looks like for a recording of 64,000 neurons in a larval
 
 ## Installation
 
-You can just download the github folder as outlined above or you can pip install the package:
+You can download the github folder and run the following inside the folder to start the GUI:
+```
+python -m rastermap
+```
+
+You can pip install the outdated package here (no GUI or 2D suppport):
 ```
 pip install rastermap
 ```
 
 ## Using (python) rastermap
 
-rastermap can be run the same way as the T-SNE embedding algorithm or other algorithms in scikit-learn. **RMAP** is a class which has functions *fit*, *fit_transform*, and *transform* (embeds new points into original embedding).
+### Running in the GUI
+
+Save your data into an npy file that is just a matrix that is neurons x features. Then "Load data matrix". Next click "Run embedding algorithm" and run with TWO components if you want to visualize it in the GUI. The embedding will pop up in the GUI when it's done running, and save the embedding in the same folder as your data matrix with the name "embedding.npy". Loading the embedding:
+
+```
+import numpy as np
+model = np.load('embedding.npy')
+model = model.dict()
+y = model['embedding'] # neurons x n_components
+```
+
+To draw ROIs around points in the GUI, you draw lines and then resize them. The neurons' activity traces then show up on the right side of the GUI sorted along this "line axis" that you've drawn. To start drawing a line, hold down SHIFT and click for the first point, click for the endpoint, and then resize the box and click again to complete it. Do NOT hold down the mouse, that will just drag you all over the place :) To update the plot on the right with the selected cells on the left, hit the SPACE key. You can delete the last ROI with the DELETE button, or delete a specific ROI by clicking inside that ROI and holding down ALT. You can save the ROIs you've drawn with the "save ROIs" button
+
+### Running the code
+
+rastermap can be run the same way as the T-SNE embedding algorithm or other algorithms in scikit-learn. **Rastermap** is a class which has functions *fit*, *fit_transform*, and *transform* (embeds new points into original embedding).
 
 **(input should be n_samples x n_features like t-sne, etc)**
 
@@ -51,34 +71,31 @@ embed2 = model.transform(sp2)
 
 Rastermap first takes the specified PCs of the data, and then embeds them into n_X clusters. It returns upsampled cluster identities (n_X x upsamp). Clusters are also computed across Y (n_Y) and smoothed, to help with fitting.
 
-- **n_components** : int, optional (default: 1)
+- **n_components** : int, optional (default: 2)
         dimension of the embedding space
-- **n_X** : int, optional (default: 30)
-        number of clusters in X
-- **n_Y** :  int, optional (default: 100)
-        number of clusters in Y: will be used to smooth data before sorting in X
-- **iPC**  : nparray, int, optional (default: 0-199)
-        which PCs to use during optimization
-- **upsamp** : int, optional (default: 25)
-        embedding is upsampled in last iteration using kriging interpolation
-- **sig_upsamp** : float, optional (default: 1.0)
-        stddev of Gaussian in kriging interpolation for upsampled estimation
-- **sig_Y** : float, optional (default: 3.0)
-        stddev of Gaussian smoothing in Y before sorting in X
-- **sig_anneal**: 1D float array, optional (default: starts at 6.0, decreases to 1.0)
-        stddev of Gaussian smoothing of clusters, changes across iterations
-        default is 50 iterations (last 20 at 1.0)
+- **n_X** : int, optional (default: 40)
+        size of the grid on which the Fourier modes are rasterized
+- **n_Y** :  int, optional (default: 0)
+        number of Fourier components in Y: will be used to smooth data for better PCs
+- **nPC**  : nparray, int, optional (default: 400)
+        how many of the top PCs to use during optimization
+- **alpha** : float, optional (default: 1.0)
+        exponent of the power law enforced on component n as: 1/(K+n)^alpha
+- **K** :  float, optional (default: 1.0)
+        additive offset of the power law enforced on component n as: 1/(K+n)^alpha
 - **init** : initialization of algorithm (default: 'pca')
         can use 'pca', 'random', or a matrix n_samples x n_components
-        
+       
 ## Outputs
 
-RMAP model has the following attributes after running 'fit':
+Rastermap model has the following attributes after running 'fit':
 - **embedding** : array-like, shape (n_samples, n_components)
         Stores the embedding vectors.
 - **u,sv,v** : singular value decomposition of data S, potentially with smoothing
 - **isort1** : sorting along first dimension (n_samples) of matrix
 - **isort2** : sorting along second dimension (n_features) of matrix (if n_Y > 0)
+- **cmap**  : correlation of each item with all locations in the embedding map (before upsampling)
+- **A**     :    PC coefficients of each Fourier mode
 
 
 ## Requirements
