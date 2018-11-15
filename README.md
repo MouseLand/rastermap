@@ -1,6 +1,6 @@
 # rastermap
 
-This algorithm computes a 1D or 2D continuous sorting of neural activity. It assumes that the spike matrix `S` is neurons by timepoints. We have a python 3 and a matlab implementation. See the [demos](rastermap/demos/) for jupyter notebooks using it, and some example data.
+This algorithm computes a 1D or 2D embedding of neural activity. It assumes that the spike matrix `S` is neurons by timepoints. We have a python 3 and a matlab implementation. See the [demos](rastermap/demos/) for jupyter notebooks using it, and some example data.
 
 Here is what the output looks like for a segment of a mesoscope recording (2.5Hz sampling rate) (sorted in neural space, but not time space):
 
