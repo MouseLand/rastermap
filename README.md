@@ -16,6 +16,7 @@ You can download the github folder and run the following inside the folder to st
 ```
 python -m rastermap
 ```
+This package was written for Python 3 and relies on the awesomeness of **numpy**, **scipy**, **PyQt5**, **PyQt5.sip** and **pyqtgraph**. You can pip install or conda install all of these packages. If having issues with **PyQt5**, then make an Anaconda environment and try to install within it.
 
 You can pip install the outdated package here (no GUI or 2D suppport):
 ```
