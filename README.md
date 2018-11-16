@@ -6,7 +6,7 @@ Here is what the output looks like for a segment of a mesoscope recording (2.5Hz
 
 ![rastersorted](example.png)
 
-Here is what the output looks like for a recording of 64,000 neurons in a larval zebrafish (data [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1), thanks to Chen, Mu, Hu, Kuan et al for sharing!). The upper left plot is the 2D embedding with boxes around clusters (which the user draws in the GUI). The plot on the right shows the activity of the clusters. The lower left plot is a Z-stack of the neurons in the tissue, colored according to their 2D position in the Rastermap embedding.
+Here is what the output looks like for a recording of 64,000 neurons in a larval zebrafish (data [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1), thanks to Chen, Mu, Hu, Kuan et al / Ahrens lab for sharing!). The upper left plot is the 2D embedding with boxes around clusters (which the user draws in the GUI). The plot on the right shows the activity of the clusters. The lower left plot is a Z-stack of the neurons in the tissue, colored according to their 2D position in the Rastermap embedding.
 
 ![fishbrain](fish_GUI3.png)
 
