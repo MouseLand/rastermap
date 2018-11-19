@@ -19,7 +19,7 @@ def distances(x, y):
 
 def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
-    #flag = False
+    flag = False
     if dims==1:
         xs = np.arange(0,nclust)
         S = np.ones((K, nclust), 'float32')
@@ -177,9 +177,8 @@ class Rastermap:
     A:    PC coefficients of each Fourier mode
     """
     def __init__(self, n_components=2, n_X = -1, n_Y = 0,
-                 nPC = 400,
-                 sig_Y=1.0, init='pca', alpha = 1., K = 1.,
-                 mode = 'basic', verbose = True):
+                 nPC = 200, sig_Y=1.0, init='pca', alpha = 1., K = 1.,
+                 mode = 'basic', verbose = True, annealing = True, constraints = 2):
 
         self.n_components = n_components
         self.alpha = alpha
@@ -189,6 +188,12 @@ class Rastermap:
         self.init = init
         self.mode = mode
         self.n_Y = n_Y
+        self.constraints = constraints
+        if constraints<2:
+            self.annealing = 0
+            self.init      = 'random'
+        else:
+            self.annealing = annealing
         if n_X>0:
             self.n_X = n_X
         else:
@@ -206,7 +211,7 @@ class Rastermap:
         if self.mode is 'parallel':
             Xall = X.copy()
             X = np.reshape(Xall.copy(), (-1, Xall.shape[-1]))
-        X -= X.mean(axis=-1)[:,np.newaxis]
+        #X -= X.mean(axis=-1)[:,np.newaxis]
         if (u is None) or (sv is None) or (v is None):
             # compute svd and keep iPC's of data
             nmin = min([X.shape[0],X.shape[1]])
@@ -220,9 +225,9 @@ class Rastermap:
         isort2 = []
         if self.n_Y > 0:
             vsort = np.argsort(v[:,0])[:,np.newaxis]
-            isort2, iclustup = self._map(v @ np.diag(sv), 1, self.n_Y, vsort)
-            X = gaussian_filter1d(X[:, isort2], self.sig_Y, axis=1)
-            u,sv,v = svdecon(np.float64(X), k=nmin)
+            isort2, iclustup = self._map(v * sv, 1, self.n_Y, vsort)
+            #X = gaussian_filter1d(X[:, isort2], self.sig_Y, axis=1)
+            #u,sv,v = svdecon(np.float64(X), k=nmin)
 
         self.u = u
         self.sv = sv
@@ -318,6 +323,8 @@ class Rastermap:
         if self.mode is 'parallel':
             Xall = X
             X = Xall[1]
+
+        X -= X.mean(axis=0)
         NN,nPC = X.shape
         # initialize 1D clusters as nodes of 1st PC
         xid = np.zeros(NN)
@@ -325,8 +332,16 @@ class Rastermap:
             iclust = np.floor(nclust * u[:,j].astype(np.float64)/NN)
             xid = nclust * xid + iclust
         xid = xid.astype('int').flatten()
-        nfreqs = np.ceil(2/3 * nclust)
-        nfreqs = int(2 * np.floor(nfreqs/2)+1)
+
+        if self.constraints==0:
+            nfreqs = nclust
+        elif self.constraints==1:
+            nfreqs = np.ceil(1/2 * nclust)
+            nfreqs = int(2 * np.floor(nfreqs/2)+1)
+        else:
+            nfreqs = np.ceil(2/3 * nclust)
+            nfreqs = int(2 * np.floor(nfreqs/2)+1)
+
         if dims>1:
             SALL, fxx = create_ND_basis(dims, nclust, nfreqs, True)
         else:
@@ -335,18 +350,20 @@ class Rastermap:
         fxx = fxx[1:]
         tic = time.time()
 
-        ncomps_anneal = (np.arange(3, nfreqs, 2)**dims).astype('int')  - 1
-        ncomps_anneal = np.tile(ncomps_anneal, (2,1)).T.flatten()
-        ncomps_anneal = np.concatenate((ncomps_anneal[:10], ncomps_anneal[2:10], ncomps_anneal[4:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
+        if self.annealing:
+            nskip = int(2 * max(1., nfreqs/100))
+            ncomps_anneal = (np.arange(3, nfreqs, nskip)**dims).astype('int')  - 1
+            ncomps_anneal = np.tile(ncomps_anneal, (2,1)).T.flatten()
+            ncomps_anneal = np.concatenate((ncomps_anneal[:10], ncomps_anneal[2:10], ncomps_anneal[4:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
+        else:
+            ncomps_anneal = SALL.shape[0]*np.ones(50).astype('int')
         #ncomps_anneal = np.concatenate((ncomps_anneal[1:5], ncomps_anneal[1:10], ncomps_anneal[3:], SALL.shape[0]*np.ones(10)), axis=0).astype('int')
         #ncomps_anneal = np.concatenate((ncomps_anneal[1:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         #ncomps_anneal = np.concatenate((np.linspace(4,SALL.shape[0],30), SALL.shape[0]*np.ones(20)), axis=0).astype('int')
-        #ncomps_anneal = SALL.shape[0]*np.ones(50).astype('int')
 
         # vscale = (self.K + fxx[:nc])**2
 
-        vscale = 1 + self.K + np.arange(len(fxx))
-#        vscale[0] = np.inf
+        vscale = self.K + np.arange(len(fxx))
 
         xnorm = (X**2).sum(axis=1)[:,np.newaxis]
         E = np.zeros(len(ncomps_anneal)+1)
@@ -362,7 +379,8 @@ class Rastermap:
             A  = S0 @ X
             nA      = np.sum(A**2, axis=1)**.5
             nA      *= vscale[:nc]**(self.alpha/2)
-            #nA = np.ones(nA.shape)
+            if self.constraints<2:
+                nA = np.ones(nA.shape)
             A        /= nA[:, np.newaxis]
             eweights = (S0.T / nA) @ S
             AtS     = A.T @ S
