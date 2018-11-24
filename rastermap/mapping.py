@@ -19,7 +19,7 @@ def distances(x, y):
 
 def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
-    #flag = False
+    #flag = True
     if dims==1:
         xs = np.arange(0,nclust)
         S = np.ones((K, nclust), 'float32')
@@ -177,11 +177,7 @@ class Rastermap:
         self.init = init
         self.mode = mode
         self.constraints = constraints
-        if constraints<2:
-            self.annealing = 0
-            self.init      = 'random'
-        else:
-            self.annealing = annealing
+        self.annealing = annealing
         self.n_X  = int(n_X)
         self.verbose = verbose
 
@@ -324,7 +320,7 @@ class Rastermap:
         if self.constraints==0:
             nfreqs = nclust
         elif self.constraints==1:
-            nfreqs = np.ceil(1/2 * nclust)
+            nfreqs = np.ceil(1/4 * nclust)
             nfreqs = int(2 * np.floor(nfreqs/2)+1)
         else:
             nfreqs = np.ceil(1/2 * nclust)
@@ -338,22 +334,20 @@ class Rastermap:
         fxx = fxx[1:]
         tic = time.time()
 
-        if self.annealing:
-            if dims==1:
-                nskip = int(max(1., 2*nfreqs/50))
-                #full_pass = np.arange(1, nfreqs, nskip).astype('int')
-                full_pass = np.exp(np.linspace(np.log(1), np.log(nfreqs), 100)).astype('int')
-            else:
-                nskip = int(2 * max(1., nfreqs/50))
-                full_pass = (np.arange(3, nfreqs, nskip)**dims).astype('int')  - 1
-                full_pass = np.tile(full_pass, (2,1)).T.flatten()
-            phase1 = full_pass[:10]
-            phase2 = full_pass[10] * np.ones(20)
-            phaseX = SALL.shape[0] * np.ones(20)
-            ncomps_anneal = np.hstack((phase1, phase2, full_pass[3:], phaseX)).astype('int')
-            print(ncomps_anneal.shape)
+        if dims==1:
+            nskip = int(max(1., 2*nfreqs/50))
+            #full_pass = np.arange(1, nfreqs, nskip).astype('int')
+            full_pass = np.exp(np.linspace(np.log(1), np.log(nfreqs), 50)).astype('int')
         else:
-            ncomps_anneal = SALL.shape[0]*np.ones(41).astype('int')
+            nskip = int(2 * max(1., nfreqs/50))
+            full_pass = (np.arange(3, nfreqs, nskip)**dims).astype('int')  - 1
+            full_pass = np.tile(full_pass, (2,1)).T.flatten()
+
+        phase1 = full_pass[:10]
+        phase2 = full_pass[10] * np.ones(20)
+        phaseX = SALL.shape[0] * np.ones(20)
+        ncomps_anneal = np.hstack((phase1, phase2, full_pass[3:], phaseX)).astype('int')
+        print(ncomps_anneal.shape)
 
         if self.constraints==2:
             self.vscale = 1/(self.K + np.arange(len(fxx)))**(self.alpha/2)
@@ -365,15 +359,20 @@ class Rastermap:
         if self.mode is 'parallel':
             cmapx = np.zeros((2, NN, nclust**dims), 'float32')
 
+        #lam = 10*(1 + np.arange(SALL.shape[0]))/SALL.shape[0]
         for t,nc in enumerate(ncomps_anneal):
             # get basis functions
             S = SALL[:nc, :]
             S0 = S[:, xid]
-            A  = S0 @ X
+            #StS = S0 @ S0.T + np.eye(nc) * lam[:nc]
+            A = S0 @ X
+            #A  = np.linalg.solve(StS, A)
+
             nA      = np.sum(A**2, axis=1)**.5
-            nA      /= self.vscale[:nc]
             if self.constraints<2:
                 nA = np.ones(nA.shape)
+            else:
+                nA      /= self.vscale[:nc]
             A        /= nA[:, np.newaxis]
             eweights = (S0.T / nA) @ S
             AtS     = A.T @ S
