@@ -375,8 +375,8 @@ class Rastermap:
             else:
                 nA      /= self.vscale[:nc]
             A        /= nA[:, np.newaxis]
-            eweights = ((S.T / nA) @ S))[ix, :]
-            AtS     = A.T @ S            
+            eweights = ((S.T / nA) @ S)[xid, :]
+            AtS     = A.T @ S
             vnorm   = np.sum(AtS**2, axis=0)[np.newaxis,:]
             if self.mode=='parallel':
                 X = Xall[t%2]
