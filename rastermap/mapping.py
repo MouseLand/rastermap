@@ -343,9 +343,10 @@ class Rastermap:
             full_pass = (np.arange(3, nfreqs, nskip)**dims).astype('int')  - 1
             full_pass = np.tile(full_pass, (2,1)).T.flatten()
 
+        nbasis,npix = SALL.shape
         phase1 = full_pass[:10]
         phase2 = full_pass[10] * np.ones(20)
-        phaseX = SALL.shape[0] * np.ones(20)
+        phaseX = nbasis * np.ones(20)
         ncomps_anneal = np.hstack((phase1, phase2, full_pass[3:], phaseX)).astype('int')
         print(ncomps_anneal.shape)
 
@@ -363,10 +364,10 @@ class Rastermap:
         for t,nc in enumerate(ncomps_anneal):
             # get basis functions
             S = SALL[:nc, :]
-            S0 = S[:, xid]
-            #StS = S0 @ S0.T + np.eye(nc) * lam[:nc]
-            A = S0 @ X
-            #A  = np.linalg.solve(StS, A)
+            X0 = np.zeros((npix, nPC))
+            for j in range(npix):
+                X0[j, :] = X[xid==j, :].sum(axis=0)
+            A = S @ X0
 
             nA      = np.sum(A**2, axis=1)**.5
             if self.constraints<2:
@@ -374,9 +375,8 @@ class Rastermap:
             else:
                 nA      /= self.vscale[:nc]
             A        /= nA[:, np.newaxis]
-            eweights = (S0.T / nA) @ S
-            AtS     = A.T @ S
-            #vnorm   = np.sum(S * (A @ AtS), axis=0)[np.newaxis,:]
+            eweights = ((S.T / nA) @ S))[ix, :]
+            AtS     = A.T @ S            
             vnorm   = np.sum(AtS**2, axis=0)[np.newaxis,:]
             if self.mode=='parallel':
                 X = Xall[t%2]
