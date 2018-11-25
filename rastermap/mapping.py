@@ -323,7 +323,7 @@ class Rastermap:
             nfreqs = np.ceil(1/4 * nclust)
             nfreqs = int(2 * np.floor(nfreqs/2)+1)
         else:
-            nfreqs = np.ceil(1/2 * nclust)
+            nfreqs = np.ceil(2/3 * nclust)
             nfreqs = int(2 * np.floor(nfreqs/2)+1)
 
         if dims>1:
@@ -376,7 +376,8 @@ class Rastermap:
             A        /= nA[:, np.newaxis]
             eweights = (S0.T / nA) @ S
             AtS     = A.T @ S
-            vnorm   = np.sum(S * (A @ AtS), axis=0)[np.newaxis,:]
+            #vnorm   = np.sum(S * (A @ AtS), axis=0)[np.newaxis,:]
+            vnorm   = np.sum(AtS**2, axis=0)[np.newaxis,:]
             if self.mode=='parallel':
                 X = Xall[t%2]
             cv      = X @ AtS
