@@ -5,6 +5,79 @@ import math
 import numpy as np
 import time
 
+def swap_lines(CC0, di):
+    npix = CC0.shape[0]
+    irange = np.arange(npix-1)
+    ri = np.arange(1,npix-di-1)
+    rj = ri+di
+    m0 = np.logical_and(ri[:,np.newaxis]-2<irange, rj[:,np.newaxis]+1>irange)
+    m0 = np.logical_not(m0).astype('float32')
+    Cost = CC0[ri-1,rj+1]- CC0[ri-1,ri] - CC0[rj,rj+1]
+    Cost1 = Cost[:,np.newaxis] + CC0[np.ix_(ri,irange)] + CC0[np.ix_(rj,irange+1)] - CC0[irange, irange+1]
+    Cost2 = Cost[:,np.newaxis] + CC0[np.ix_(rj,irange)] + CC0[np.ix_(ri,irange+1)] - CC0[irange, irange+1]
+    Cost3 = CC0[ri-1,rj] + CC0[rj+1,ri] - CC0[ri-1,ri] - CC0[rj,rj+1]
+    #Cost2 = Cost2* 0
+    Cost3 = Cost3* 0
+    Cost12  = np.maximum(Cost1, Cost2)
+    Cost123 = np.maximum(Cost12, Cost3[:, np.newaxis]) * m0
+    Cmax = np.amax(Cost123)
+    imax = np.argmax(Cost123)
+    x,y  = np.unravel_index(imax, Cost123.shape)
+    if Cost3[x]>Cost12[x,y]:
+        flip = 2
+    else:
+        flip = Cost1[x,y] < Cost2[x,y]
+    return Cmax, ri[x], irange[y], flip
+
+def bin(X0, dt):
+    NN, NT = X0.shape
+    NN = int(dt * np.floor(NN/dt))
+    X0 = X0[:NN, :]
+    X0 = np.reshape(X0, (-1, dt, NT)).mean(axis=1)
+    return X0
+
+def resort_X(X0, niter=500):
+    X = X0.copy()
+    npix, nd = X.shape
+    X = np.vstack((X[0,:], X, X[0,:]))
+    npix, nd = X.shape
+    CC = np.corrcoef(X)
+    CC[0, :] = 0
+    CC[-1, :] = 0
+    CC[:, 0] = 0
+    CC[:, -1] = 0
+    xid = np.arange(npix)
+    for k in range(niter):
+        flag = 0
+        for di in np.arange(1, npix-2):
+            Cmax, xstart, xinsrt, flip  = swap_lines(CC, di)
+            if Cmax>0:
+                # do the swap if it improves cost
+                iall = np.hstack((np.arange(xstart), np.arange(xstart+di+1,npix)))
+                if xstart+di+1>=npix:
+                    print(xstart, di)
+                ifind = int(np.nonzero(iall==xinsrt)[0])
+                if ifind+1>=len(iall):
+                    print(xstart, di, ifind, len(iall))
+                if flip==2:
+                    isort = np.hstack((np.arange(xstart), np.arange(xstart, xstart+di+1)[::-1], np.arange(xstart+di+1,npix)))
+                elif flip==1:
+                    isort = np.hstack((iall[:ifind+1], np.arange(xstart, xstart+di+1)[::-1], iall[ifind+1:]))
+                else:
+                    isort = np.hstack((iall[:ifind+1], np.arange(xstart, xstart+di+1), iall[ifind+1:]))
+                CC = CC[np.ix_(isort, isort)]
+                X = X[isort, :]
+                #xid1 = np.zeros(npix, 'int32')
+                #xid1[isort] = xid
+                xid = xid[isort]
+                flag = 1
+                break
+        if flag==0:
+            break
+    print(k, flag)
+    X = X[1:-1, :]
+    xid = xid[1:-1] - 1
+    return X, xid
 
 def distances(x, y):
     # x and y are n_components by number of data points
@@ -177,7 +250,11 @@ class Rastermap:
         self.init = init
         self.mode = mode
         self.constraints = constraints
-        self.annealing = annealing
+        if constraints<2:
+            self.annealing = 0
+            self.init      = 'random'
+        else:
+            self.annealing = annealing
         self.n_X  = int(n_X)
         self.verbose = verbose
 
@@ -199,6 +276,7 @@ class Rastermap:
         A:    PC coefficients of each Fourier mode
 
         """
+        X = X.copy()
         if self.mode is 'parallel':
             Xall = X.copy()
             X = np.reshape(Xall.copy(), (-1, Xall.shape[-1]))
@@ -208,8 +286,8 @@ class Rastermap:
             nmin = min([X.shape[0], X.shape[1]])
             nmin = np.minimum(nmin-1, self.nPC)
             u,sv,v = svdecon(np.float64(X), k=nmin)
-            v = v * np.sign(skew(u, axis=0))
-            u = u * np.sign(skew(u, axis=0)) * sv
+            u = u * sv
+
         NN, self.nPC = u.shape
         if self.constraints==3:
             plaw = 1/(1+np.arange(1000))**(self.alpha/2)
@@ -245,7 +323,7 @@ class Rastermap:
             init_sort = init_sort[:,np.newaxis]
 
         # now sort in X
-        isort1, iclustup = self._map(u, self.n_components, self.n_X, init_sort)
+        isort1, iclustup = self._map(u.copy(), self.n_components, self.n_X, init_sort)
         self.isort = isort1
         self.embedding = iclustup
         return self
@@ -320,7 +398,7 @@ class Rastermap:
         if self.constraints==0:
             nfreqs = nclust
         elif self.constraints==1:
-            nfreqs = np.ceil(1/4 * nclust)
+            nfreqs = np.ceil(1/2 * nclust)
             nfreqs = int(2 * np.floor(nfreqs/2)+1)
         else:
             nfreqs = np.ceil(2/3 * nclust)
@@ -334,20 +412,24 @@ class Rastermap:
         fxx = fxx[1:]
         tic = time.time()
 
-        if dims==1:
-            nskip = int(max(1., 2*nfreqs/50))
-            #full_pass = np.arange(1, nfreqs, nskip).astype('int')
-            full_pass = np.exp(np.linspace(np.log(1), np.log(nfreqs), 50)).astype('int')
+        if self.annealing:
+            nskip = int(2 * max(1., nfreqs/100))
+            ncomps_anneal = (np.arange(3, nfreqs, nskip)**dims).astype('int')  - 1
+            ncomps_anneal = np.tile(ncomps_anneal, (2,1)).T.flatten()
+            ncomps_anneal = np.concatenate((ncomps_anneal[:10], ncomps_anneal[2:10], ncomps_anneal[4:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         else:
-            nskip = int(2 * max(1., nfreqs/50))
-            full_pass = (np.arange(3, nfreqs, nskip)**dims).astype('int')  - 1
-            full_pass = np.tile(full_pass, (2,1)).T.flatten()
+            ncomps_anneal = SALL.shape[0]*np.ones(50).astype('int')
+
+        #nskip = int(max(1., 2*nfreqs/50))
+        #full_pass = np.arange(1, nfreqs, nskip).astype('int')
+        #full_pass = np.exp(np.linspace(np.log(1), np.log(nfreqs), 50)).astype('int')
 
         nbasis,npix = SALL.shape
-        phase1 = full_pass[:10]
-        phase2 = full_pass[10] * np.ones(20)
-        phaseX = nbasis * np.ones(20)
-        ncomps_anneal = np.hstack((phase1, phase2, full_pass[3:], phaseX)).astype('int')
+        #phase1 = full_pass[:10]
+        #phase2 = full_pass[10] * np.ones(20)
+        #phaseX = nbasis * np.ones(20)
+        #ncomps_anneal = np.hstack((phase1, phase2, full_pass[3:], phaseX)).astype('int')
+
         print(ncomps_anneal.shape)
 
         if self.constraints==2:
@@ -367,8 +449,8 @@ class Rastermap:
             X0 = np.zeros((npix, nPC))
             for j in range(npix):
                 X0[j, :] = X[xid==j, :].sum(axis=0)
-            A = S @ X0
 
+            A = S @ X0
             nA      = np.sum(A**2, axis=1)**.5
             if self.constraints<2:
                 nA = np.ones(nA.shape)
@@ -377,10 +459,11 @@ class Rastermap:
             A        /= nA[:, np.newaxis]
             eweights = ((S.T / nA) @ S)[xid, :]
             AtS     = A.T @ S
-            vnorm   = np.sum(AtS**2, axis=0)[np.newaxis,:]
             if self.mode=='parallel':
                 X = Xall[t%2]
+
             cv      = X @ AtS
+            vnorm   = np.sum(AtS**2, axis=0)[np.newaxis,:]
             vnorm   = vnorm + xnorm  * eweights**2 - 2*eweights * cv
             cv      = cv - xnorm * eweights
             cmap    = np.maximum(0., cv)**2 / vnorm
