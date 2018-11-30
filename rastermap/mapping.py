@@ -92,7 +92,7 @@ def distances(x, y):
 
 def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
-    #flag = True
+    #flag = False
     if dims==1:
         xs = np.arange(0,nclust)
         S = np.ones((K, nclust), 'float32')
@@ -442,22 +442,26 @@ class Rastermap:
         if self.mode is 'parallel':
             cmapx = np.zeros((2, NN, nclust**dims), 'float32')
 
+        lam = np.ones(NN)
         #lam = 10*(1 + np.arange(SALL.shape[0]))/SALL.shape[0]
         for t,nc in enumerate(ncomps_anneal):
             # get basis functions
             S = SALL[:nc, :]
             X0 = np.zeros((npix, nPC))
+            N = np.ones(npix)
             for j in range(npix):
-                X0[j, :] = X[xid==j, :].sum(axis=0)
-
-            A = S @ X0
+                ix = xid==j
+                if np.sum(ix):
+                    X0[j, :] = lam[ix] @ X[ix, :]
+                    N[j] = np.sum(ix)**.5
+            A = S @ (X0 / N[:, np.newaxis])
             nA      = np.sum(A**2, axis=1)**.5
             if self.constraints<2:
                 nA = np.ones(nA.shape)
             else:
                 nA      /= self.vscale[:nc]
             A        /= nA[:, np.newaxis]
-            eweights = ((S.T / nA) @ S)[xid, :]
+            eweights = ((S.T / nA) @ S)[xid, :] / N[xid, np.newaxis]
             AtS     = A.T @ S
             if self.mode=='parallel':
                 X = Xall[t%2]
@@ -470,8 +474,8 @@ class Rastermap:
             cmax    = np.amax(cmap, axis=1)
             xid     = np.argmax(cmap, axis=1)
 
-            #asort   = np.argsort(xid)
-            #xid[asort] = (np.arange(NN)*S.shape[1]/NN).astype('int')
+            #lam = np.sqrt(cmax /vnorm[0,xid])
+            #lam    = np.sqrt(cmax / vnorm[np.arange(NN), xid])
 
             E[t]    = np.nanmean(cmax)/np.nanmean(xnorm)
             if self.mode is 'parallel':
