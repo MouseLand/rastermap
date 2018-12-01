@@ -250,15 +250,15 @@ class Rastermap:
         self.init = init
         self.mode = mode
         self.constraints = constraints
-        if constraints<2:
-            self.annealing = 0
-            self.init      = 'random'
-        else:
-            self.annealing = annealing
+        #if constraints<2:
+            #self.annealing = 0
+            #self.init      = 'random'
+        #else:
+        self.annealing = annealing
         self.n_X  = int(n_X)
         self.verbose = verbose
 
-    def fit(self, X=None, u=None, sv=None, v=None):
+    def fit(self, X=None, u=None):
         """Fit X into an embedded space.
         Inputs
         ----------
@@ -296,7 +296,7 @@ class Rastermap:
             self.vscale = np.hstack((self.vscale, tail))
         # first smooth in Y (if n_Y > 0)
         self.u = u
-        self.v = v
+
         if self.mode is 'parallel':
             NN = Xall.shape[1]
             X = np.zeros((2, NN, u.shape[1]), 'float64')
@@ -447,21 +447,27 @@ class Rastermap:
         for t,nc in enumerate(ncomps_anneal):
             # get basis functions
             S = SALL[:nc, :]
+            #S0 = S[:, xid] * lam
+
             X0 = np.zeros((npix, nPC))
             N = np.ones(npix)
             for j in range(npix):
                 ix = xid==j
                 if np.sum(ix):
                     X0[j, :] = lam[ix] @ X[ix, :]
-                    N[j] = np.sum(ix)**.5
+                    N[j] = np.sum(lam[ix]**2)**.5
             A = S @ (X0 / N[:, np.newaxis])
+
+            #A = S0 @ X
+            #StS = S0 @ S0.T
+            #A = np.linalg.solve(StS, A)
             nA      = np.sum(A**2, axis=1)**.5
             if self.constraints<2:
                 nA = np.ones(nA.shape)
             else:
                 nA      /= self.vscale[:nc]
             A        /= nA[:, np.newaxis]
-            eweights = ((S.T / nA) @ S)[xid, :] / N[xid, np.newaxis]
+            eweights = ((S.T / nA) @ S)[xid, :] / N[xid, np.newaxis] * lam[:, np.newaxis]
             AtS     = A.T @ S
             if self.mode=='parallel':
                 X = Xall[t%2]
@@ -470,12 +476,12 @@ class Rastermap:
             vnorm   = np.sum(AtS**2, axis=0)[np.newaxis,:]
             vnorm   = vnorm + xnorm  * eweights**2 - 2*eweights * cv
             cv      = cv - xnorm * eweights
-            cmap    = np.maximum(0., cv)**2 / vnorm
+            cmap    = np.maximum(0., cv) **2 / vnorm
             cmax    = np.amax(cmap, axis=1)
             xid     = np.argmax(cmap, axis=1)
 
             #lam = np.sqrt(cmax /vnorm[0,xid])
-            #lam    = np.sqrt(cmax / vnorm[np.arange(NN), xid])
+            lam    = np.sqrt(cmax / vnorm[np.arange(NN), xid])
 
             E[t]    = np.nanmean(cmax)/np.nanmean(xnorm)
             if self.mode is 'parallel':
