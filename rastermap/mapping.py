@@ -5,79 +5,6 @@ import math
 import numpy as np
 import time
 
-def swap_lines(CC0, di):
-    npix = CC0.shape[0]
-    irange = np.arange(npix-1)
-    ri = np.arange(1,npix-di-1)
-    rj = ri+di
-    m0 = np.logical_and(ri[:,np.newaxis]-2<irange, rj[:,np.newaxis]+1>irange)
-    m0 = np.logical_not(m0).astype('float32')
-    Cost = CC0[ri-1,rj+1]- CC0[ri-1,ri] - CC0[rj,rj+1]
-    Cost1 = Cost[:,np.newaxis] + CC0[np.ix_(ri,irange)] + CC0[np.ix_(rj,irange+1)] - CC0[irange, irange+1]
-    Cost2 = Cost[:,np.newaxis] + CC0[np.ix_(rj,irange)] + CC0[np.ix_(ri,irange+1)] - CC0[irange, irange+1]
-    Cost3 = CC0[ri-1,rj] + CC0[rj+1,ri] - CC0[ri-1,ri] - CC0[rj,rj+1]
-    #Cost2 = Cost2* 0
-    Cost3 = Cost3* 0
-    Cost12  = np.maximum(Cost1, Cost2)
-    Cost123 = np.maximum(Cost12, Cost3[:, np.newaxis]) * m0
-    Cmax = np.amax(Cost123)
-    imax = np.argmax(Cost123)
-    x,y  = np.unravel_index(imax, Cost123.shape)
-    if Cost3[x]>Cost12[x,y]:
-        flip = 2
-    else:
-        flip = Cost1[x,y] < Cost2[x,y]
-    return Cmax, ri[x], irange[y], flip
-
-def bin(X0, dt):
-    NN, NT = X0.shape
-    NN = int(dt * np.floor(NN/dt))
-    X0 = X0[:NN, :]
-    X0 = np.reshape(X0, (-1, dt, NT)).mean(axis=1)
-    return X0
-
-def resort_X(X0, niter=500):
-    X = X0.copy()
-    npix, nd = X.shape
-    X = np.vstack((X[0,:], X, X[0,:]))
-    npix, nd = X.shape
-    CC = np.corrcoef(X)
-    CC[0, :] = 0
-    CC[-1, :] = 0
-    CC[:, 0] = 0
-    CC[:, -1] = 0
-    xid = np.arange(npix)
-    for k in range(niter):
-        flag = 0
-        for di in np.arange(1, npix-2):
-            Cmax, xstart, xinsrt, flip  = swap_lines(CC, di)
-            if Cmax>0:
-                # do the swap if it improves cost
-                iall = np.hstack((np.arange(xstart), np.arange(xstart+di+1,npix)))
-                if xstart+di+1>=npix:
-                    print(xstart, di)
-                ifind = int(np.nonzero(iall==xinsrt)[0])
-                if ifind+1>=len(iall):
-                    print(xstart, di, ifind, len(iall))
-                if flip==2:
-                    isort = np.hstack((np.arange(xstart), np.arange(xstart, xstart+di+1)[::-1], np.arange(xstart+di+1,npix)))
-                elif flip==1:
-                    isort = np.hstack((iall[:ifind+1], np.arange(xstart, xstart+di+1)[::-1], iall[ifind+1:]))
-                else:
-                    isort = np.hstack((iall[:ifind+1], np.arange(xstart, xstart+di+1), iall[ifind+1:]))
-                CC = CC[np.ix_(isort, isort)]
-                X = X[isort, :]
-                #xid1 = np.zeros(npix, 'int32')
-                #xid1[isort] = xid
-                xid = xid[isort]
-                flag = 1
-                break
-        if flag==0:
-            break
-    print(k, flag)
-    X = X[1:-1, :]
-    xid = xid[1:-1] - 1
-    return X, xid
 
 def distances(x, y):
     # x and y are n_components by number of data points
@@ -92,7 +19,7 @@ def distances(x, y):
 
 def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
-    #flag = False
+    flag = False
     if dims==1:
         xs = np.arange(0,nclust)
         S = np.ones((K, nclust), 'float32')
@@ -139,6 +66,11 @@ def svdecon(X, k=100):
     else:
         V = (U.T @ X).T
         V = V/(V**2).sum(axis=0)**.5
+    if NN>NT:
+        Sv *= NT**.5
+    else:
+        Sv *= NN**.5
+
     return U, Sv, V
 
 def upsample(cmap, dims, nclust, upsamp):
@@ -217,19 +149,17 @@ class Rastermap:
     n_X clusters. It returns upsampled cluster identities (n_X*upsamp).
     Optionally, a 1D embeddding is also computed across the second dimension (n_Y>0),
     smoothed over, and the PCA recomputed before fitting Rastermap.
-
     data X: n_samples x n_features
-
     Parameters
     -----------
     n_components : int, optional (default: 2)
         dimension of the embedding space
-    alpha : float, optional (default: 1.0)
+    alpha: float, optional (default: 1.0)
         exponent of the power law enforced on component n as: 1/(K+n)^alpha
-    K :  float, optional (default: 1.0)
+    K:    float, optional (default: 1.0)
         additive offset of the power law enforced on component n as: 1/(K+n)^alpha
-    n_X :  int, optional (default: 40)
-        size of the grid on which the Fourier modes are rasterized
+    n_X : int, optional (default: -1, i.e. auto)
+        number of Fourier components used. If -1, 2/3 of the Fourier modes are used for each dimension.
     n_Y : int, optional (default: 0, i.e. not used)
         number of Fourier components in Y: will be used to smooth data for better PCs
     nPC : int, optional (default: 400)
@@ -238,45 +168,48 @@ class Rastermap:
         can use 'pca', 'random', or a matrix n_samples x n_components
     verbose: bool (default: True)
         whether to output progress during optimization
+    Returns
+    ----------
+    embedding : array-like, shape (n_samples, n_components)
+        Stores the embedding vectors.
+    u,sv,v : singular value decomposition of data S, potentially with smoothing
+    isort1 : sorting along first dimension of matrix
+    isort2 : sorting along second dimension of matrix (if n_Y > 0)
+    cmap: correlation of each item with all locations in the embedding map (before upsampling)
+    A:    PC coefficients of each Fourier mode
     """
-    def __init__(self, n_components=2, n_X = 40,
-                 nPC = 200, init='pca', alpha = 1., K = 1.,
+    def __init__(self, n_components=2, n_X = -1, n_Y = 0,
+                 nPC = 200, sig_Y=1.0, init='pca', alpha = 1., K = 1.,
                  mode = 'basic', verbose = True, annealing = True, constraints = 2):
 
         self.n_components = n_components
         self.alpha = alpha
         self.K     = K
         self.nPC = nPC
+        self.sig_Y = sig_Y
         self.init = init
         self.mode = mode
+        self.n_Y = n_Y
         self.constraints = constraints
-        #if constraints<2:
-            #self.annealing = 0
-            #self.init      = 'random'
-        #else:
-        self.annealing = annealing
-        self.n_X  = int(n_X)
+        if constraints<2:
+            self.annealing = 0
+            self.init      = 'random'
+        else:
+            self.annealing = annealing
+        if n_X>0:
+            self.n_X = n_X
+        else:
+            self.n_X  = min(100, np.ceil(1600**(1/n_components)).astype('int'))
+
         self.verbose = verbose
 
-    def fit(self, X=None, u=None):
+    def fit(self, X, u=None):
         """Fit X into an embedded space.
-        Inputs
+        Parameters
         ----------
         X : array, shape (n_samples, n_features)
-        u,s,v : svd decomposition of X (optional)
-
-        Assigns
-        ----------
-        embedding : array-like, shape (n_samples, n_components)
-            Stores the embedding vectors.
-        u,sv,v : singular value decomposition of data S, potentially with smoothing
-        isort1 : sorting along first dimension of matrix
-        isort2 : sorting along second dimension of matrix (if n_Y > 0)
-        cmap: correlation of each item with all locations in the embedding map (before upsampling)
-        A:    PC coefficients of each Fourier mode
-
+        y : Ignored
         """
-        X = X.copy()
         if self.mode is 'parallel':
             Xall = X.copy()
             X = np.reshape(Xall.copy(), (-1, Xall.shape[-1]))
@@ -287,16 +220,19 @@ class Rastermap:
             nmin = np.minimum(nmin-1, self.nPC)
             u,sv,v = svdecon(np.float64(X), k=nmin)
             u = u * sv
-
+            #u, sv, v = np.float32(u), np.float32(sv), np.float32(v)
         NN, self.nPC = u.shape
-        if self.constraints==3:
-            plaw = 1/(1+np.arange(1000))**(self.alpha/2)
-            self.vscale = np.sum(u**2,axis=0)**.5
-            tail = self.vscale[-1] * plaw[u.shape[1]:]/plaw[u.shape[1]]
-            self.vscale = np.hstack((self.vscale, tail))
-        # first smooth in Y (if n_Y > 0)
-        self.u = u
 
+        # first smooth in Y (if n_Y > 0)
+        # this will be a 1-D fit
+        isort2 = []
+        if self.n_Y > 0:
+            vsort = np.argsort(v[:,0])[:,np.newaxis]
+            isort2, iclustup = self._map(v * sv, 1, self.n_Y, vsort)
+            #X = gaussian_filter1d(X[:, isort2], self.sig_Y, axis=1)
+            #u,sv,v = svdecon(np.float64(X), k=nmin)
+
+        self.u = u
         if self.mode is 'parallel':
             NN = Xall.shape[1]
             X = np.zeros((2, NN, u.shape[1]), 'float64')
@@ -305,8 +241,8 @@ class Rastermap:
                 X[j] = Xall[j] @ self.v
 
         if self.init == 'pca':
-            usort = u * np.sign(skew(u, axis=0))
-            init_sort = np.argsort(usort[:NN, :self.n_components], axis=0)
+            u = u * np.sign(skew(u, axis=0))
+            init_sort = np.argsort(u[:NN, :self.n_components], axis=0)
             #init_sort = u[:NN,:self.n_components]
             if False:
                 ix = init_sort > 0
@@ -324,20 +260,20 @@ class Rastermap:
 
         # now sort in X
         isort1, iclustup = self._map(u.copy(), self.n_components, self.n_X, init_sort)
-        self.isort = isort1
+        self.isort2 = isort2
+        self.isort1 = isort1
         self.embedding = iclustup
         return self
 
     def fit_transform(self, X, u=None, sv=None, v=None):
         """Fit X into an embedded space and return that transformed
         output.
-        Inputs
+        Parameters
         ----------
         X : array, shape (n_samples, n_features). X contains a sample per row.
-
         Returns
         -------
-        embedding : array, shape (n_samples, n_components)
+        X_new : array, shape (n_samples, n_components)
             Embedding of the training data in low-dimensional space.
         """
         self.fit(X, u, sv, v)
@@ -386,7 +322,7 @@ class Rastermap:
             Xall = X
             X = Xall[1]
 
-        X -= X.mean(axis=0)
+        #X -= X.mean(axis=0)
         NN,nPC = X.shape
         # initialize 1D clusters as nodes of 1st PC
         xid = np.zeros(NN)
@@ -419,21 +355,13 @@ class Rastermap:
             ncomps_anneal = np.concatenate((ncomps_anneal[:10], ncomps_anneal[2:10], ncomps_anneal[4:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
         else:
             ncomps_anneal = SALL.shape[0]*np.ones(50).astype('int')
+        #ncomps_anneal = np.concatenate((ncomps_anneal[1:5], ncomps_anneal[1:10], ncomps_anneal[3:], SALL.shape[0]*np.ones(10)), axis=0).astype('int')
+        #ncomps_anneal = np.concatenate((ncomps_anneal[1:], SALL.shape[0]*np.ones(20)), axis=0).astype('int')
+        #ncomps_anneal = np.concatenate((np.linspace(4,SALL.shape[0],30), SALL.shape[0]*np.ones(20)), axis=0).astype('int')
 
-        #nskip = int(max(1., 2*nfreqs/50))
-        #full_pass = np.arange(1, nfreqs, nskip).astype('int')
-        #full_pass = np.exp(np.linspace(np.log(1), np.log(nfreqs), 50)).astype('int')
+        # vscale = (self.K + fxx[:nc])**2
 
-        nbasis,npix = SALL.shape
-        #phase1 = full_pass[:10]
-        #phase2 = full_pass[10] * np.ones(20)
-        #phaseX = nbasis * np.ones(20)
-        #ncomps_anneal = np.hstack((phase1, phase2, full_pass[3:], phaseX)).astype('int')
-
-        print(ncomps_anneal.shape)
-
-        if self.constraints==2:
-            self.vscale = 1/(self.K + np.arange(len(fxx)))**(self.alpha/2)
+        vscale = self.K + np.arange(len(fxx))
 
         xnorm = (X**2).sum(axis=1)[:,np.newaxis]
         E = np.zeros(len(ncomps_anneal)+1)
@@ -442,47 +370,27 @@ class Rastermap:
         if self.mode is 'parallel':
             cmapx = np.zeros((2, NN, nclust**dims), 'float32')
 
-        lam = np.ones(NN)
-        #lam = 10*(1 + np.arange(SALL.shape[0]))/SALL.shape[0]
         for t,nc in enumerate(ncomps_anneal):
             # get basis functions
             S = SALL[:nc, :]
-            #S0 = S[:, xid] * lam
-
-            X0 = np.zeros((npix, nPC))
-            N = np.ones(npix)
-            for j in range(npix):
-                ix = xid==j
-                if np.sum(ix):
-                    X0[j, :] = lam[ix] @ X[ix, :]
-                    N[j] = np.sum(lam[ix]**2)**.5
-            A = S @ (X0 / N[:, np.newaxis])
-
-            #A = S0 @ X
-            #StS = S0 @ S0.T
-            #A = np.linalg.solve(StS, A)
+            S0 = S[:, xid]
+            A  = S0 @ X
             nA      = np.sum(A**2, axis=1)**.5
+            nA      *= vscale[:nc]**(self.alpha/2)
             if self.constraints<2:
                 nA = np.ones(nA.shape)
-            else:
-                nA      /= self.vscale[:nc]
             A        /= nA[:, np.newaxis]
-            eweights = ((S.T / nA) @ S)[xid, :] / N[xid, np.newaxis] * lam[:, np.newaxis]
+            eweights = (S0.T / nA) @ S
             AtS     = A.T @ S
+            vnorm   = np.sum(S * (A @ AtS), axis=0)[np.newaxis,:]
             if self.mode=='parallel':
                 X = Xall[t%2]
-
             cv      = X @ AtS
-            vnorm   = np.sum(AtS**2, axis=0)[np.newaxis,:]
             vnorm   = vnorm + xnorm  * eweights**2 - 2*eweights * cv
             cv      = cv - xnorm * eweights
-            cmap    = np.maximum(0., cv) **2 / vnorm
+            cmap    = np.maximum(0., cv)**2 / vnorm
             cmax    = np.amax(cmap, axis=1)
             xid     = np.argmax(cmap, axis=1)
-
-            #lam = np.sqrt(cmax /vnorm[0,xid])
-            lam    = np.sqrt(cmax / vnorm[np.arange(NN), xid])
-
             E[t]    = np.nanmean(cmax)/np.nanmean(xnorm)
             if self.mode is 'parallel':
                 cmapx[t%2] = cmap
