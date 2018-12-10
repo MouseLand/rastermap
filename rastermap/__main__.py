@@ -36,7 +36,7 @@ if __name__ == '__main__':
                           init=ops['init'], alpha=ops['alpha'], K=ops['K'], constraints=ops['constraints'],
                           annealing=ops['annealing'])
         model.fit(S)
-        proc  = {'embedding': model.embedding, 'uv': [model.u, model.v],
+        proc  = {'embedding': model.embedding, 'u': model.u,
                  'ops': ops, 'filename': args.S}
         basename, fname = os.path.split(args.S)
         np.save(os.path.join(basename, 'embedding.npy'), proc)
