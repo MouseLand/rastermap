@@ -149,6 +149,12 @@ class MainW(QtGui.QMainWindow):
         #self.win.resize(1000, 500)
         self.l0.addWidget(self.win, 0, 0, 38, 30)
         layout = self.win.ci.layout
+        # --- full recording
+        #self.pfull = self.win.addPlot(title="FULL VIEW",row=0,col=1)
+        #self.pfull.setMouseEnabled(x=False,y=False)
+        #self.imgfull = pg.ImageItem(autoDownsample=True)
+        #self.pfull.addItem(self.imgfull)
+
         # --- embedding image
         self.p0 = self.win.addPlot(row=0, col=0, rowspan=2, lockAspect=True)
         self.p0.setAspectLocked(ratio=1)
@@ -165,7 +171,7 @@ class MainW(QtGui.QMainWindow):
         # --- activity image
         self.p1 = self.win.addPlot(row=0, col=2,
                                    rowspan=3, invertY=True, padding=0)
-        self.p1.setMouseEnabled(x=True, y=False)
+        self.p1.setMouseEnabled(x=False, y=False)
         self.img = pg.ImageItem(autoDownsample=False)
         self.p1.hideAxis('left')
         colormap = cm.get_cmap("viridis")
@@ -336,7 +342,7 @@ class MainW(QtGui.QMainWindow):
                             ugood[r] = 1
                     ugood = ugood.astype(bool)
                     if ugood.sum() > 4:
-                        model = Rastermap(n_components=1, n_X=20, init=np.arange(0,ugood.sum()).astype(np.int32))
+                        model = Rastermap(n_components=1, n_X=20, init=np.arange(0,ugood.sum()).astype(np.int32)[:,np.newaxis])
                         y     = model.fit_transform(self.Ur[ugood,:])
                         y     = y.flatten()
                         y2 = np.zeros((lROI,))

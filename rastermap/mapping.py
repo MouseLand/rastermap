@@ -493,6 +493,10 @@ class Rastermap:
             usort = usort * np.sign(skew(usort, axis=0))
         else:
             init_sort = self.init
+            xid = np.zeros(NN)
+            for j in range(self.n_components):
+                iclust = np.floor(nclust * init_sort[:,j].astype(np.float64)/NN)
+                xid = nclust * xid + iclust
 
         if self.init=='pca' or self.init=='laplacian':
             init_sort = np.argsort(usort[:, :self.n_components], axis=0)
@@ -500,9 +504,10 @@ class Rastermap:
             for j in range(self.n_components):
                 iclust = np.floor(nclust * init_sort[:,j].astype(np.float64)/NN)
                 xid = nclust * xid + iclust
+
         xid = xid.astype('int').flatten()
 
-        self.init_sort = usort
+        #self.init_sort = usort
 
         if self.n_components==1 and init_sort.ndim==1:
             init_sort = init_sort[:,np.newaxis]
@@ -623,8 +628,12 @@ class Rastermap:
             isort = np.argsort(iclustup2[:,0])
             self.cmap = cmapx
         else:
-            iclustup = upsample_grad(np.sqrt(cmap), dims, nclust).T
-            iclustup2, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
+            if self.n_components==2:
+                iclustup = upsample_grad(np.sqrt(cmap), dims, nclust).T
+                iclustup2, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
+                self.embedding0 = iclustup2
+            else:
+                iclustup, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
             isort = np.argsort(iclustup[:,0])
             self.cmap = cmap
         if self.verbose:
@@ -635,7 +644,6 @@ class Rastermap:
         self.lam = lam
         self.X0 = X0
         self.xid = xid
-        self.embedding0 = iclustup2
         return isort, iclustup
 
 def main(X,ops=None,u=None,sv=None,v=None):
