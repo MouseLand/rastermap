@@ -153,7 +153,7 @@ def create_ND_basis(dims, nclust, K, flag=True):
     flag = False
     if dims==1:
         xs = np.arange(0,nclust)
-        S = np.ones((K, nclust), 'float32')
+        S = np.ones((K, nclust), 'float64')
         for k in range(K):
             if flag:
                 S[k, :] = np.sin(math.pi + (k+1)%2 * math.pi/2 + 2*math.pi/nclust * (xs+0.5) * int((1+k)/2))
@@ -524,7 +524,8 @@ class Rastermap:
             nfreqs = np.ceil(1/2 * nclust)
             nfreqs = int(2 * np.floor(nfreqs/2)+1)
         else:
-            nfreqs = np.ceil(2/3 * nclust)
+            nfreqs = nclust-1
+            #nfreqs = np.ceil(1/2 * nclust)
             nfreqs = int(2 * np.floor(nfreqs/2)+1)
 
         if SALL is None:
@@ -535,6 +536,7 @@ class Rastermap:
             SALL = SALL[1:, :]
             fxx = fxx[1:]
         else:
+            #SALL = SALL[:nfreqs**2-1, :]
             SALL = SALL[:nfreqs**2-1, :]
             fxx = np.arange(SALL.shape[0])
         print(SALL.shape)
@@ -571,9 +573,6 @@ class Rastermap:
             cmapx = np.zeros((2, NN, nclust**dims), 'float32')
 
         lam = np.ones(NN)
-
-        #f = np.linspace(.25,.0, len(ncomps_anneal))
-        #f[-30:] = 0
         X0 = np.zeros((npix, nPC))
         for t,nc in enumerate(ncomps_anneal):
             # get basis functions
@@ -621,7 +620,7 @@ class Rastermap:
             self.cmap = cmapx
         else:
             iclustup = upsample_grad(np.sqrt(cmap), dims, nclust).T
-            #iclustup, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
+            iclustup2, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
             isort = np.argsort(iclustup[:,0])
             self.cmap = cmap
         if self.verbose:
@@ -632,6 +631,7 @@ class Rastermap:
         self.lam = lam
         self.X0 = X0
         self.xid = xid
+        self.embedding0 = iclustup2
         return isort, iclustup
 
 def main(X,ops=None,u=None,sv=None,v=None):
