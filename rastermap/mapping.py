@@ -185,7 +185,6 @@ def svdecon(X, k=100):
         COV = (X.T @ X)/NT
     else:
         COV = (X @ X.T)/NN
-    print(k)
     if k==0:
         k = np.minimum(COV.shape) - 1
     Sv, U = eigsh(COV, k = k)

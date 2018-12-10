@@ -51,6 +51,7 @@ class Slider(QtGui.QSlider):
     def level_change(self, parent, bid):
         parent.sat[bid] = float(self.value())/100
         parent.img.setLevels([parent.sat[0],parent.sat[1]])
+        parent.imgfull.setLevels([parent.sat[0],parent.sat[1]])
         parent.win.show()
 
 # custom vertical label
@@ -72,7 +73,7 @@ class MainW(QtGui.QMainWindow):
     def __init__(self):
         super(MainW, self).__init__()
         pg.setConfigOptions(imageAxisOrder="row-major")
-        self.setGeometry(25, 25, 1600, 1000)
+        self.setGeometry(25, 25, 1800, 1000)
         self.setWindowTitle("Rastermap")
         icon_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), "logo.png"
@@ -100,7 +101,7 @@ class MainW(QtGui.QMainWindow):
         # ------ MENU BAR -----------------
         loadMat =  QtGui.QAction("&Load data matrix", self)
         loadMat.setShortcut("Ctrl+L")
-        loadMat.triggered.connect(self.load_mat)
+        loadMat.triggered.connect(lambda: self.load_mat(name=None))
         self.addAction(loadMat)
         # run rastermap from scratch
         self.runRMAP = QtGui.QAction("&Run embedding algorithm", self)
@@ -147,58 +148,56 @@ class MainW(QtGui.QMainWindow):
         self.win = pg.GraphicsLayoutWidget()
         #self.win.move(600, 0)
         #self.win.resize(1000, 500)
-        self.l0.addWidget(self.win, 0, 0, 38, 30)
+        self.l0.addWidget(self.win, 0, 0, 50, 30)
         layout = self.win.ci.layout
         # --- full recording
-        #self.pfull = self.win.addPlot(title="FULL VIEW",row=0,col=1)
-        #self.pfull.setMouseEnabled(x=False,y=False)
-        #self.imgfull = pg.ImageItem(autoDownsample=True)
-        #self.pfull.addItem(self.imgfull)
+        self.pfull = self.win.addPlot(title="FULL VIEW",row=0,col=2,rowspan=1,colspan=3)
+        self.pfull.setMouseEnabled(x=False,y=False)
+        self.imgfull = pg.ImageItem(autoDownsample=True)
+        self.pfull.addItem(self.imgfull)
+        self.pfull.hideAxis('left')
+        #self.pfull.hideAxis('bottom')
 
         # --- embedding image
-        self.p0 = self.win.addPlot(row=0, col=0, rowspan=2, lockAspect=True)
+        self.p0 = self.win.addPlot(row=1, col=0, rowspan=2, colspan=1, lockAspect=True)
         self.p0.setAspectLocked(ratio=1)
         self.p0.scene().sigMouseMoved.connect(self.mouse_moved_embedding)
-        self.win.ci.layout.setRowStretchFactor(1, .1)
 
         # ---- colorbar
-        self.p3 = self.win.addPlot(row=0, col=1, rowspan=3)
+        self.p3 = self.win.addPlot(row=1, col=1, rowspan=3, colspan=1)
         self.p3.setMouseEnabled(x=False,y=False)
         self.p3.setMenuEnabled(False)
         self.colorimg = pg.ImageItem(autoDownsample=True)
         self.p3.addItem(self.colorimg)
         self.p3.scene().sigMouseMoved.connect(self.mouse_moved_bar)
+
         # --- activity image
-        self.p1 = self.win.addPlot(row=0, col=2,
+        self.p1 = self.win.addPlot(row=1, col=2, colspan=3,
                                    rowspan=3, invertY=True, padding=0)
         self.p1.setMouseEnabled(x=False, y=False)
         self.img = pg.ImageItem(autoDownsample=False)
         self.p1.hideAxis('left')
-        colormap = cm.get_cmap("viridis")
-        colormap._init()
-        lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
-        lut = lut[0:-3,:]
-        # apply the colormap
-        #self.img.setLookupTable(lut)
-        self.img.setLevels([0,1])
         self.p1.setMenuEnabled(False)
         self.p1.scene().contextMenuItem = self.p1
         self.p1.addItem(self.img)
         self.p1.scene().sigMouseMoved.connect(self.mouse_moved_activity)
 
         # bottom row for buttons
-        self.p2 = self.win.addViewBox(row=2, col=0)
-        self.p2.setMouseEnabled(x=False,y=False)
-        self.p2.setMenuEnabled(False)
+        #self.p2 = self.win.addViewBox(row=2, col=0)
+        #self.p2.setMouseEnabled(x=False,y=False)
+        #self.p2.setMenuEnabled(False)
 
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
 
-        self.win.ci.layout.setColumnStretchFactor(0, 1)
+        #self.win.ci.layout.setRowStretchFactor(0, .5)
+        self.win.ci.layout.setRowStretchFactor(1, 2)
+        self.win.ci.layout.setRowStretchFactor(2, 2)
+        #self.win.ci.layout.setColumnStretchFactor(0, .5)
         self.win.ci.layout.setColumnStretchFactor(1, .1)
-        #self.win.ci.layout.setColumnStretchFactor(2, 2)
+        self.win.ci.layout.setColumnStretchFactor(3, 2)
 
         # self.key_on(self.win.scene().keyPressEvent)
-        rs = 25
+        rs = 2
         addROI = QtGui.QLabel("<font color='white'>add an ROI by SHIFT click</font>")
         self.l0.addWidget(addROI, rs+0, 0, 1, 2)
         addROI = QtGui.QLabel("<font color='white'>delete an ROI by ALT click</font>")
@@ -238,11 +237,10 @@ class MainW(QtGui.QMainWindow):
         self.sat = [0,1]
         for j in range(2):
             self.sl.append(Slider(j, self))
-            self.l0.addWidget(self.sl[j],rs+8-4*j,3,4,1)
+            self.l0.addWidget(self.sl[j],rs+4-4*j,3,4,1)
             qlabel = VerticalLabel(text=txt[j])
             #qlabel.setStyleSheet('color: white;')
-            self.l0.addWidget(qlabel,rs+8-4*j,4,4,1)
-
+            self.l0.addWidget(qlabel,rs+4-4*j,4,4,1)
 
         # ------ CHOOSE CELL-------
         #self.ROIedit = QtGui.QLineEdit(self)
@@ -262,13 +260,35 @@ class MainW(QtGui.QMainWindow):
         self.Rcolors = []
         self.embedded = False
 
-        #self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/embedding.npy'
+        #self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/spks.npy'
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
-        #self.fname = 'C:/Users/carse/github/TX4/spks.npy'
+        #self.fname = '/github/TX4/embedding.npy'
         #self.load_proc(self.fname)
 
         self.show()
         self.win.show()
+
+    def add_imgROI(self):
+        if hasattr(self, 'imgROI'):
+            self.pfull.removeItem(self.imgROI)
+        nt = self.sp.shape[1]
+        nn = self.sp.shape[0]
+
+        redpen = pg.mkPen(pg.mkColor(255, 0, 0),
+                                width=3,
+                                style=QtCore.Qt.SolidLine)
+        self.imgROI = pg.RectROI([nt*.25, -.5], [nt*.25, nn+.5],
+                      maxBounds=QtCore.QRectF(-.5,-.5,nt+.5,nn+.5),
+                      pen=redpen)
+        self.yrange = np.arange(0, nn).astype(np.int32)
+        self.imgROI.handleSize = 10
+        self.imgROI.handlePen = redpen
+        # Add top and right Handles
+        self.imgROI.addScaleHandle([1, 0.5], [0., 0.5])
+        self.imgROI.addScaleHandle([0.5, 0], [0.5, 1])
+        self.imgROI.sigRegionChangeFinished.connect(self.imgROI_position)
+        self.pfull.addItem(self.imgROI)
+        self.imgROI.setZValue(10)  # make sure ROI is drawn above image
 
     def plot_embedding(self):
         self.se = pg.ScatterPlotItem(size=4, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 70))
@@ -278,34 +298,44 @@ class MainW(QtGui.QMainWindow):
         self.p0.addItem(self.se)
 
     def smooth_activity(self):
-        if self.sp.shape[0] == self.selected.size:
-            sp_smoothed = self.sp
-        else:
-            N = int(self.smooth.text())
-            if N > 1:
-                cumsum = np.cumsum(np.concatenate((np.zeros((N,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
-                sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
-                sp_smoothed = zscore(sp_smoothed, axis=1)
-                sp_smoothed += 1
-                sp_smoothed /= 9
-        return sp_smoothed
+        #if self.sp.shape[0] == self.selected.size:
+        #    self.sp_smoothed = self.sp[self.selected, :]
+        #
+        #else:
+        N = int(self.smooth.text())
+        if N > 1:
+            cumsum = np.cumsum(np.concatenate((np.zeros((N,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
+            self.sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
+            self.sp_smoothed = zscore(self.sp_smoothed, axis=1)
+            self.sp_smoothed += 1
+            self.sp_smoothed /= 9
 
     def plot_activity(self):
-        sp_smoothed = self.smooth_activity()
-        self.img.setImage(sp_smoothed)
+        self.smooth_activity()
+        nn = self.sp_smoothed.shape[0]
+        nt = self.sp_smoothed.shape[1]
+        self.imgfull.setImage(self.sp_smoothed)
+        self.imgfull.setLevels([self.sat[0],self.sat[1]])
+        self.img.setImage(self.sp_smoothed)
         self.img.setLevels([self.sat[0],self.sat[1]])
-        self.p1.setXRange(0, self.sp.shape[1], padding=0)
-        self.p1.setYRange(0, self.selected.size, padding=0)
-        self.p1.setLimits(xMin=0,xMax=self.sp.shape[1],yMin=0,yMax=self.selected.size)
+        self.p1.setXRange(0, nt, padding=0)
+        self.p1.setYRange(0, nn, padding=0)
+        self.p1.setLimits(xMin=0,xMax=nt,yMin=0,yMax=nn)
+        self.pfull.setXRange(0, nt, padding=0)
+        self.pfull.setYRange(0, nn, padding=0)
+        self.pfull.setLimits(xMin=-1,xMax=nt+1,yMin=-1,yMax=nn+1)
+        self.imgROI.setPos(-.5,-.5)
+        self.imgROI.setSize([nt+.5,nn+.5])
+        self.imgROI.maxBounds = QtCore.QRectF(-1.,-1.,nt+1,nn+1)
         self.show()
         self.win.show()
 
     def plot_colorbar(self):
         nneur = self.colormat_plot.shape[0]
         self.colorimg.setImage(self.colormat_plot)
-        self.p3.setYRange(0,nneur)
+        self.p3.setYRange(self.yrange[0],self.yrange[-1])
         self.p3.setXRange(0,10)
-        self.p3.setLimits(yMin=0,yMax=nneur,xMin=0,xMax=10)
+        self.p3.setLimits(yMin=self.yrange[0],yMax=self.yrange[-1],xMin=0,xMax=10)
         self.p3.getAxis('bottom').setTicks([[(0,'')]])
         self.win.show()
 
@@ -324,6 +354,33 @@ class MainW(QtGui.QMainWindow):
                         self.ROI_delete()
                 else:
                     self.ROI_delete()
+
+    def imgROI_range(self):
+        pos = self.imgROI.pos()
+        posy = pos.y()
+        posx = pos.x()
+        sizex,sizey = self.imgROI.size()
+        xrange = (np.arange(0,int(sizex)) + int(posx)).astype(np.int32)
+        yrange = (np.arange(0,int(sizey)) + int(posy)).astype(np.int32)
+        xrange = xrange[xrange>=0]
+        xrange = xrange[xrange<self.sp_smoothed.shape[1]]
+        yrange = yrange[yrange>=0]
+        yrange = yrange[yrange<self.sp_smoothed.shape[0]]
+        return xrange,yrange
+
+    def imgROI_position(self):
+        xrange,yrange = self.imgROI_range()
+        self.img.setImage(self.sp_smoothed[np.ix_(yrange,xrange)])
+        self.img.setLevels([self.sat[0],self.sat[1]])
+        self.p1.setXRange(0,xrange.size)
+        self.p1.setYRange(0,yrange.size)
+        self.p1.setLimits(xMin=0,xMax=xrange.size,yMin=0,yMax=yrange.size)
+        axy = self.p3.getAxis('left')
+        axx = self.p1.getAxis('bottom')
+        self.yrange = yrange
+        self.plot_colorbar()
+        axy.setTicks([[(yrange[0],str(yrange[0])),(float(yrange[-1]),str(yrange[-1]))]])
+        axx.setTicks([[(0.0,str(xrange[0])),(float(xrange.size),str(xrange[-1]))]])
 
     def ROI_selection(self, loaded=False):
         self.colormat = np.zeros((0,10,3), dtype=np.int64)
@@ -360,7 +417,7 @@ class MainW(QtGui.QMainWindow):
                         self.selected = np.array([item for sublist in self.Rselected for item in sublist])
                         self.colormat = np.concatenate(self.Rcolors, axis=0)
         else:
-            self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
+            self.selected = np.argsort(self.embedding[:,0])
             self.colormat = 255*np.ones((self.X.shape[0],10,3), dtype=np.int32)
 
         self.colormat_plot = self.colormat.copy()
@@ -442,6 +499,13 @@ class MainW(QtGui.QMainWindow):
         self.updateROI.setStyleSheet(self.styleUnpressed)
         self.saveROI.setStyleSheet(self.styleUnpressed)
 
+    def disable_embedded(self):
+        self.updateROI.setEnabled(False)
+        self.saveROI.setEnabled(False)
+        self.updateROI.setStyleSheet(self.styleInactive)
+        self.saveROI.setStyleSheet(self.styleInactive)
+
+
     def mouse_moved_embedding(self, pos):
         if self.embedded:
             if self.p0.sceneBoundingRect().contains(pos):
@@ -471,7 +535,8 @@ class MainW(QtGui.QMainWindow):
         if self.loaded:
             if self.p1.sceneBoundingRect().contains(pos):
                 y = self.p1.vb.mapSceneToView(pos).y()
-                ineur = min(self.colormat.shape[0]-1, max(0, int(np.floor(y))))
+                ineur = min(self.yrange.size-1, max(0, int(np.floor(y))))
+                ineur = ineur + self.yrange[0]
                 self.update_selected(ineur)
 
     def mouse_moved_bar(self, pos):
@@ -527,36 +592,41 @@ class MainW(QtGui.QMainWindow):
                     iplot = 1
                     y = self.p1.vb.mapSceneToView(event.scenePos()).y()
                     ineur = min(self.colormat.shape[0]-1, max(0, int(np.floor(y))))
+                    ineur = ineur + self.yrange[0]
                     if event.double():
                         self.zoom_plot(iplot)
                     elif event.modifiers() == QtCore.Qt.AltModifier:
-                        self.ROI_remove([y])
+                        self.ROI_remove([ineur])
                 elif x == self.p3:
                     iplot = 2
                     y = self.p3.vb.mapSceneToView(event.scenePos()).y()
                     ineur = min(self.colormat.shape[0]-1, max(0, int(np.floor(y))))
                     if event.modifiers() == QtCore.Qt.AltModifier:
-                        self.ROI_remove([y])
+                        self.ROI_remove([ineur])
 
     def zoom_plot(self, iplot):
         if iplot == 0:
             self.p0.setXRange(self.embedding[:,0].min(), self.embedding[:,0].max())
             self.p0.setYRange(self.embedding[:,1].min(), self.embedding[:,1].max())
         else:
-            self.p1.setYRange(0, self.X.shape[0])
-            self.p1.setXRange(0, self.X.shape[1])
+            self.p1.setYRange(0, self.sp_smoothed.shape[0])
+            self.p1.setXRange(0, self.sp_smoothed.shape[1])
         self.show()
 
     def run_RMAP(self):
         RW = rastermap.run.RunWindow(self)
         RW.show()
 
-    def load_mat(self):
-        name = QtGui.QFileDialog.getOpenFileName(
-            self, "Open *.npy", filter="*.npy"
+    def load_mat(self, name=None):
+        if name is None:
+            name = QtGui.QFileDialog.getOpenFileName(
+                self, "Open *.npy", filter="*.npy"
             )
-        self.fname = name[0]
-        self.filebase = name[0]
+            self.fname = name[0]
+            self.filebase = name[0]
+        else:
+            self.fname = name
+            self.filebase = name
         try:
             X = np.load(self.fname)
             print(X.shape)
@@ -587,6 +657,8 @@ class MainW(QtGui.QMainWindow):
             self.sp += 1
             self.sp /= 9
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
+            self.embedding = self.selected[:, np.newaxis]
+            self.add_imgROI()
             self.ROI_selection()
             self.enable_loaded()
             self.show()
@@ -624,6 +696,7 @@ class MainW(QtGui.QMainWindow):
             y    = self.proc['embedding']
             u    = self.proc['uv'][0]
             v    = self.proc['uv'][1]
+            ops  = self.proc['ops']
             X    = u @ v.T
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
@@ -643,11 +716,17 @@ class MainW(QtGui.QMainWindow):
             self.sp = zscore(self.X, axis=1)
             self.sp += 1
             self.sp /= 9
-            self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.embedding = y
-            self.embedded = True
+            if ops['n_components'] > 1:
+                self.embedded = True
+                self.enable_embedded()
+            else:
+                self.p0.clear()
+                self.embedded=False
+                self.disable_embedded()
+
+            self.selected = np.argsort(self.embedding[:,0])
             self.enable_loaded()
-            self.enable_embedded()
             #self.usv = usv
             self.U   = u #@ np.diag(usv[1])
             ineur = 0
@@ -659,13 +738,14 @@ class MainW(QtGui.QMainWindow):
                     else:
                         self.ROI_add(roi['pos'], roi['prect'],  np.random.randint(255,size=(3,)))
 
-
+            self.add_imgROI()
             self.ROI_selection(loaded=True)
-            self.plot_embedding()
-            self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
+            if self.embedded:
+                self.plot_embedding()
+                self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
                                          symbol='x', pen=pg.mkPen(color=(255,0,0,255), width=3),
                                          size=12)#brush=pg.mkBrush(color=(255,0,0,255)), size=14)
-            self.p0.addItem(self.xp)
+                self.p0.addItem(self.xp)
             self.show()
             self.loaded = True
 
