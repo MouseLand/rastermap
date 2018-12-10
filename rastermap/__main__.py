@@ -32,11 +32,12 @@ if __name__ == '__main__':
                 print('iscell found and used to select neurons')
         print(S.shape)
         S = zscore(S,axis=1)
-        model = Rastermap(ops['n_components'], ops['n_X'], ops['n_Y'], ops['nPC'],
-                          ops['sig_Y'], ops['init'], ops['alpha'], ops['K'])
+        model = Rastermap(n_components=ops['n_components'], n_X=ops['n_X'], nPC=ops['nPC'],
+                          init=ops['init'], alpha=ops['alpha'], K=ops['K'], constraints=ops['constraints'],
+                          annealing=ops['annealing'])
         model.fit(S)
-        proc  = {'embedding': model.embedding, 'usv': [model.u, model.sv, model.v],
-                 'cmap': model.cmap, 'A': model.A, 'ops': ops, 'filename': args.S}
+        proc  = {'embedding': model.embedding, 'uv': [model.u, model.v],
+                 'ops': ops, 'filename': args.S}
         basename, fname = os.path.split(args.S)
         np.save(os.path.join(basename, 'embedding.npy'), proc)
     else:
