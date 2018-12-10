@@ -612,10 +612,13 @@ class MainW(QtGui.QMainWindow):
             proc = np.load(name)
             proc = proc.item()
             self.proc = proc
-            X    = np.load(self.proc['filename'])
-            self.filebase = self.proc['filename']
+            # do not load X, use reconstruction
+            #X    = np.load(self.proc['filename'])
+            #self.filebase = self.proc['filename']
             y    = self.proc['embedding']
-            u  = self.proc['u']
+            u    = self.proc['uv'][0]
+            v    = self.proc['uv'][1]
+            X    = u @ v.T
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
             print('ERROR: this is not a *.npy file :( ')
@@ -629,14 +632,7 @@ class MainW(QtGui.QMainWindow):
             self.ROIorder = []
             self.Rselected = []
             self.Rcolors = []
-            iscell, file_iscell = self.load_iscell()
             self.X = X
-            self.file_iscell = None
-            if iscell is not None:
-                if iscell.size == self.X.shape[0]:
-                    self.X = self.X[iscell, :]
-                    self.file_iscell = file_iscell
-                    print('using iscell.npy in folder')
             self.p0.clear()
             self.sp = zscore(self.X, axis=1)
             self.sp += 1

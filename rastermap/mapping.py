@@ -366,7 +366,7 @@ class Rastermap:
         self.n_X  = int(n_X)
         self.verbose = verbose
 
-    def fit_transform(self, X, u=None, sv=None, v=None):
+    def fit_transform(self, X, u=None):
         """Fit X into an embedded space and return that transformed
         output.
         Inputs
@@ -378,7 +378,7 @@ class Rastermap:
         embedding : array, shape (n_samples, n_components)
             Embedding of the training data in low-dimensional space.
         """
-        self.fit(X, u, sv, v)
+        self.fit(X, u)
         return self.embedding
 
     def transform(self, X):
@@ -419,7 +419,7 @@ class Rastermap:
         S = S.T
         return S
 
-    def fit(self, X=None, u=None, s = None):
+    def fit(self, X=None, u=None):
         """Fit X into an embedded space.
         Inputs
         ----------
@@ -452,6 +452,8 @@ class Rastermap:
             print("nmin %d"%nmin)
             u,sv,v = svdecon(np.float64(X), k=nmin)
             u = u * sv
+            self.v = v
+        self.u = u
 
         NN, self.nPC = u.shape
         if self.constraints==3:
@@ -460,7 +462,6 @@ class Rastermap:
             tail = self.vscale[-1] * plaw[u.shape[1]:]/plaw[u.shape[1]]
             self.vscale = np.hstack((self.vscale, tail))
         # first smooth in Y (if n_Y > 0)
-        self.u = u
 
         if self.mode is 'parallel':
             NN = Xall.shape[1]
@@ -507,7 +508,7 @@ class Rastermap:
             init_sort = init_sort[:,np.newaxis]
 
         # now sort in X
-        isort1, iclustup = self._map(u.copy(), self.n_components, self.n_X, xid, s)
+        isort1, iclustup = self._map(u.copy(), self.n_components, self.n_X, xid)
         self.isort = isort1
         self.embedding = iclustup
         return self
