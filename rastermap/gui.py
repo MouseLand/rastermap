@@ -615,7 +615,7 @@ class MainW(QtGui.QMainWindow):
             X    = np.load(self.proc['filename'])
             self.filebase = self.proc['filename']
             y    = self.proc['embedding']
-            usv  = self.proc['usv']
+            usv  = self.proc['uv']
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
             print('ERROR: this is not a *.npy file :( ')
@@ -646,8 +646,8 @@ class MainW(QtGui.QMainWindow):
             self.embedded = True
             self.enable_loaded()
             self.enable_embedded()
-            self.usv = usv
-            self.U   = usv[0] @ np.diag(usv[1])
+            #self.usv = usv
+            self.U   = usv[0] #@ np.diag(usv[1])
             ineur = 0
             # if ROIs saved
             if 'ROIs' in self.proc:

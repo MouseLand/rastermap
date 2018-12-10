@@ -14,13 +14,13 @@ class RunWindow(QtGui.QDialog):
         self.win.setLayout(self.layout)
 
         # default ops
-        self.ops = {'n_components': 2, 'n_X': 40, 'n_Y': 0, 'alpha': 1., 'K': 1.,
-                    'nPC': 200, 'sig_Y': 2, 'init': 'pca'}
+        self.ops = {'n_components': 2, 'n_X': 40, 'alpha': 1., 'K': 1.,
+                    'nPC': 200, 'constraints': 2, 'annealing': True, 'init': 'pca'}
 
-        keys = ['n_components','n_X','n_Y','alpha','K','nPC','sig_Y','init']
-        tooltips = ['each tiff has this many planes in sequence',
-                    'each tiff has this many channels per plane',
-                    'this channel is used to extract functional ROIs (1-based)',
+        keys = ['n_components','n_X','alpha','constraints','K','nPC','annealing','init']
+        tooltips = ['dimensionality of low-D space (1 or 2)',
+                    'number of nodes in low-D space (rasterization)',
+                    'decay of power-law 1/n^alpha',
                     'approximate diameter of ROIs in pixels (can input two numbers separated by a comma for elongated ROIs)',
                     'timescale of sensor in deconvolution (in seconds)',
                     'sampling rate (per plane)',

@@ -185,6 +185,7 @@ def svdecon(X, k=100):
         COV = (X.T @ X)/NT
     else:
         COV = (X @ X.T)/NN
+    print(k)
     if k==0:
         k = np.minimum(COV.shape) - 1
     Sv, U = eigsh(COV, k = k)
@@ -448,6 +449,7 @@ class Rastermap:
             X -= np.mean(X, axis=0)
             nmin = min([X.shape[0], X.shape[1]])
             nmin = np.minimum(nmin-1, self.nPC)
+            print("nmin %d"%nmin)
             u,sv,v = svdecon(np.float64(X), k=nmin)
             u = u * sv
 
