@@ -445,6 +445,7 @@ class Rastermap:
         #X -= X.mean(axis=-1)[:,np.newaxis]
         if ((u is None)):
             # compute svd and keep iPC's of data
+            X -= np.mean(X, axis=0)
             nmin = min([X.shape[0], X.shape[1]])
             nmin = np.minimum(nmin-1, self.nPC)
             u,sv,v = svdecon(np.float64(X), k=nmin)
