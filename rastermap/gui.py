@@ -262,8 +262,8 @@ class MainW(QtGui.QMainWindow):
 
         #self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/spks.npy'
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
-        #self.fname = '/github/TX4/embedding.npy'
-        #self.load_proc(self.fname)
+        self.fname = '/github/TX4/spks.npy'
+        self.load_mat(self.fname)
 
         self.show()
         self.win.show()
@@ -703,6 +703,20 @@ class MainW(QtGui.QMainWindow):
             print('ERROR: this is not a *.npy file :( ')
             X = None
         if X is not None:
+            # check if training set used
+            if 'train_time' in ops:
+                if ops['train_time'].sum() < ops['train_time'].size:
+                    # not all training pts used
+                    X    = np.load(self.proc['filename'])
+                    self.filebase = self.proc['filename']
+                    iscell, file_iscell = self.load_iscell()
+                    if iscell is not None:
+                        if iscell.size == X.shape[0]:
+                            X = X[iscell, :]
+                            print('using iscell.npy in folder')
+                    v = (u.T @ X).T
+                    v /= ((v**2).sum(axis=0))**0.5
+                    X = u @ v.T
             self.startROI = False
             self.endROI = False
             self.posROI = np.zeros((3,2))

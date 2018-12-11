@@ -35,9 +35,15 @@ if __name__ == '__main__':
         model = Rastermap(n_components=ops['n_components'], n_X=ops['n_X'], nPC=ops['nPC'],
                           init=ops['init'], alpha=ops['alpha'], K=ops['K'], constraints=ops['constraints'],
                           annealing=ops['annealing'])
-        model.fit(S)
+        if ops['end_time']==-1:
+            ops['end_time'] = S.shape[1]
+            ops['start_time'] = 0
+        train_time = np.zeros((S.shape[1],)).astype(bool)
+        print(train_time.shape)
+        train_time[np.arange(ops['start_time'], ops['end_time']).astype(int)] = 1
+        model.fit(S[:, train_time])
         proc  = {'embedding': model.embedding, 'uv': [model.u, model.v],
-                 'ops': ops, 'filename': args.S}
+                 'ops': ops, 'filename': args.S, 'train_time': train_time}
         basename, fname = os.path.split(args.S)
         np.save(os.path.join(basename, 'embedding.npy'), proc)
     else:
