@@ -185,6 +185,7 @@ def svdecon(X, k=100):
         COV = (X.T @ X)/NT
     else:
         COV = (X @ X.T)/NN
+    COV = np.float64(COV)
     if k==0:
         k = np.minimum(COV.shape) - 1
     Sv, U = eigsh(COV, k = k)
@@ -436,20 +437,18 @@ class Rastermap:
         A:    PC coefficients of each Fourier mode
 
         """
-        X = X.copy()
-        X -= X.mean(axis=0)
-
         if self.mode is 'parallel':
-            Xall = X.copy()
-            X = np.reshape(Xall.copy(), (-1, Xall.shape[-1]))
-        #X -= X.mean(axis=-1)[:,np.newaxis]
+            #X = X.copy()
+            X = np.reshape(X, (-1, X.shape[-1]))
+        else:
+            X = X.copy()
         if ((u is None)):
             # compute svd and keep iPC's of data
             X -= np.mean(X, axis=0)
             nmin = min([X.shape[0], X.shape[1]])
             nmin = np.minimum(nmin-1, self.nPC)
             print("nmin %d"%nmin)
-            u,sv,v = svdecon(np.float64(X), k=nmin)
+            u,sv,v = svdecon(X, k=nmin)
             u = u * sv
             self.v = v
         self.u = u
@@ -463,15 +462,15 @@ class Rastermap:
         # first smooth in Y (if n_Y > 0)
 
         if self.mode is 'parallel':
-            NN = Xall.shape[1]
-            X = np.zeros((2, NN, u.shape[1]), 'float64')
-            for j in range(2):
-                Xall[j] -= Xall[j].mean(axis=-1)[:, np.newaxis]
-                X[j] = Xall[j] @ self.v
+            NN = int(X.shape[0]/2)
+            u = np.reshape(u, (2, NN, u.shape[1]))
 
         nclust = self.n_X
         if self.init == 'pca':
-            usort = u * np.sign(skew(u, axis=0))
+            if self.mode is 'parallel':
+                usort = u[0] * np.sign(skew(u[0], axis=0))
+            else:
+                usort = u * np.sign(skew(u, axis=0))
         elif self.init == 'random':
             init_sort = np.random.permutation(NN)[:,np.newaxis]
             for j in range(1,self.n_components):
@@ -621,8 +620,8 @@ class Rastermap:
             print('%2.2fs   final      %4.4f'%(time.time()-tic, E[t]))
 
         if self.mode is 'parallel':
-            iclustup1, cmax = upsample(np.sqrt(cmapx[0]), dims, nclust, 10)
-            iclustup2, cmax = upsample(np.sqrt(cmapx[1]), dims, nclust, 10)
+            iclustup1 = upsample_grad(np.sqrt(cmapx[0]), dims, nclust).T
+            iclustup2 = upsample_grad(np.sqrt(cmapx[1]), dims, nclust).T
             iclustup = np.concatenate((iclustup1[np.newaxis, :, :], iclustup2[np.newaxis, :, :]), axis=0)
             isort = np.argsort(iclustup2[:,0])
             self.cmap = cmapx
