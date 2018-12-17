@@ -691,8 +691,8 @@ class MainW(QtGui.QMainWindow):
             self.sp /= 9
             self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
             self.embedding = self.selected[:, np.newaxis]
-            self.add_imgROI()
-            self.ROI_selection()
+            #self.add_imgROI()
+            #self.ROI_selection()
             self.enable_loaded()
             self.show()
             self.loaded = True
