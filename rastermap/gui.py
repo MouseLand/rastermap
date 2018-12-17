@@ -259,11 +259,12 @@ class MainW(QtGui.QMainWindow):
         self.Rselected = []
         self.Rcolors = []
         self.embedded = False
-
+        self.posAll = []
         #self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/spks.npy'
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
-        #self.fname = '/github/TX4/embedding.npy'
-        #self.load_proc(self.fname)
+        self.file_iscell = None
+        self.fname = '/github/TX4/embedding.npy'
+        self.load_proc(self.fname)
 
         self.show()
         self.win.show()
@@ -573,6 +574,22 @@ class MainW(QtGui.QMainWindow):
                         elif event.button() == 2:
                             # do nothing
                             nothing = True
+                        elif event.modifiers() == QtCore.Qt.ShiftModifier:
+                            if not self.startROI:
+                                self.startROI = True
+                                self.endROI = False
+                                self.posROI[0,:] = [x,y]
+                            else:
+                                self.startROI = True
+                                self.endROI = False
+                                self.posROI[1,:] = [x,y]
+                                #print(self.)
+
+                                self.posAll.append(self.posROI[:2,:])
+                                self.l1 = pg.PlotDataItem(self.posAll[-1][:, 0], self.posAll[-1][:, 1])
+                                self.posROI[0,:] = [x,y]
+                                self.p0.addItem(self.l1)
+                                self.p0.show()
                         elif self.startROI:
                             self.posROI[1,:] = [x,y]
                             self.endROI = True
@@ -581,10 +598,8 @@ class MainW(QtGui.QMainWindow):
                             self.posROI[2,:] = [x,y]
                             self.endROI = False
                             self.p0.removeItem(self.l0)
+                            self.posAll = []
                             self.ROI_add(self.posROI, self.prect)
-                        elif event.modifiers() == QtCore.Qt.ShiftModifier:
-                            self.startROI = True
-                            self.posROI[0,:] = [x,y]
                         elif event.modifiers() == QtCore.Qt.AltModifier:
                             self.ROI_remove([x,y])
 
@@ -692,7 +707,7 @@ class MainW(QtGui.QMainWindow):
             self.proc = proc
             # do not load X, use reconstruction
             #X    = np.load(self.proc['filename'])
-            #self.filebase = self.proc['filename']
+            self.filebase = self.proc['filename']
             y    = self.proc['embedding']
             u    = self.proc['uv'][0]
             v    = self.proc['uv'][1]
@@ -703,6 +718,22 @@ class MainW(QtGui.QMainWindow):
             print('ERROR: this is not a *.npy file :( ')
             X = None
         if X is not None:
+            self.filebase = self.proc['filename']
+            iscell, file_iscell = self.load_iscell()
+
+            # check if training set used
+            if 'train_time' in self.proc:
+                if self.proc['train_time'].sum() < self.proc['train_time'].size:
+                    # not all training pts used
+                    X    = np.load(self.proc['filename'])
+                    if iscell is not None:
+                        if iscell.size == X.shape[0]:
+                            X = X[iscell, :]
+                            print('using iscell.npy in folder')
+                    v = (u.T @ X).T
+                    v /= ((v**2).sum(axis=0))**0.5
+                    X = u @ v.T
+                    print(X.shape)
             self.startROI = False
             self.endROI = False
             self.posROI = np.zeros((3,2))

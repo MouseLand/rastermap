@@ -15,9 +15,10 @@ class RunWindow(QtGui.QDialog):
 
         # default ops
         self.ops = {'n_components': 2, 'n_X': 40, 'alpha': 1., 'K': 1.,
-                    'nPC': 200, 'constraints': 2, 'annealing': True, 'init': 'pca'}
+                    'nPC': 200, 'constraints': 2, 'annealing': True, 'init': 'pca',
+                    'start_time': 0, 'end_time': 1000}
 
-        keys = ['n_components','n_X','alpha','constraints','K','nPC','annealing','init']
+        keys = ['n_components','n_X','alpha','constraints','K','nPC','annealing','init','start_time','end_time']
         tooltips = ['dimensionality of low-D space (1 or 2)',
                     'number of nodes in low-D space (rasterization)',
                     'decay of power-law 1/(K + n^alpha)',
@@ -25,7 +26,9 @@ class RunWindow(QtGui.QDialog):
                     'number of PCs used to compute embedding',
                     '0=no constraints, 1=smoothing only, 2=power-law',
                     'whether to anneal at the end (otherwise each neuron is kept at assigned node)',
-                    "initialization - 'pca' for PCs, 'random' for random"]
+                    "initialization - 'pca' for PCs, 'random' for random",
+                    "start time for training set",
+                    "end time for training set (if -1, use all points for training)"]
 
         bigfont = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
         l=0
