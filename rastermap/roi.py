@@ -46,8 +46,23 @@ class gROI():
         dists[np.arange(0, grid.shape[0]), np.arange(0, grid.shape[0])] = np.Inf
         nneigh = (dists<=dx+1e-5).sum(axis=1)
         exterior = grid[nneigh<4,:]
+        npts = exterior.shape[0]
+        distmat = dists[np.ix_(nneigh<4, nneigh<4)]<=1.5*dx
+        n0 = 0
+        norder = np.zeros((npts,), np.int32)
+        for n in range(npts-1):#distmat.shape[0]):
+            d = distmat[n0]
+            try:
+                neigh = (d>0).nonzero()[0]
+                ibad = np.isin(neigh, norder)
+                neigh = neigh[~ibad]
+                n0 = neigh[0]
+                norder[n] = n0
+            except:
+                break
 
-        self.ROIplot = pg.ScatterPlotItem(pos=exterior, pen=self.pen, symbol='o', size=4)
+        #self.ROIplot = pg.ScatterPlotItem(pos=exterior, pen=self.pen, symbol='o', size=4)
+        self.ROIplot = pg.PlotDataItem(exterior[norder,0], exterior[norder,1], pen=self.pen)
         parent.p0.addItem(self.ROIplot)
         self.dotplot = pg.ScatterPlotItem(pos=self.pos[-1][1,:][np.newaxis], pen=self.pen, symbol='+')
         parent.p0.addItem(self.dotplot)
