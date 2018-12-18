@@ -260,6 +260,7 @@ class MainW(QtGui.QMainWindow):
         self.Rcolors = []
         self.embedded = False
         self.posAll = []
+        self.lp = []
         #self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/spks.npy'
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
         self.file_iscell = None
@@ -299,17 +300,16 @@ class MainW(QtGui.QMainWindow):
         self.p0.addItem(self.se)
 
     def smooth_activity(self):
-        #if self.sp.shape[0] == self.selected.size:
-        #    self.sp_smoothed = self.sp[self.selected, :]
-        #
-        #else:
-        N = int(self.smooth.text())
-        if N > 1:
-            cumsum = np.cumsum(np.concatenate((np.zeros((N,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
-            self.sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
-            self.sp_smoothed = zscore(self.sp_smoothed, axis=1)
-            self.sp_smoothed += 1
-            self.sp_smoothed /= 9
+        if self.sp.shape[0] == self.selected.size:
+            self.sp_smoothed = self.sp[self.selected, :]
+        else:
+            N = int(self.smooth.text())
+            if N > 1:
+                cumsum = np.cumsum(np.concatenate((np.zeros((N,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
+                self.sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
+                self.sp_smoothed = zscore(self.sp_smoothed, axis=1)
+                self.sp_smoothed += 1
+                self.sp_smoothed /= 9
 
     def plot_activity(self):
         self.smooth_activity()
@@ -472,7 +472,7 @@ class MainW(QtGui.QMainWindow):
         if len(self.ROIs) > 0:
             if len(p) > 1:
                 for n in range(len(self.ROIs)-1,-1,-1):
-                    ptrue = self.ROIs[n].inROI(np.array(p))
+                    ptrue, pdist = self.ROIs[n].inROI(np.array(p)[np.newaxis,:])
                     if ptrue.shape[0] > 0:
                         self.delete(n)
                         break
@@ -522,10 +522,18 @@ class MainW(QtGui.QMainWindow):
                         # compute the distance from the line to the point
                         self.posROI[2,:] = [x,y]
                         d = dist_to_line(self.posROI)
-                        self.prect = rect_from_line(self.posROI, d)
-                        self.p0.removeItem(self.l0)
-                        self.l0 = pg.PlotDataItem(self.prect[:,0], self.prect[:,1])
-                        self.p0.addItem(self.l0)
+                        self.prect = []
+                        for k in range(len(self.lp)):
+                            self.p0.removeItem(self.lp[k])
+                            self.prect.append(rect_from_line(self.posAll[k], d))
+                            self.lp[k] = pg.PlotDataItem(self.prect[-1][:,0], self.prect[-1][:,1])
+                            self.p0.addItem(self.lp[k])
+                        #self.prect.append(rect_from_line(self.posROI, d))
+                        #self.p0.removeItem(self.l0)
+                        #self.l0 = pg.PlotDataItem(self.prect[0][:,0], self.prect[0][:,1])
+                        #self.p0.addItem(self.l0)
+                        self.p0.show()
+                        self.show()
                 else:
                     dists = (self.embedding[self.selected,0] - x)**2 + (self.embedding[self.selected,1] - y)**2
                     ineur = np.argmin(dists.flatten()).astype(int)
@@ -580,26 +588,36 @@ class MainW(QtGui.QMainWindow):
                                 self.endROI = False
                                 self.posROI[0,:] = [x,y]
                             else:
+                                # plotting
                                 self.startROI = True
                                 self.endROI = False
                                 self.posROI[1,:] = [x,y]
                                 #print(self.)
-
-                                self.posAll.append(self.posROI[:2,:])
-                                self.l1 = pg.PlotDataItem(self.posAll[-1][:, 0], self.posAll[-1][:, 1])
+                                self.posAll.append(self.posROI[:2,:].copy())
+                                pos = self.posAll[-1]
+                                self.lp.append(pg.PlotDataItem(pos[:, 0], pos[:, 1]))
                                 self.posROI[0,:] = [x,y]
-                                self.p0.addItem(self.l1)
+                                self.p0.addItem(self.lp[-1])
                                 self.p0.show()
                         elif self.startROI:
                             self.posROI[1,:] = [x,y]
+                            self.posAll.append(self.posROI[:2,:].copy())
+                            self.p0.removeItem(self.l0)
+                            pos = self.posAll[-1]
+                            self.lp.append(pg.PlotDataItem(pos[:, 0], pos[:, 1]))
+                            self.p0.addItem(self.lp[-1])
+                            self.p0.show()
                             self.endROI = True
                             self.startROI = False
                         elif self.endROI:
                             self.posROI[2,:] = [x,y]
                             self.endROI = False
-                            self.p0.removeItem(self.l0)
+                            for lp in self.lp:
+                                self.p0.removeItem(lp)
+                            self.ROI_add(self.posAll, self.prect)
                             self.posAll = []
-                            self.ROI_add(self.posROI, self.prect)
+                            self.lp = []
+
                         elif event.modifiers() == QtCore.Qt.AltModifier:
                             self.ROI_remove([x,y])
 

@@ -446,7 +446,7 @@ class Rastermap:
             # compute svd and keep iPC's of data
             X -= np.mean(X, axis=0)
             nmin = min([X.shape[0], X.shape[1]])
-            nmin = np.minimum(nmin-1, self.nPC)
+            nmin = np.minimum(nmin, self.nPC)
             print("nmin %d"%nmin)
             u,sv,v = svdecon(X, k=nmin)
             u = u * sv
