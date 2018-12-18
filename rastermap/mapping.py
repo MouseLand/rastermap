@@ -419,7 +419,7 @@ class Rastermap:
         S = S.T
         return S
 
-    def fit(self, X=None, u=None):
+    def fit(self, X=None, u=None, s=None):
         """Fit X into an embedded space.
         Inputs
         ----------
@@ -511,7 +511,7 @@ class Rastermap:
             init_sort = init_sort[:,np.newaxis]
 
         # now sort in X
-        isort1, iclustup = self._map(u.copy(), self.n_components, self.n_X, xid)
+        isort1, iclustup = self._map(u.copy(), self.n_components, self.n_X, xid, s)
         self.isort = isort1
         self.embedding = iclustup
         return self
@@ -569,7 +569,10 @@ class Rastermap:
         print(ncomps_anneal.shape)
 
         if self.constraints==2:
-            self.vscale = 1/(self.K + np.arange(len(fxx)))**(self.alpha/2)
+            self.vscale = (1 + np.arange(len(fxx)))
+            self.vscale = 2 * np.ceil(self.vscale/2)
+
+            self.vscale = 1/self.vscale**(self.alpha/2)
             print(self.alpha)
 
         xnorm = (X**2).sum(axis=1)[:,np.newaxis]
