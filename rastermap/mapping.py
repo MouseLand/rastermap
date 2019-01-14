@@ -1,12 +1,44 @@
+from scipy.spatial import cKDTree
+from scipy.sparse import csr_matrix, lil_matrix
+from scipy.sparse.csgraph import dijkstra
 from scipy.ndimage import gaussian_filter1d
 from scipy.sparse.linalg import eigsh
 from scipy.stats import zscore, skew
+from sklearn.decomposition import PCA
 import math
 import numpy as np
 import time
 import multiprocessing
 from multiprocessing import Pool
 from numba import jit
+
+
+def upsample_grad2(AtS, X, xid, dims, nX):
+    ys, xs = np.meshgrid(np.arange(nX), np.arange(nX))
+    xygrid = np.vstack((xs.flatten(), ys.flatten()))
+
+    NN = xs.shape[0]
+    eta = .1
+    sig2 = 1.
+    #
+
+    dy = np.zeros((2, NN))
+    y = xygrid[xid, :]
+    ds = np.zeros((2, y.shape[0], xygrid.shape[0]))
+    for j in range(2):
+        ds[j] = y[:, j][:, np.newaxis] - xygrid[:,j]
+
+    W = exp(-np.sum(ds**2, axis=0)/sig2)
+    ypred = W @ AtS
+    lam = np.sum(ypred * X, axis=1)/np.sum(ypred**2, axis=1)
+    err = lam[:, np.newaxis] * ypred - X
+    err = err * lam[:, np.newaxis]
+
+    for j in range(2):
+        dy[j] = np.sum(err * W * ds[j], axis=1)
+    y = y - eta[j] * err
+
+    return y
 
 def upsample_grad(CC, dims, nX):
     CC /= np.amax(CC, axis=1)[:, np.newaxis]
@@ -87,12 +119,32 @@ def swap_lines(CC0, di):
         flip = Cost1[x,y] < Cost2[x,y]
     return Cmax, ri[x], irange[y], flip
 
-def bin(X0, dt):
+@jit(nopython=True, nogil=True)
+def bin2(X0, dt, axis=0):
     NN, NT = X0.shape
-    NN = int(dt * np.floor(NN/dt))
-    X0 = X0[:NN, :]
-    X0 = np.reshape(X0, (-1, dt, NT)).mean(axis=1)
-    return X0
+    if axis==0:
+        NN = int(dt * np.floor(NN/dt))
+        X = np.zeros((int(NN/dt), NT), np.float32)
+        for j in range(NN/dt):
+            X[j, :] = np.sum(X0[j*dt:(j+1)*dt, :], axis=0)
+    else:
+        NT = int(dt * np.floor(NT/dt))
+        X = np.zeros((NN, int(NT/dt)), np.float32)
+        for j in range(NT/dt):
+            X[:, j] = np.sum(X0[:, j*dt:(j+1)*dt], axis=1)
+    X = X / dt
+    return X
+
+def bin(X0, dt, axis=0):
+    NN, NT = X0.shape
+    if axis==0:
+        NN = int(dt * np.floor(NN/dt))
+        X = np.reshape(X0[:NN, :], (-1, dt, NT)).mean(axis=1)
+    else:
+        NT = int(dt * np.floor(NT/dt))
+        X = np.reshape(X0[:, :NT], (NN, -1, dt)).mean(axis=2)
+
+    return X
 
 def resort_X(X0, niter=500):
     X = X0.copy()
@@ -144,7 +196,7 @@ def distances(x, y):
         x = np.reshape(x, (-1, 1))
         y = np.reshape(y, (-1, 1))
     for j in range(x.shape[1]):
-        ds += dwrap(x[:,j][:,np.newaxis] - y[:,j], 1.)**2
+        ds += (x[:,j][:,np.newaxis] - y[:,j])**2
     ds = np.sqrt(ds)
     return ds
 
@@ -237,6 +289,10 @@ def upsample(cmap, dims, nclust, upsamp):
     xs = xs.T
     return xs, cmax
 
+@jit(nopython=True, nogil=True)
+def my_matmul(x,y):
+    z = x @ y
+    return z
 
 def dwrap(kx,nc):
     '''compute a wrapped distance'''
@@ -275,6 +331,157 @@ def upsampled_kernel(nclust, sig, upsamp, dims):
 
     return Km, M1, M0
 
+def expand_dij(dist, ind, dij):
+    ncores = 10
+    #nbatches = ncores
+    NN = dist.shape[0]
+    #nbatch = int(np.ceil(NN/ncores))
+    nbatch = 1000
+    nbatches = int(np.ceil(NN/nbatch))
+    inputs = []
+    indx = []
+    for j in range(nbatches):
+        ilist = np.arange(j*nbatch, min(NN, (j+1)*nbatch))
+        indx.append(ilist)
+        inputs.append((dist[indx[j], :], ind[indx[j], :], dij))
+
+    with Pool(ncores) as p:
+        y = p.map(expand_worker, inputs)
+
+    dij0 = np.zeros((dij.shape[0], NN))
+    for j in range(nbatches):
+        dij0[:, indx[j]] = y[j]
+
+    # dij = np.amin(np.expand_dims(dist[ :10000, :], 0)  + dij[:, ind[:10000, :]], axis=-1)
+    return dij0
+
+def expand_worker(inputs):
+    dist, ind, dij = inputs
+    dij = np.amin(dist[np.newaxis, :, :]  + dij[:, ind[:,:]], axis=-1)
+    return dij
+
+
+@jit(nopython=True, nogil=True)
+def my_max(a, b):
+    abmax = np.maximum(a, b)
+    return abmax
+
+def scaled_kmeans(X, k=32):
+    # reduces data to k clusters by scaled k-means
+    NN, nf = X.shape
+    # initialize with cluster means randomly
+    xmeans = X[np.random.permutation(NN)[:k], :]
+    niter = 20
+    lam = np.ones(NN)
+    xid = np.linspace(0, k-1, NN).astype('int')
+    for i in range(niter):
+        xmeans /= (1e-10 + np.sum(xmeans**2, axis=1))[:, np.newaxis]**.5
+        cv = X @ xmeans.T
+        cv = my_max(0., cv)
+        xid = np.argmax(cv, axis = 1)
+        lam = cv[np.arange(NN), xid]
+        for j in range(k):
+            ix = xid==j
+            if np.sum(ix):
+                xmeans[j, :] = lam[ix] @ X[ix, :]
+    return xmeans, xid
+
+def nearest_neigh(X0, X1, k= 32):
+    upow = np.sum(X0**2, axis=1)
+    upow2 = np.sum(X1**2, axis=1)
+
+    utu  = upow + upow2[:, np.newaxis] - 2 * X1 @ X0.T
+    ind = np.argpartition(utu, k, axis=1)
+    ind = ind[:, :k]
+    dist = utu[np.tile(np.arange(X1.shape[0])[:, np.newaxis], (1, k)).flatten(), ind.flatten()]
+
+    dist = np.reshape(dist, (X1.shape[0], -1))
+    #isort = np.argsort(dist, axis=1).astype('int')
+    #ind = ind[np.tile(np.arange(X1.shape[0])[:, np.newaxis], (1, k)).flatten(), isort.flatten()]
+    #ind = np.reshape(ind, (X1.shape[0], -1))
+
+    dist = np.maximum(0, dist)**.5
+    return dist, ind
+
+def dbisomap(X, k=32, nISO = 256, d = 2):
+    NN = X.shape[0]
+    NMAX = min(20000, NN)
+    n0   = min(128, NN)
+
+    t0 = time.time()
+
+    # get the landmarks from k-means
+    xmeans, xid = scaled_kmeans(X, k=n0)
+    xmeans = zscore(xmeans, axis=1)/xmeans.shape[1]**.5
+    #xmeans = X[np.linspace(0, NN-1, n0).astype('int32'), :]
+    print('time %2.2f. found landmarks'%(time.time()-t0))
+
+    X0    = np.concatenate((xmeans, X), axis=0)
+    iland = np.arange(n0)
+    itree = n0 + np.linspace(0, NN-1, NMAX).astype('int32')
+    itree = np.hstack((iland, itree))
+
+    dist, ind = nearest_neigh(X0[itree, :], X0, k)
+    #tree        = cKDTree(X0[itree, :], leafsize=40)
+    #dist, ind   = tree.query(X0, k=k, eps= 2, n_jobs=-1)
+    print('time %2.2f. found nearest neighbors'%(time.time()-t0))
+
+    pho     = np.amax(dist, axis=1)
+    pho     = np.maximum(pho, np.median(pho)/10)
+    pho     = 1/pho
+    dist    = dist * (pho[:, np.newaxis] * pho[ind])**(d/2)
+    ix      = np.tile(np.arange(NMAX+n0)[:, np.newaxis], (1, dist.shape[1]))
+    D       = csr_matrix((dist[itree].flatten(), (ix.flatten(), ind[itree].flatten())), shape=(NMAX+n0, NMAX+n0))
+    D       = lil_matrix(D)
+    Dt      = D.T
+    D[Dt > D]    = Dt[Dt > D]
+    print('time %2.2f. contructed sparse matrix'%(time.time()-t0))
+
+    dij          = dijkstra_pool(D, iland)
+    print('time %2.2f. computed dijkstra'%(time.time()-t0))
+
+    dij[dij>100] = 100
+    # now expand dij to all the other points
+    dij = expand_dij(dist[n0:, :], ind[n0:, :], dij)
+    print('time %2.2f. upsampled'%(time.time()-t0))
+
+    H = -(dij**2).T
+    H -= np.mean(H, axis=1)[:, np.newaxis]
+    H -= np.mean(H, axis=0)
+    v = PCA(n_components=min(n0, nISO)).fit(H).components_
+    V = H @ v.T
+    S = np.sum(V**2, axis=0)**.5
+    V /= S
+    print('time %2.2f. finished'%(time.time()-t0))
+
+    return S, V#, ind[n0:, :]-n0, itree[n0:] -n0
+
+def dijkstra_pool(D, irange):
+    inputs = []
+    nbatches = 10
+    for j in range(nbatches):
+        inputs.append((D, irange[j::nbatches]))
+
+    num_cores = nbatches # multiprocessing.cpu_count()
+    with Pool(num_cores) as p:
+        y = p.map(dijkstra_worker, inputs)
+
+    dij = np.zeros((len(irange), D.shape[0]))
+    for j in range(len(y)):
+        dij[j:len(irange):nbatches, :] = y[j]
+
+    return dij
+
+def dijkstra_worker(inputs):
+    D, ikp = inputs
+    dij = dijkstra(D, indices=ikp, directed = False)
+    return dij
+
+@jit(nopython=True, nogil=True)
+def assign_neurons2(vnorm, cv):
+    cmap    = np.maximum(0., cv)**2 / vnorm
+    return cmap
+
 @jit(nopython=True, nogil=True)
 def assign_neurons(vnorm, xnorm, eweights, cv):
     vnorm   = vnorm + xnorm  * eweights**2 - 2*eweights * cv
@@ -285,7 +492,7 @@ def assign_neurons(vnorm, xnorm, eweights, cv):
 def gradient_descent_neurons(inputs):
     CC, yinit, ynodes, eta = inputs
     flag = 1
-    niter = 201
+    niter = 201 # 201
     alpha = 1.
     y = yinit
     x = 1.
@@ -316,6 +523,8 @@ def optimize_neurons(CC, y, ynodes, eta):
     num_cores = multiprocessing.cpu_count()
     with Pool(num_cores) as p:
         y = p.map(gradient_descent_neurons, inputs)
+    #y = gradient_descent_neurons((CC, y, ynodes, eta))
+
     y = np.array(y).T
     return y
 
@@ -437,40 +646,69 @@ class Rastermap:
         A:    PC coefficients of each Fourier mode
 
         """
+        t0 = time.time()
         if self.mode is 'parallel':
             #X = X.copy()
-            X = np.reshape(X, (-1, X.shape[-1]))
+            d = int(X.shape[1]/5e4)
+
+            #X -= np.expand_dims(X.mean(axis=1), 1)
+            #X0 = X[0].T @ X[1]
+
+            X0 = X[:, ::d, :]
+            X0 -= np.expand_dims(X0.mean(axis=1), 1)
+            X0 = X0[0].T @ X0[1]
+
+            X0 = X0 + X0.T
+            NN = X.shape[1]
         else:
-            X = X.copy()
+            X = X -  np.mean(X, axis=0)
+            d = max(1, int(X.shape[0]/5e4))
+            X0 = X[::d, :]
+            NN = X.shape[0]
+
         if ((u is None)):
             # compute svd and keep iPC's of data
-            X -= np.mean(X, axis=0)
-            nmin = min([X.shape[0], X.shape[1]])
+            nmin = np.amin(X0.shape)
             nmin = np.minimum(nmin, self.nPC)
             print("nmin %d"%nmin)
-            u,sv,v = svdecon(X, k=nmin)
-            u = u * sv
+            print(time.time() - t0)
+            v = PCA(n_components=nmin).fit(X0).components_
+            #v = svdecon(X0, k=nmin)[2].T
+            print(time.time() - t0)
+            #u = u * sv
             self.v = v
-        self.u = u
+            #self.u = u
+            self.nPC = nmin
 
-        NN, self.nPC = u.shape
+        if self.mode is 'parallel':
+            self.u = np.zeros((2, X.shape[1], self.nPC), np.float32)
+            self.u[0] = X[0] @ v.T
+            self.u[1] = X[1] @ v.T
+            self.u -= np.expand_dims(self.u.mean(axis=1), 1)
+        else:
+            self.u = X @ v.T
+        print(time.time() - t0)
+
         if self.constraints==3:
             plaw = 1/(1+np.arange(1000))**(self.alpha/2)
             self.vscale = np.sum(u**2,axis=0)**.5
             tail = self.vscale[-1] * plaw[u.shape[1]:]/plaw[u.shape[1]]
             self.vscale = np.hstack((self.vscale, tail))
-        # first smooth in Y (if n_Y > 0)
-
-        if self.mode is 'parallel':
-            NN = int(X.shape[0]/2)
-            u = np.reshape(u, (2, NN, u.shape[1]))
 
         nclust = self.n_X
         if self.init == 'pca':
             if self.mode is 'parallel':
-                usort = u[0] * np.sign(skew(u[0], axis=0))
+                usort = self.u[0] * np.sign(skew(self.u[0], axis=0))
             else:
-                usort = u * np.sign(skew(u, axis=0))
+                usort = self.u * np.sign(skew(self.u, axis=0))
+                #self.u = zscore(self.u, axis=1)/self.u.shape[1]**.5
+        elif self.init == 'dbisomap':
+                self.u = zscore(self.u, axis=1)/self.u.shape[1]**.5
+                S, self.u = dbisomap(self.u, k=32, nISO = nmin)
+                self.u = self.u * S
+                usort = self.u
+                #S, usort = dbisomap(self.u, k = 32)
+                usort = usort * np.sign(skew(usort, axis=0))
         elif self.init == 'random':
             init_sort = np.random.permutation(NN)[:,np.newaxis]
             for j in range(1,self.n_components):
@@ -480,14 +718,25 @@ class Rastermap:
                 iclust = np.floor(nclust * init_sort[:,j].astype(np.float64)/NN)
                 xid = nclust * xid + iclust
         elif self.init =='laplacian':
-            Uz = zscore(u, axis=1)/u.shape[1]**.5
+            Uz = zscore(self.u, axis=1)/self.u.shape[1]**.5
             CC = Uz @ Uz.T
             CCsort = np.sort(CC, axis=0)[::-1, :]
             CC[CC<CCsort[100, :]] = 0
             CC = (CC + CC.T)/2
-            Ds = 1. - CC
-            W = np.diag(np.sum(Ds, axis=1)) - Ds
-            usort = svdecon(W, k=2)[0]
+            M = np.diag(np.sum(CC, axis=1)) - CC
+            S, V = eigsh(M, k=3, which='SM')
+            usort = V[:, 1:]
+            usort = usort * np.sign(skew(usort, axis=0))
+        elif self.init=='lle':
+            Uz = zscore(self.u, axis=1)/self.u.shape[1]**.5
+            CC = Uz @ Uz.T
+            CCsort = np.sort(CC, axis=1)
+            W = np.float64(CC > CCsort[:, -64][:, np.newaxis])
+            W = W - np.diag(np.diag(W))
+            W /= np.sum(W, axis=1)[:, np.newaxis]
+            M = np.eye(W.shape[0]) - W
+            S, V = eigsh(M.T @ M, k=3, which='SM')
+            usort = V[:, 1:]
             usort = usort * np.sign(skew(usort, axis=0))
         else:
             init_sort = self.init
@@ -496,7 +745,7 @@ class Rastermap:
                 iclust = np.floor(nclust * init_sort[:,j].astype(np.float64)/NN)
                 xid = nclust * xid + iclust
 
-        if self.init=='pca' or self.init=='laplacian':
+        if self.init=='pca' or self.init=='laplacian' or self.init=='lle' or self.init=='dbisomap':
             init_sort = np.argsort(usort[:, :self.n_components], axis=0)
             xid = np.zeros(NN)
             for j in range(self.n_components):
@@ -511,11 +760,11 @@ class Rastermap:
             init_sort = init_sort[:,np.newaxis]
 
         # now sort in X
-        isort1, iclustup = self._map(u.copy(), self.n_components, self.n_X, xid, s)
+        print(time.time() - t0)
+        isort1, iclustup = self._map(self.u, self.n_components, self.n_X, xid, s)
         self.isort = isort1
         self.embedding = iclustup
         return self
-
 
     def _map(self, X, dims, nclust, xid, SALL=None):
         if self.mode is 'parallel':
@@ -528,7 +777,7 @@ class Rastermap:
         if self.constraints==0:
             nfreqs = nclust
         elif self.constraints==1:
-            nfreqs = np.ceil(1/2 * nclust)
+            nfreqs = np.ceil(1 * nclust)
             nfreqs = int(2 * np.floor(nfreqs/2)+1)
         else:
             nfreqs = nclust-1
@@ -548,8 +797,6 @@ class Rastermap:
             fxx = np.arange(SALL.shape[0])
         print(SALL.shape)
 
-        tic = time.time()
-
         if self.annealing:
             nskip = int(2 * max(1., nfreqs/100))
             ncomps_anneal = (np.arange(3, nfreqs, nskip)**dims).astype('int')  - 1
@@ -558,20 +805,13 @@ class Rastermap:
         else:
             ncomps_anneal = SALL.shape[0]*np.ones(50).astype('int')
 
-        #ncomps_anneal = 8*np.ones(50).astype('int')
-
         nbasis,npix = SALL.shape
-        #phase1 = full_pass[:10]
-        #phase2 = full_pass[10] * np.ones(20)
-        #phaseX = nbasis * np.ones(20)
-        #ncomps_anneal = np.hstack((phase1, phase2, full_pass[3:], phaseX)).astype('int')
 
         print(ncomps_anneal.shape)
 
         if self.constraints==2:
-            self.vscale = (1 + np.arange(len(fxx)))
+            self.vscale = 1 + np.arange(len(fxx))
             self.vscale = 2 * np.ceil(self.vscale/2)
-
             self.vscale = 1/self.vscale**(self.alpha/2)
             print(self.alpha)
 
@@ -581,6 +821,8 @@ class Rastermap:
             print('time; iteration;  explained PC variance')
         if self.mode is 'parallel':
             cmapx = np.zeros((2, NN, nclust**dims), 'float32')
+
+        tic = time.time()
 
         lam = np.ones(NN)
         X0 = np.zeros((npix, nPC))
@@ -593,24 +835,21 @@ class Rastermap:
                     lam[ix] /= np.sum(lam[ix]**2)**.5
                     X0[j, :] = lam[ix] @ X[ix, :]
             A = S @ X0
-            if self.constraints<2:
-                eweights = (S.T @ S)[xid, :] * lam[:, np.newaxis]
-            else:
+            if self.constraints>=2:
                 nA      = np.sum(A**2, axis=1)**.5
                 nA      /= self.vscale[:nc]
                 A        /= nA[:, np.newaxis]
-                eweights = ((S.T / nA) @ S)[xid, :] * lam[:, np.newaxis]
+
             AtS     = A.T @ S
             if self.mode=='parallel':
                 X = Xall[t%2]
             cv      = X @ AtS
             vnorm   = np.sum(AtS**2, axis=0)
 
-            cmap, vnorm = assign_neurons(vnorm, xnorm, eweights, cv)
-
+            cmap    = assign_neurons2(vnorm, cv)
             cmax    = np.amax(cmap, axis=1)
             xid     = np.argmax(cmap, axis=1)
-            lam    = np.sqrt(cmax / vnorm[np.arange(NN), xid])
+            lam     = np.sqrt(cmax / vnorm[xid])
 
             E[t]    = np.nanmean(cmax)/np.nanmean(xnorm)
 
@@ -630,9 +869,9 @@ class Rastermap:
             self.cmap = cmapx
         else:
             if self.n_components==2:
-                iclustup = upsample_grad(np.sqrt(cmap), dims, nclust).T
-                iclustup2, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
-                self.embedding0 = iclustup2
+                iclustup        = upsample_grad(np.sqrt(cmap), dims, nclust).T
+                #iclustup, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
+                self.embedding0 = iclustup
             else:
                 iclustup, cmax = upsample(np.sqrt(cmap), dims, nclust, 10)
             isort = np.argsort(iclustup[:,0])

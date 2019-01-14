@@ -68,6 +68,28 @@ def svdecon(X, k=100):
         V = V/(V**2).sum(axis=0)**.5
     return U, Sv, V
 
+def NNDescent_pool(X, k = 256):
+    index = NNDescent(X, leaf_size = 15, algorithm='standard', n_trees = 8, n_neighbors = 15)
+    inputs = []
+    nbatches = 20
+    ncores = nbatches
+    for j in range(nbatches):
+        inputs.append((index, X[j::nbatches], k))
+    with Pool(ncores) as p:
+        y = p.map(NNDescent_worker, inputs)
+    dist = np.zeros((X.shape[0], k))
+    ind  = np.zeros((X.shape[0], k))
+    for j in range(len(y)):
+        dist[j::nbatches] = y[j][0]
+        ind[j::nbatches] = y[j][1]
+    return dist, ind
+
+def NNDescent_worker(inputs):
+    index, X, k = inputs
+    ind, dist = index.query(X, k=k, queue_size=1)
+    return dist, ind
+
+
 def upsample(cmap, dims, nclust, upsamp):
     N = cmap.shape[0]
     # first we need the coordinates of the maximum as an array
