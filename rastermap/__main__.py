@@ -32,6 +32,7 @@ if __name__ == '__main__':
                 print('iscell found and used to select neurons')
         print(S.shape)
         S = zscore(S,axis=1)
+        ops['mode'] = 'basic'
         model = Rastermap(n_components=ops['n_components'], n_X=ops['n_X'], nPC=ops['nPC'],
                           init=ops['init'], alpha=ops['alpha'], K=ops['K'], constraints=ops['constraints'],
                           annealing=ops['annealing'])

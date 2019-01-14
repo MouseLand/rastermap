@@ -264,7 +264,7 @@ class MainW(QtGui.QMainWindow):
         #self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/spks.npy'
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
         self.file_iscell = None
-        self.fname = '/github/TX4/embedding.npy'
+        self.fname = '/media/carsen/DATA2/grive/rastermap/grive/DATA/embedding.npy'
         self.load_proc(self.fname)
 
         self.show()
@@ -731,6 +731,7 @@ class MainW(QtGui.QMainWindow):
             v    = self.proc['uv'][1]
             ops  = self.proc['ops']
             X    = u @ v.T
+            print(X.shape)
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
             print('ERROR: this is not a *.npy file :( ')
