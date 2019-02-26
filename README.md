@@ -4,30 +4,48 @@ This algorithm computes a 1D or 2D embedding of neural activity. It assumes that
 
 Here is what the output looks like for a segment of a mesoscope recording (2.5Hz sampling rate) (sorted in neural space, but not time space):
 
-![rastersorted](example.png)
+![rastersorted](figs/example.png)
 
 Here is what the output looks like for a recording of 64,000 neurons in a larval zebrafish (data [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1), thanks to Chen, Mu, Hu, Kuan et al / Ahrens lab for sharing!). The upper left plot is the 2D embedding with boxes around clusters (which the user draws in the GUI). The plot on the right shows the activity of the clusters. The lower left plot is a Z-stack of the neurons in the tissue, colored according to their 2D position in the Rastermap embedding.
 
-![fishbrain](fish_GUI3.png)
+![fishbrain](figs/fish_GUI3.png)
 
 ## Installation
 
-You can download the github folder and run the following inside the folder to start the GUI:
-```
-python -m rastermap
-```
-This package was written for Python 3 and relies on the awesomeness of **numpy**, **scipy**, **PyQt5**, **PyQt5.sip** and **pyqtgraph**. You can pip install or conda install all of these packages. If having issues with **PyQt5**, then make an Anaconda environment and try to install within it.
+You can pip install the package:
 
-You can pip install the outdated package here (no GUI or 2D suppport):
 ```
 pip install rastermap
 ```
+
+And then open the GUI with
+
+```
+python -m rastermap
+```
+
+You can download the github folder and run the command inside the folder
+
+This package was written for Python 3 and relies on the awesomeness of **numpy**, **scipy**, **PyQt5**, **PyQt5.sip** and **pyqtgraph**. You can pip install or conda install all of these packages. If having issues with **PyQt5**, then make an Anaconda environment and try to install within it.
+
 
 ## Using (python) rastermap
 
 ### Running in the GUI
 
-Save your data into an npy file that is just a matrix that is neurons x features. Then "Load data matrix" and choose this file. Next click "Run embedding algorithm" and run with TWO components if you want to visualize it in the GUI. The embedding will pop up in the GUI when it's done running, and save the embedding in the same folder as your data matrix with the name "embedding.npy". Loading the embedding:
+Save your data into an npy file that is just a matrix that is neurons x features. Then "Load data matrix" and choose this file. Next click "Run embedding algorithm" and run with TWO components if you want to visualize it in the GUI. See the parameters section to learn about the parameters.
+
+![runingui](figs/runingui.png)
+
+The embedding will pop up in the GUI when it's done running, and save the embedding in the same folder as your data matrix with the name "embedding.npy".
+
+![guiex](figs/guiex.png)
+
+To draw ROIs around points in the GUI, you draw multiple line segments and then resize them. The neurons' activity traces then show up on the right side of the GUI sorted along this "line axis" that you've drawn. To start drawing a line, hold down SHIFT and click for the first point, and keep clicking to make more segments. To end the segment, click WITHOUT holding down SHIFT. Then resize the box and click again to complete the ROI. Do NOT hold down the mouse, that will just drag you all over the place :) To update the plot on the right with the selected cells on the left, hit the SPACE key. You can delete the last ROI with the DELETE button, or delete a specific ROI by clicking inside that ROI and holding down ALT. You can save the ROIs you've drawn with the "save ROIs" button. They will save along with the embedding so you can reload the file with the "Load processed data" option.
+
+![guiroi](figs/guiroi.png)
+
+How to load the embedding outside the GUI:
 
 ```
 import numpy as np
@@ -36,7 +54,6 @@ model = model.dict()
 y = model['embedding'] # neurons x n_components
 ```
 
-To draw ROIs around points in the GUI, you draw lines and then resize them. The neurons' activity traces then show up on the right side of the GUI sorted along this "line axis" that you've drawn. To start drawing a line, hold down SHIFT and click for the first point, click for the endpoint, and then resize the box and click again to complete it. Do NOT hold down the mouse, that will just drag you all over the place :) To update the plot on the right with the selected cells on the left, hit the SPACE key. You can delete the last ROI with the DELETE button, or delete a specific ROI by clicking inside that ROI and holding down ALT. You can save the ROIs you've drawn with the "save ROIs" button.
 
 NOTE: If you are using suite2p "spks.npy", then the GUI will automatically use the "iscell.npy" file in the same folder to subsample your recording with the chosen cells.
 
@@ -88,7 +105,7 @@ Rastermap first takes the specified PCs of the data, and then embeds them into n
         additive offset of the power law enforced on component n as: 1/(K+n)^alpha
 - **init** : initialization of algorithm (default: 'pca')
         can use 'pca', 'random', or a matrix n_samples x n_components
-       
+
 ## Outputs
 
 Rastermap model has the following attributes after running 'fit':
