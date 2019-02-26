@@ -30,7 +30,10 @@ if __name__ == '__main__':
             if iscell.size == S.shape[0]:
                 S = S[iscell, :]
                 print('iscell found and used to select neurons')
+        print('size of rastermap matrix')
         print(S.shape)
+        if len(S.shape) > 2:
+            S = S.mean(axis=-1)
         S = zscore(S,axis=1)
         ops['mode'] = 'basic'
         model = Rastermap(n_components=ops['n_components'], n_X=ops['n_X'], nPC=ops['nPC'],
