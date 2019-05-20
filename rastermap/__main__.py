@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
     if len(args.S)>0:
         S = np.load(args.S)
-        ops = np.load(args.ops)
+        ops = np.load(args.ops, allow_pickle=True)
         ops = ops.item()
         if len(args.iscell) > 0:
             iscell = np.load(args.iscell)
@@ -50,5 +50,6 @@ if __name__ == '__main__':
                  'ops': ops, 'filename': args.S, 'train_time': train_time}
         basename, fname = os.path.split(args.S)
         np.save(os.path.join(basename, 'embedding.npy'), proc)
+        np.save('embedding.npy', proc)
     else:
         gui.run()

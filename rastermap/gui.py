@@ -723,7 +723,7 @@ class MainW(QtGui.QMainWindow):
         else:
             self.fname = name
         try:
-            proc = np.load(name)
+            proc = np.load(name, allow_pickle=True)
             proc = proc.item()
             self.proc = proc
             # do not load X, use reconstruction
