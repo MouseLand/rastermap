@@ -13,7 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/MouseLand/rastermap",
     packages=setuptools.find_packages(),
-	install_requires = ['numpy>=1.13.0', 'scipy', 'pyqtgraph', 'PyQt5', 'PyQt5.sip','matplotlib'],
+	install_requires = ['numpy>=1.13.0', 'scipy', 'pyqtgraph', 'PyQt5', 'PyQt5.sip','matplotlib','numba'],
     include_package_data=True,
     classifiers=(
         "Programming Language :: Python :: 3",

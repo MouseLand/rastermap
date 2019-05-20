@@ -16,7 +16,7 @@ class RunWindow(QtGui.QDialog):
         # default ops
         self.ops = {'n_components': 2, 'n_X': 40, 'alpha': 1., 'K': 1.,
                     'nPC': 200, 'constraints': 2, 'annealing': True, 'init': 'pca',
-                    'start_time': 0, 'end_time': 1000}
+                    'start_time': 0, 'end_time': -1}
 
         keys = ['n_components','n_X','alpha','constraints','K','nPC','annealing','init','start_time','end_time']
         tooltips = ['dimensionality of low-D space (1 or 2)',

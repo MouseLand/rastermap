@@ -748,6 +748,8 @@ class MainW(QtGui.QMainWindow):
                 if self.proc['train_time'].sum() < self.proc['train_time'].size:
                     # not all training pts used
                     X    = np.load(self.proc['filename'])
+                    # show only test timepoints
+                    X    = X[:,~self.proc['train_time']]
                     if iscell is not None:
                         if iscell.size == X.shape[0]:
                             X = X[iscell, :]
@@ -767,7 +769,8 @@ class MainW(QtGui.QMainWindow):
             self.Rselected = []
             self.Rcolors = []
             self.p0.clear()
-            self.sp = zscore(X, axis=1)
+            self.sp = X#zscore(X, axis=1)
+            del X
             self.sp += 1
             self.sp /= 9
             self.embedding = y
