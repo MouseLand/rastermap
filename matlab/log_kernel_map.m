@@ -26,7 +26,7 @@ X = zscore(X(1:3:end, :), 1, 2)/size(X,2)^.5;
 U = gpuArray(single(X));
 %%
 X = readNPY('D:/Github/data/allen-visp-alm/logCPM.npy');
-X = gpuArray(single(X(1:3:end, :)));
+X = gpuArray(single(X(1:2:end, :)));
 X = X - mean(X,1);
 [U, S, V] = svdecon(X);
 U = X * V;
@@ -58,11 +58,11 @@ U = zscore(U, 1, 2)/size(U,2)^.5;
 
 %%
 u0 = U;
-% u0 = u0./sum(u0.^2,2).^.5;
+u0 = u0./sum(u0.^2,2).^.5;
 
 ndims = 2;
-niter = 4000;
-eta0 = .1;
+niter = 10000;
+eta0 = .01;
 pW = 0.9;
 
 my_metric = 'neglog';
@@ -74,15 +74,15 @@ ys = .5 * ys./std(ys,1,1);
 ys = gpuArray(single(ys));
 dy = gpuArray.zeros(NN, ndims, 'single');
 eta = linspace(eta0, eta0, niter);
-lam = gpuArray.zeros(NN,1, 'single');
+lam = - gpuArray.ones(NN,1, 'single');
 olam = gpuArray.zeros(NN,1, 'single');
 oy = zeros(NN, ndims);
 
 
 K  = u0 * u0';
 % K = readNPY('D:\Github\rastercode\imgcov.npy');
-LAM = gpuArray.ones(size(K), 'single');
-% LAM = abs(K).^1.5;
+% LAM = gpuArray.ones(size(K), 'single');
+LAM = abs(K).^2;
 err0 = mean(mean(LAM .* K.^2));
 
 Ld = 10;
@@ -102,7 +102,7 @@ for k = 1:niter
         case 'exp'
             W = exp(-ds.^.5); 
         case 'neglog'
-            W = 1  - log(.001 + ds)/log(Ld^2); 
+            W = 1  - log(.25 + ds)/log(Ld^2); 
     end
         
     Wlam = W .* exp(lam)';
@@ -119,6 +119,7 @@ for k = 1:niter
         end
         fprintf('iter %d, eta %2.4f, time %2.2f, err %2.6f \n', k, eta(k),  toc, cnew)        
         if ndims>1
+            hold off
             plot(ys(:,1), ys(:,2), '.')
             drawnow
         end
@@ -138,7 +139,7 @@ for k = 1:niter
         case 'exp'
            err = err .*  W;
         case 'neglog'
-            err = err ./(.001 + +ds);
+            err = err ./(.25 + +ds);
     end
 
     for i = 1:ndims
@@ -161,6 +162,10 @@ toc
 
 
 drawnow
+%%
+
+
+
 %%
 ds = reshape(ys, [NN, 1, ndims]) - reshape(ys, [1, NN, ndims]);
 W = exp(-sum(ds.^2, 3));

@@ -10,14 +10,12 @@ X = X - mean(X,1);
 U = X * V;
 U = U(:, 1:256);
 U = zscore(U, 1, 2)/size(U,2)^.5;
-%%
-col = readNPY('D:/Github/data/allen-visp-alm/rgb_col.npy');
-ind = 1+readNPY('D:/Github/data/allen-visp-alm/ind.npy');
+
 
 
 %%
 NN = size(U,1);
-nraster = 256;
+nraster = 1024;
 irand = randperm(size(U,1), nraster);
 u0 = U(irand, :);
 tic
@@ -32,7 +30,7 @@ for k = 1:10
     for j = 1:nraster
         N(j)=gather(sum(imax==j));
         ll = lam(imax==j);
-        ll = ll/sum(ll.^2).^.5;
+        ll = ll/(1e-3 + sum(ll.^2).^.5);
         u0(j, :) = ll' * U(imax==j, :);
         L(j, imax==j) = ll;        
     end       
@@ -43,10 +41,10 @@ NN = size(U,1);
 %%
 Ld = 10;
 
-u0 = u0./sum(u0.^2,2).^.5;
+u0 = u0./(1e-3 + sum(u0.^2,2).^.5);
 K = u0 * u0';
 
-ndims = 1;
+ndims = 2;
 niter = 4000;
 eta0 = .1;
 pW = 0.9;
@@ -63,7 +61,7 @@ eta = linspace(eta0, eta0, niter);
 oy = zeros(NN, ndims);
 
 % LAM = gpuArray.ones(size(K), 'single');
-LAM = abs(K);
+LAM = abs(K).^2;
 % LAM = exp(K);
 err0 = mean(mean(LAM .* K.^2));
 
@@ -129,7 +127,7 @@ for k = 1:niter
     end
     
     dcW = -mean(err,2) - mean(err,1)';
-    dcW = dcW./mean(dcW.^2).^.5;
+    dcW = dcW./(1e-3 + mean(dcW.^2).^.5);
     ocW = pW * ocW + (1-pW) * dcW;
     
     for i = 1:ndims
@@ -270,11 +268,14 @@ end
 toc
 
 %%
+col = readNPY('D:/Github/data/allen-visp-alm/rgb_col.npy');
+ind = 1+readNPY('D:/Github/data/allen-visp-alm/ind.npy');
 
+clf
 for j =1:max(ind)
-    ix = ind==j;
+    ix = ind(1:2:end)==j;
     if sum(ix)>0
-        plot(ys(ix,1), ys(ix,2), '.', 'Color', col(j,:)/255)
+        plot(ys(ix,1), ys(ix,2), '.', 'Color', col(j,:)/255, 'Markersize', 16)
     end
     hold on
 end

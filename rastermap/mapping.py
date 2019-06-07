@@ -672,9 +672,10 @@ class Rastermap:
             nmin = np.minimum(nmin, self.nPC)
             print("nmin %d"%nmin)
             print(time.time() - t0)
-            v = PCA(n_components=nmin).fit(X0).components_
+            model = PCA(n_components=nmin).fit(X0)
             #v = svdecon(X0, k=nmin)[2].T
             print(time.time() - t0)
+            v = model.components_
             #u = u * sv
             self.v = v
             #self.u = u
