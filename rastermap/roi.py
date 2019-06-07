@@ -31,38 +31,42 @@ class gROI():
         self.selected = pts[inds[::-1]]
 
         # make a grid of points and find external points - use as hull
-        pos2 = np.array(prect)
-        xmin = pos2[:,:,0].min()
-        xmax = pos2[:,:,0].max()
-        ymin = pos2[:,:,1].min()
-        ymax = pos2[:,:,1].max()
-        dx = np.minimum((xmax-xmin)/100, (ymax-ymin)/100)
-        grid = np.meshgrid(np.arange(xmin,xmax,dx), np.arange(ymin,ymax,dx))
-        grid = np.concatenate((grid[0].flatten()[:,np.newaxis], grid[1].flatten()[:,np.newaxis]), axis=1)
-        gridpts, _ = self.inROI(grid)
-        grid = grid[gridpts, :]
-        dists = ((grid[:,0][:,np.newaxis] - grid[:,0][np.newaxis,:])**2 +
-               (grid[:,1][:,np.newaxis] - grid[:,1][np.newaxis,:])**2)**0.5
-        dists[np.arange(0, grid.shape[0]), np.arange(0, grid.shape[0])] = np.Inf
-        nneigh = (dists<=dx+1e-5).sum(axis=1)
-        exterior = grid[nneigh<4,:]
-        npts = exterior.shape[0]
-        distmat = dists[np.ix_(nneigh<4, nneigh<4)]<=1.5*dx
-        n0 = 0
-        norder = np.zeros((npts,), np.int32)
-        for n in range(npts-1):#distmat.shape[0]):
-            d = distmat[n0]
-            try:
-                neigh = (d>0).nonzero()[0]
-                ibad = np.isin(neigh, norder)
-                neigh = neigh[~ibad]
-                n0 = neigh[0]
-                norder[n] = n0
-            except:
-                break
+        if len(self.prect) > 1:
+            pos2 = np.array(prect)
+            xmin = pos2[:,:,0].min()
+            xmax = pos2[:,:,0].max()
+            ymin = pos2[:,:,1].min()
+            ymax = pos2[:,:,1].max()
+            dx = np.maximum((xmax-xmin)/100, (ymax-ymin)/100)
+            grid = np.meshgrid(np.arange(xmin,xmax,dx), np.arange(ymin,ymax,dx))
+            grid = np.concatenate((grid[0].flatten()[:,np.newaxis], grid[1].flatten()[:,np.newaxis]), axis=1)
+            gridpts, _ = self.inROI(grid)
+            grid = grid[gridpts, :]
+            dists = ((grid[:,0][:,np.newaxis] - grid[:,0][np.newaxis,:])**2 +
+                   (grid[:,1][:,np.newaxis] - grid[:,1][np.newaxis,:])**2)**0.5
+            dists[np.arange(0, grid.shape[0]), np.arange(0, grid.shape[0])] = np.Inf
+            nneigh = (dists<=dx+1e-5).sum(axis=1)
+            exterior = grid[nneigh<4,:]
 
-        #self.ROIplot = pg.ScatterPlotItem(pos=exterior, pen=self.pen, symbol='o', size=4)
-        self.ROIplot = pg.PlotDataItem(exterior[norder,0], exterior[norder,1], pen=self.pen)
+            # npts = exterior.shape[0]
+            # distmat = dists[np.ix_(nneigh<4, nneigh<4)]<=1.5*dx
+            # n0 = 0
+            # norder = np.zeros((npts,), np.int32)
+            # for n in range(npts-1):#distmat.shape[0]):
+            #     d = distmat[n0]
+            #     try:
+            #         neigh = (d>0).nonzero()[0]
+            #         ibad = np.isin(neigh, norder)
+            #         neigh = neigh[~ibad]
+            #         n0 = neigh[0]
+            #         norder[n] = n0
+            #     except:
+            #         break
+            # self.ROIplot = pg.PlotDataItem(exterior[norder,0], exterior[norder,1], pen=self.pen)
+            #
+            self.ROIplot = pg.ScatterPlotItem(pos=exterior, pen=self.pen, symbol='o', size=4)
+        else:
+            self.ROIplot = pg.PlotDataItem(self.prect[0][:,0], self.prect[0][:,1], pen=self.pen)
         parent.p0.addItem(self.ROIplot)
         self.dotplot = pg.ScatterPlotItem(pos=self.pos[-1][1,:][np.newaxis], pen=self.pen, symbol='+')
         parent.p0.addItem(self.dotplot)

@@ -264,8 +264,8 @@ class MainW(QtGui.QMainWindow):
         #self.fname = '/media/carsen/DATA1/BootCamp/mesoscope_cortex/spks.npy'
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
         self.file_iscell = None
-        self.fname = '/media/carsen/DATA2/grive/rastermap/grive/DATA/embedding.npy'
-        self.load_proc(self.fname)
+        #self.fname = '/media/carsen/DATA2/grive/rastermap/DATA/embedding.npy'
+        #self.load_proc(self.fname)
 
         self.show()
         self.win.show()
@@ -419,7 +419,7 @@ class MainW(QtGui.QMainWindow):
                         self.colormat = np.concatenate(self.Rcolors, axis=0)
         else:
             self.selected = np.argsort(self.embedding[:,0])
-            self.colormat = 255*np.ones((self.X.shape[0],10,3), dtype=np.int32)
+            self.colormat = 255*np.ones((self.sp.shape[0],10,3), dtype=np.int32)
 
         self.colormat_plot = self.colormat.copy()
         self.plot_activity()
@@ -678,21 +678,24 @@ class MainW(QtGui.QMainWindow):
             self.Rcolors = []
             iscell, file_iscell = self.load_iscell()
             self.file_iscell = None
-            self.X = X
             if iscell is not None:
-                if iscell.size == self.X.shape[0]:
-                    self.X = self.X[iscell, :]
+                if iscell.size == X.shape[0]:
+                    X = X[iscell, :]
                     self.file_iscell = file_iscell
                     print('using iscell.npy in folder')
-
+            if len(X.shape) > 2:
+                X = X.mean(axis=-1)
             self.p0.clear()
-            self.sp = zscore(self.X, axis=1)
+            self.sp = zscore(X, axis=1)
             self.sp += 1
             self.sp /= 9
-            self.selected = np.arange(0, self.X.shape[0]).astype(np.int64)
+            self.selected = np.arange(0, X.shape[0]).astype(np.int64)
             self.embedding = self.selected[:, np.newaxis]
-            #self.add_imgROI()
-            #self.ROI_selection()
+            nn = self.sp.shape[0]
+            #self.yrange = np.arange(0, nn).astype(np.int32)
+            #self.colormat = 255*np.ones((self.sp.shape[0],10,3), dtype=np.int32)
+            self.add_imgROI()
+            self.ROI_selection()
             self.enable_loaded()
             self.show()
             self.loaded = True
@@ -720,18 +723,18 @@ class MainW(QtGui.QMainWindow):
         else:
             self.fname = name
         try:
-            proc = np.load(name)
+            proc = np.load(name, allow_pickle=True)
             proc = proc.item()
             self.proc = proc
             # do not load X, use reconstruction
             #X    = np.load(self.proc['filename'])
             self.filebase = self.proc['filename']
             y    = self.proc['embedding']
+            print(y.shape)
             u    = self.proc['uv'][0]
             v    = self.proc['uv'][1]
             ops  = self.proc['ops']
             X    = u @ v.T
-            print(X.shape)
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):
             print('ERROR: this is not a *.npy file :( ')
@@ -745,10 +748,14 @@ class MainW(QtGui.QMainWindow):
                 if self.proc['train_time'].sum() < self.proc['train_time'].size:
                     # not all training pts used
                     X    = np.load(self.proc['filename'])
+                    # show only test timepoints
+                    X    = X[:,~self.proc['train_time']]
                     if iscell is not None:
                         if iscell.size == X.shape[0]:
                             X = X[iscell, :]
                             print('using iscell.npy in folder')
+                    if len(X.shape) > 2:
+                        X = X.mean(axis=-1)
                     v = (u.T @ X).T
                     v /= ((v**2).sum(axis=0))**0.5
                     X = u @ v.T
@@ -761,9 +768,9 @@ class MainW(QtGui.QMainWindow):
             self.ROIorder = []
             self.Rselected = []
             self.Rcolors = []
-            self.X = X
             self.p0.clear()
-            self.sp = zscore(self.X, axis=1)
+            self.sp = X#zscore(X, axis=1)
+            del X
             self.sp += 1
             self.sp /= 9
             self.embedding = y

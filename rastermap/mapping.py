@@ -150,7 +150,7 @@ def distances(x, y):
 
 def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
-    flag = False
+    flag = True
     if dims==1:
         xs = np.arange(0,nclust)
         S = np.ones((K, nclust), 'float64')
