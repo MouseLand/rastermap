@@ -628,7 +628,7 @@ class Rastermap:
         S = S.T
         return S
 
-    def fit(self, X=None, u=None, s=None):
+    def fit(self, X=None, u=None, v=None, s=None):
         """Fit X into an embedded space.
         Inputs
         ----------
@@ -681,16 +681,18 @@ class Rastermap:
             self.v = v
             #self.u = u
             self.nPC = nmin
-        else:
-            self.v = u.T @ X
 
-        if self.mode is 'parallel':
-            self.u = np.zeros((2, X.shape[1], self.nPC), np.float32)
-            self.u[0] = X[0] @ self.v
-            self.u[1] = X[1] @ self.v
-            self.u -= np.expand_dims(self.u.mean(axis=1), 1)
+            if self.mode is 'parallel':
+                self.u = np.zeros((2, X.shape[1], self.nPC), np.float32)
+                self.u[0] = X[0] @ self.v
+                self.u[1] = X[1] @ self.v
+                self.u -= np.expand_dims(self.u.mean(axis=1), 1)
+            else:
+                self.u = X @ self.v
         else:
-            self.u = X @ self.v
+            self.v = v
+            self.u = u
+
         print(time.time() - t0)
 
         if self.constraints==3:
