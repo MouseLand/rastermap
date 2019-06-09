@@ -675,19 +675,22 @@ class Rastermap:
             model = PCA(n_components=nmin).fit(X0)
             #v = svdecon(X0, k=nmin)[2].T
             print(time.time() - t0)
-            v = model.components_
+            v = model.components_.copy().transpose()
+            del model
             #u = u * sv
             self.v = v
             #self.u = u
             self.nPC = nmin
+        else:
+            self.v = u.T @ X
 
         if self.mode is 'parallel':
             self.u = np.zeros((2, X.shape[1], self.nPC), np.float32)
-            self.u[0] = X[0] @ v.T
-            self.u[1] = X[1] @ v.T
+            self.u[0] = X[0] @ self.v
+            self.u[1] = X[1] @ self.v
             self.u -= np.expand_dims(self.u.mean(axis=1), 1)
         else:
-            self.u = X @ v.T
+            self.u = X @ self.v
         print(time.time() - t0)
 
         if self.constraints==3:
