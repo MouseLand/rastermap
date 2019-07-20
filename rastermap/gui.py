@@ -38,11 +38,10 @@ def rect_from_line(p,d):
 class Slider(QtGui.QSlider):
     def __init__(self, bid, parent=None):
         super(self.__class__, self).__init__()
-        initval = [0,100]
         self.bid = bid
         self.setMinimum(0)
         self.setMaximum(100)
-        self.setValue(initval[bid])
+        self.setValue(parent.sat[bid]*100)
         self.setTickPosition(QtGui.QSlider.TicksLeft)
         self.setTickInterval(10)
         self.valueChanged.connect(lambda: self.level_change(parent,bid))
@@ -234,13 +233,22 @@ class MainW(QtGui.QMainWindow):
         # add slider for levels
         self.sl = []
         txt = ["lower saturation", 'upper saturation']
-        self.sat = [0,1]
+        self.sat = [0.3,0.7]
         for j in range(2):
             self.sl.append(Slider(j, self))
             self.l0.addWidget(self.sl[j],rs+4-4*j,3,4,1)
             qlabel = VerticalLabel(text=txt[j])
             #qlabel.setStyleSheet('color: white;')
             self.l0.addWidget(qlabel,rs+4-4*j,4,4,1)
+        colormap = cm.get_cmap("gray_r")
+        colormap._init()
+        lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
+        lut = lut[0:-3,:]
+        # apply the colormap
+        self.img.setLookupTable(lut)
+        self.imgfull.setLookupTable(lut)
+        self.img.setLevels([self.sat[0], self.sat[1]])
+        self.imgfull.setLevels([self.sat[0], self.sat[1]])
 
         # ------ CHOOSE CELL-------
         #self.ROIedit = QtGui.QLineEdit(self)
@@ -308,8 +316,8 @@ class MainW(QtGui.QMainWindow):
                 cumsum = np.cumsum(np.concatenate((np.zeros((N,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
                 self.sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
                 self.sp_smoothed = zscore(self.sp_smoothed, axis=1)
-                self.sp_smoothed += 1
-                self.sp_smoothed /= 9
+                self.sp_smoothed = np.maximum(-4, np.minimum(8, self.sp_smoothed)) + 4
+                self.sp_smoothed /= 12
 
     def plot_activity(self):
         self.smooth_activity()
@@ -687,8 +695,8 @@ class MainW(QtGui.QMainWindow):
                 X = X.mean(axis=-1)
             self.p0.clear()
             self.sp = zscore(X, axis=1)
-            self.sp += 1
-            self.sp /= 9
+            self.sp = np.maximum(-4, np.minimum(8, self.sp)) + 4
+            self.sp /= 12
             self.selected = np.arange(0, X.shape[0]).astype(np.int64)
             self.embedding = self.selected[:, np.newaxis]
             nn = self.sp.shape[0]
