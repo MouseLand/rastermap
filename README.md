@@ -1,6 +1,6 @@
 # rastermap
 
-This algorithm computes a 1D or 2D embedding of neural activity. It assumes that the spike matrix `S` is neurons by timepoints. We have a python 3 and a matlab implementation, and have a GUI for running it in the python implementation. See the [demos](rastermap/demos/) for jupyter notebooks using it, and some example data.
+This algorithm computes a 1D or 2D embedding of neural activity. It assumes that the spike matrix `S` is neurons by timepoints. We have a python 3 and a matlab implementation, and have a GUI for running it in the python implementation. See the [demos](demos/) for jupyter notebooks using it, and some example data. We also have a guided [tutorial](tutorial/) integrating suite2p, rastermap, and facemap in an attempt to understand visual cortical responses.
 
 ![guigif](figs/rguifast.gif)
 
