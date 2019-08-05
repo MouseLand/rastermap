@@ -42,9 +42,9 @@ Run
 python -m facemap
 ```
 
-Then open the video "cam1_TX39_20Hz.avi" in facemap (this is a subset of the video). You can see how facemap works in [mesoscope3.ipynb](mesoscope3.ipynb).
+Then open the video "cam1_TX39_20Hz.avi" in facemap (this is a subset of the video). You can process this small subset of data in the GUI.
 
-I've run facemap on the whole movie and aligned them to the neural frames for you. So now let's see how the behavior relates to the neural activity. Open [mesoscope4.ipynb](mesoscope4.ipynb).
+I've run facemap on the whole movie and aligned them to the neural frames for you. So now let's see how the behavior relates to the neural activity in the notebook.
 
 ## BONUS: Explore data in [rastermap](https://github.com/MouseLand/rastermap) GUI
 
