@@ -2,14 +2,15 @@
 
 ## Setting up
 
-Clone this repository / pull to get the latest version
-```
-https://github.com/MouseLand/rastermap.git
-```
 
 We will make an environment with all the packages that we need with the **conda** package manager using the `environment.yml` file:
 
-1. Download the `environment.yml` file from the repository or `cd Mesoscope` to be in the same folder.
+1. Download the `environment.yml` from this folder *OR*
+    1. Clone this repository / pull to get the latest version
+    ```
+    git clone https://github.com/MouseLand/rastermap.git
+    ```
+    2. `cd rastermap/tutorial` to be in the same folder with the `environment.yml` folder.
 2. Open an anaconda prompt (windows) / command prompt (linux/Mac) with `conda` for **python 3** in the path. In linux/Mac you can check which conda you have with `which conda`, it should be in a subfolder below `anaconda3`.
 3. Run `conda env create -f environment.yml`.
 4. To activate this new environment, run `conda activate mouseland`.
@@ -23,7 +24,7 @@ Open the file [Python/python_tutorial.ipynb](../Python/python_tutorial.ipynb) in
 
 ## MESOSCOPE IN V1
 
-![2pv1](figs/2pv1.JPG)
+![2pv1](2pv1.JPG)
 
 ^ 18,795 neurons in V1 ^
 
