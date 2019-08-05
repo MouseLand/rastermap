@@ -35,9 +35,14 @@ We will now compute the receptive fields of single neurons, using the [tutorial.
 
 We can also run *rastermap* inside the notebook (which we do) and look at the receptive fields of groups of neurons placed together in the embedding. These receptive field estimates will be less noisy. But what are these neurons doing which don't have clear receptive fields?
 
-### behavioral analysis with [facemap](https://github.com/MouseLand/facemap)
+## Behavioral analysis with [facemap](https://github.com/MouseLand/facemap)
 
-Let's look at what the mouse is doing during the recording. Install facemap using the instructions on the github. Then open the video "cam1_TX39_20Hz.avi" in facemap (this is a subset of the video). You can see how facemap works in [mesoscope3.ipynb](mesoscope3.ipynb).
+Run
+```
+python -m facemap
+```
+
+Then open the video "cam1_TX39_20Hz.avi" in facemap (this is a subset of the video). You can see how facemap works in [mesoscope3.ipynb](mesoscope3.ipynb).
 
 I've run facemap on the whole movie and aligned them to the neural frames for you. So now let's see how the behavior relates to the neural activity. Open [mesoscope4.ipynb](mesoscope4.ipynb).
 
