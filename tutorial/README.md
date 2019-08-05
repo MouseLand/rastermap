@@ -1,7 +1,8 @@
-# Tutorial
+# using rastermap to explore visual cortex
 
 ## Setting up
 
+Download the data from [figshare](). It will include all the visual cortical responses 
 
 We will make an environment with all the packages that we need with the **conda** package manager using the `environment.yml` file:
 
@@ -16,12 +17,6 @@ We will make an environment with all the packages that we need with the **conda*
 4. To activate this new environment, run `conda activate mouseland`.
 5. You should see `(mouseland)` on the left side of the terminal line. Now check that you can `python -m suite2p` or `python -m facemap` or `python -m rastermap`.
 
-## PYTHON
-
-Check out the python [readme](https://github.com/marius10p/NeuralDataScienceCSHL2019/tree/master/Python)
-
-Open the file [Python/python_tutorial.ipynb](../Python/python_tutorial.ipynb) in a jupyter-notebook. We will go through these exercises together.
-
 ## MESOSCOPE IN V1
 
 ![2pv1](2pv1.JPG)
@@ -30,7 +25,7 @@ Open the file [Python/python_tutorial.ipynb](../Python/python_tutorial.ipynb) in
 
 ### view the data in [suite2p](https://github.com/MouseLand/suite2p)
 
-Install suite2p and load the data in folder XX into suite2p (stat.npy).
+Install suite2p and load the data from [figshare]() into suite2p (stat.npy).
 
 ### retinotopy
 
