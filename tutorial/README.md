@@ -31,18 +31,24 @@ We can run *rastermap* from inside *suite2p* in the Visualizations menu (or with
 
 ## Retinotopy
 
-We will now compute the receptive fields, using the [tutorial.ipynb](tutorial.ipynb) notebook. 
+We will now compute the receptive fields of single neurons, using the [tutorial.ipynb](tutorial.ipynb) notebook. 
 
-### explore data using [rastermap](https://github.com/MouseLand/rastermap)
-
-We will use an unsupervised dimensionality reduction technique that works well with neural data. Install rastermap and load the data into the GUI. 
-
-Next we will run rastermap in the notebook so that we can compute receptive fields across the rastermap, open [mesoscope2.ipynb](mesoscope2.ipynb).
-
-What are these neurons doing which don't have clear receptive fields?
+We can also run *rastermap* inside the notebook (which we do) and look at the receptive fields of groups of neurons placed together in the embedding. These receptive field estimates will be less noisy. But what are these neurons doing which don't have clear receptive fields?
 
 ### behavioral analysis with [facemap](https://github.com/MouseLand/facemap)
 
 Let's look at what the mouse is doing during the recording. Install facemap using the instructions on the github. Then open the video "cam1_TX39_20Hz.avi" in facemap (this is a subset of the video). You can see how facemap works in [mesoscope3.ipynb](mesoscope3.ipynb).
 
 I've run facemap on the whole movie and aligned them to the neural frames for you. So now let's see how the behavior relates to the neural activity. Open [mesoscope4.ipynb](mesoscope4.ipynb).
+
+## BONUS: Explore data in [rastermap](https://github.com/MouseLand/rastermap) GUI
+
+However, these neural responses are high-dimensional, is a one-dimensional embedding enough to view the structure? We can also embed the neurons in a 2D space using *rastermap*. Run
+```
+python -m rastermap
+```
+
+
+
+
+
