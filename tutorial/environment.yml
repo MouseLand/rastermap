@@ -1,0 +1,27 @@
+name: mouseland
+channels:
+  - conda-forge
+dependencies:
+  - python>3.5
+  - pip
+  - ffmpeg
+  - av
+  - mkl_fft=1.0.10
+  - mkl=2019.3
+  - numpy>=1.16
+  - numba>=0.43.1
+  - matplotlib
+  - scipy
+  - h5py
+  - scikit-image
+  - scikit-learn
+  - jupyter
+  - pip:
+    - PyQt5
+    - pyqtgraph
+    - natsort
+    - git+https://github.com/soft-matter/pims.git
+    - git+https://github.com/pyqtgraph/pyqtgraph
+    - facemap
+    - rastermap>=0.1.0
+    - suite2p
