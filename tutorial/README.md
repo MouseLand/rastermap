@@ -7,10 +7,7 @@ First start downloading the data from [figshare](). It will include all the visu
 Next we will make an environment with all the packages that we need with the **conda** package manager using the `environment.yml` file:
 
 1. Download the `environment.yml` from this folder *OR*
-    1. Clone this repository / pull to get the latest version
-    ```
-    git clone https://github.com/MouseLand/rastermap.git
-    ```
+    1. Clone this repository `git clone https://github.com/MouseLand/rastermap.git` (or pull the latest version if you already have it with `git pull`)
     2. `cd rastermap/tutorial` to be in the same folder with the `environment.yml` folder.
 2. Open an anaconda prompt (windows) / command prompt (linux/Mac) with `conda` for **python 3** in the path. In linux/Mac you can check which conda you have with `which conda`, it should be in a subfolder below `anaconda3`.
 3. Run `conda env create -f environment.yml`.
