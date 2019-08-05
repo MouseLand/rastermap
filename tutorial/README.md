@@ -1,8 +1,11 @@
-# 2P exercises
+# Tutorial
 
 ## Setting up
 
 Clone this repository / pull to get the latest version
+```
+https://github.com/MouseLand/rastermap.git
+```
 
 We will make an environment with all the packages that we need with the **conda** package manager using the `environment.yml` file:
 
