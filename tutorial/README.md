@@ -1,10 +1,10 @@
-# using rastermap to explore visual cortex
+# Using rastermap to explore visual cortical activity
 
 ## Setting up
 
-Download the data from [figshare](). It will include all the visual cortical responses 
+First start downloading the data from [figshare](). It will include all the visual cortical responses, the behavioral responses aligned to the neural frames, and a short example video of the mouse's face.
 
-We will make an environment with all the packages that we need with the **conda** package manager using the `environment.yml` file:
+Next we will make an environment with all the packages that we need with the **conda** package manager using the `environment.yml` file:
 
 1. Download the `environment.yml` from this folder *OR*
     1. Clone this repository / pull to get the latest version
