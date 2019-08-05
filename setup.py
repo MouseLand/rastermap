@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="rastermap",
-    version="0.0.7",
+    version="0.0.9",
     author="Marius Pachitariu and Carsen Stringer",
     author_email="carsen.stringer@gmail.com",
     description="Unsupervised clustering algorithm for 2D data",
