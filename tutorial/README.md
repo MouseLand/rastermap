@@ -2,7 +2,7 @@
 
 ## Setting up
 
-First start downloading the data from [figshare](). It will include all the visual cortical responses, the behavioral responses aligned to the neural frames, and a short example video of the mouse's face.
+First start downloading the data from [figshare](). It will include all the visual cortical responses, the behavioral responses aligned to the neural frames, and a short example video of the mouse's face. In this experiment we are showing sparse noise stimuli to the mouse (for retinotopic mapping) as it freely runs on an air-floating ball.
 
 Next we will make an environment with all the packages that we need with the **conda** package manager using the `environment.yml` file:
 
@@ -14,19 +14,24 @@ Next we will make an environment with all the packages that we need with the **c
 4. To activate this new environment, run `conda activate mouseland`.
 5. You should see `(mouseland)` on the left side of the terminal line. Now check that you can `python -m suite2p` or `python -m facemap` or `python -m rastermap`.
 
-## MESOSCOPE IN V1
-
+## View the data in [suite2p](https://github.com/MouseLand/suite2p)
 ![2pv1](2pv1.JPG)
 
 ^ 18,795 neurons in V1 ^
 
-### view the data in [suite2p](https://github.com/MouseLand/suite2p)
+You will need 16GB of RAM to load this data into your computer. Start suite2p  with
+```
+python -m suite2p
+```
+From the file menu you can load the data (or with CTRL+L), choose the `stat.npy` file.
 
-Install suite2p and load the data from [figshare]() into suite2p (stat.npy).
+You can view the correlations among neurons with the *correlations* color. If you want to bin the responses a certain before computing the correlations, you can use the *bin=* text edit box. The data is collected with an imaging rate of 3Hz, so 3 bins = 1 second. Some neurons are correlated with their neighbors, others aren't. Why might that be?
 
-### retinotopy
+We can run *rastermap* from inside *suite2p* in the Visualizations menu (or with CTRL+V). You can then look at different groups of neurons in the main GUI by circling them with the RED ROI box in the top plot, and then clicking "show selected cells in GUI".
 
-We will now compute the receptive fields, using the [mesoscope1.ipynb](mesoscope1.ipynb). In these experiments we are showing sparse noise stimuli to the mice as they freely run on an air-floating ball.
+## Retinotopy
+
+We will now compute the receptive fields, using the [tutorial.ipynb](tutorial.ipynb) notebook. 
 
 ### explore data using [rastermap](https://github.com/MouseLand/rastermap)
 
