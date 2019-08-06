@@ -52,6 +52,7 @@ However, these neural responses are high-dimensional, is a one-dimensional embed
 ```
 python -m rastermap
 ```
+Load in the data (`spks.npy`) and then run 2D *rastermap*.
 
 
 
