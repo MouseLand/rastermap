@@ -97,8 +97,6 @@ Rastermap first takes the specified PCs of the data, and then embeds them into n
         dimension of the embedding space
 - **n_X** : int, optional (default: 40)
         size of the grid on which the Fourier modes are rasterized
-- **n_Y** :  int, optional (default: 0)
-        number of Fourier components in Y: will be used to smooth data for better PCs
 - **nPC**  : nparray, int, optional (default: 400)
         how many of the top PCs to use during optimization
 - **alpha** : float, optional (default: 1.0)
@@ -115,7 +113,6 @@ Rastermap model has the following attributes after running 'fit':
         Stores the embedding vectors.
 - **u,sv,v** : singular value decomposition of data S, potentially with smoothing
 - **isort1** : sorting along first dimension (n_samples) of matrix
-- **isort2** : sorting along second dimension (n_features) of matrix (if n_Y > 0)
 - **cmap**  : correlation of each item with all locations in the embedding map (before upsampling)
 - **A**     :    PC coefficients of each Fourier mode
 
