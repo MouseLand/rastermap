@@ -27,13 +27,13 @@ From the file menu you can load the data (or with CTRL+L), choose the `stat.npy`
 
 You can view the correlations among neurons with the *correlations* color. If you want to bin the responses a certain before computing the correlations, you can use the *bin=* text edit box. The data is collected with an imaging rate of 3Hz, so 3 bins = 1 second. Some neurons are correlated with their neighbors, others aren't. Why might that be?
 
-We can run *rastermap* from inside *suite2p* in the Visualizations menu (or with CTRL+V). You can then look at different groups of neurons in the main GUI by circling them with the RED ROI box in the top plot, and then clicking "show selected cells in GUI".
-
 ## Retinotopy
 
 We will now compute the receptive fields of single neurons, using the [tutorial.ipynb](tutorial.ipynb) notebook. 
 
-We can also run *rastermap* inside the notebook (which we do) and look at the receptive fields of groups of neurons placed together in the embedding. These receptive field estimates will be less noisy. But what are these neurons doing which don't have clear receptive fields?
+What are the overall patterns of activity in visual cortex? Are they well-defined by the principal components?
+
+We can run *rastermap* inside the notebook (which we do) and look at the receptive fields of groups of neurons placed together in the embedding. These receptive field estimates will be less noisy. But what are these neurons doing which don't have clear receptive fields?
 
 ## Behavioral analysis with [facemap](https://github.com/MouseLand/facemap)
 
@@ -45,6 +45,10 @@ python -m facemap
 Then open the video "cam1_TX39_20Hz.avi" in facemap (this is a subset of the video). You can process this small subset of data in the GUI.
 
 I've run facemap on the whole movie and aligned them to the neural frames for you. So now let's see how the behavior relates to the neural activity in the [tutorial.ipynb](tutorial.ipynb) notebook.
+
+## Spatial localization of patterns
+
+We can run *rastermap* from inside *suite2p* in the Visualizations menu (or with CTRL+V). You can then look at different groups of neurons in the main GUI by circling them with the RED ROI box in the top plot, and then clicking "show selected cells in GUI".
 
 ## BONUS: Explore data in [rastermap](https://github.com/MouseLand/rastermap) GUI
 
