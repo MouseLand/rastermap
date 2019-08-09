@@ -31,9 +31,9 @@ You can view the correlations among neurons with the *correlations* color. If yo
 
 We will now compute the receptive fields of single neurons, using the [tutorial.ipynb](tutorial.ipynb) notebook. 
 
-What are the overall patterns of activity in visual cortex? Are they well-defined by the principal components?
+What are the overall patterns of activity in visual cortex? Are they well-defined by the principal components? We will look at the PCs in the notebook and their receptive fields.
 
-We can run *rastermap* inside the notebook (which we do) and look at the receptive fields of groups of neurons placed together in the embedding. These receptive field estimates will be less noisy. But what are these neurons doing which don't have clear receptive fields?
+Maybe there is a better way to visualize this activity. We can run *rastermap* inside the notebook (which we do) and look at the receptive fields of groups of neurons placed together in the embedding. These receptive field estimates will be less noisy. But what are these neurons doing which don't have clear receptive fields?
 
 ## Behavioral analysis with [facemap](https://github.com/MouseLand/facemap)
 
