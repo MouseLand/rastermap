@@ -1,6 +1,6 @@
-# Using rastermap to explore visual cortical activity
+Go HERE --> https://github.com/MouseLand/rastermap/tree/master/tutorial
 
-Code and data links are available here: https://github.com/MouseLand/rastermap/tree/master/tutorial
+# Using rastermap to explore visual cortical activity
 
 ## Setting up
 
