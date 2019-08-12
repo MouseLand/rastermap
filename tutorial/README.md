@@ -1,4 +1,4 @@
-Go HERE --> https://github.com/MouseLand/rastermap/tree/master/tutorial
+** https://github.com/MouseLand/rastermap/tree/master/tutorial **
 
 # Using rastermap to explore visual cortical activity
 
