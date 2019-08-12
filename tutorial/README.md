@@ -4,7 +4,7 @@ Go HERE --> https://github.com/MouseLand/rastermap/tree/master/tutorial
 
 ## Setting up
 
-First start downloading the data from [here](https://drive.google.com/drive/u/0/folders/1fvnHDucsyBryVoWdo7u5YbaufoqDrsy9). It includes all the visual cortical responses, the behavioral responses aligned to the neural frames, and a short example video of the mouse's face. In this experiment we are showing sparse noise stimuli to the mouse (for retinotopic mapping) as it freely runs on an air-floating ball.
+First start downloading the data from [here](https://figshare.com/articles/Recording_of_19_000_neurons_across_mouse_visual_cortex_during_sparse_noise_stimuli/9505250). It includes all the visual cortical responses, the behavioral responses aligned to the neural frames, and a short example video of the mouse's face. In this experiment we are showing sparse noise stimuli to the mouse (for retinotopic mapping) as it freely runs on an air-floating ball.
 
 Next we will make an environment with all the packages that we need with the **conda** package manager using the `environment.yml` file:
 
