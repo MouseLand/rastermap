@@ -74,6 +74,7 @@ class RunWindow(QtGui.QDialog):
         self.stopButton.clicked.connect(self.stop)
 
     def run_RMAP(self, parent):
+        del parent.sp
         self.finish = True
         self.error = False
         self.save_text()
@@ -84,7 +85,6 @@ class RunWindow(QtGui.QDialog):
             self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s --iscell %s'%(parent.filebase, parent.file_iscell))
         else:
             self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s'%parent.filebase)
-
 
     def stop(self):
         self.finish = False
@@ -102,7 +102,10 @@ class RunWindow(QtGui.QDialog):
             cursor.movePosition(cursor.End)
             cursor.insertText('Opening in GUI (can close this window)\n')
             basename,fname = os.path.split(parent.fname)
-            parent.fname = os.path.join(basename, 'embedding.npy')
+            if os.path.isfile(os.path.join(basename, 'embedding.npy')):
+                parent.fname = os.path.join(basename, 'embedding.npy')
+            else:
+                parent.fname = 'embedding.npy'
             parent.load_proc(parent.fname)
         elif not self.error:
             cursor = self.textEdit.textCursor()

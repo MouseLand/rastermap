@@ -41,14 +41,20 @@ class Slider(QtGui.QSlider):
         self.bid = bid
         self.setMinimum(0)
         self.setMaximum(100)
-        self.setValue(parent.sat[bid]*100)
+        self.setValue(parent.sat[bid]*200)
         self.setTickPosition(QtGui.QSlider.TicksLeft)
         self.setTickInterval(10)
         self.valueChanged.connect(lambda: self.level_change(parent,bid))
         self.setTracking(False)
+        if self.bid==0:
+            self.setInvertedAppearance(True)
 
     def level_change(self, parent, bid):
-        parent.sat[bid] = float(self.value())/100
+        parent.sat[bid] = float(self.value())/200
+        if bid==1:
+            parent.sat[bid] += 0.5
+        else:
+            parent.sat[bid] = 0.5 - parent.sat[bid]
         parent.img.setLevels([parent.sat[0],parent.sat[1]])
         parent.imgfull.setLevels([parent.sat[0],parent.sat[1]])
         parent.win.show()
@@ -198,28 +204,46 @@ class MainW(QtGui.QMainWindow):
         # self.key_on(self.win.scene().keyPressEvent)
         rs = 2
         addROI = QtGui.QLabel("<font color='white'>add an ROI by SHIFT click</font>")
-        self.l0.addWidget(addROI, rs+0, 0, 1, 2)
+        self.l0.addWidget(addROI, rs+0, 0, 1, 3)
         addROI = QtGui.QLabel("<font color='white'>delete an ROI by ALT click</font>")
-        self.l0.addWidget(addROI, rs+1, 0, 1, 2)
+        self.l0.addWidget(addROI, rs+1, 0, 1, 3)
         addROI = QtGui.QLabel("<font color='white'>delete last-drawn ROI by DELETE</font>")
-        self.l0.addWidget(addROI, rs+2, 0, 1, 2)
+        self.l0.addWidget(addROI, rs+2, 0, 1, 3)
         addROI = QtGui.QLabel("<font color='white'>delete all ROIs by ALT-DELETE</font>")
-        self.l0.addWidget(addROI, rs+3, 0, 1, 2)
+        self.l0.addWidget(addROI, rs+3, 0, 1, 3)
         self.updateROI = QtGui.QPushButton("update (SPACE)")
         self.updateROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.updateROI.clicked.connect(self.ROI_selection)
         self.updateROI.setStyleSheet(self.styleInactive)
         self.updateROI.setEnabled(False)
+        self.updateROI.setFixedWidth(100)
         self.l0.addWidget(self.updateROI, rs+4, 0, 1, 1)
         self.saveROI = QtGui.QPushButton("save ROIs")
         self.saveROI.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.saveROI.clicked.connect(self.ROI_save)
         self.saveROI.setStyleSheet(self.styleInactive)
         self.saveROI.setEnabled(False)
+        self.saveROI.setFixedWidth(100)
         self.l0.addWidget(self.saveROI, rs+5, 0, 1, 1)
 
-        addROI = QtGui.QLabel("<font color='white'>y-smoothing</font>")
-        self.l0.addWidget(addROI, rs+6, 0, 1, 1)
+        self.makegrid = QtGui.QPushButton("make ROI grid, n=")
+        self.makegrid.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
+        self.makegrid.clicked.connect(self.make_grid)
+        self.makegrid.setStyleSheet(self.styleInactive)
+        self.makegrid.setEnabled(False)
+        self.makegrid.setFixedWidth(100)
+        self.l0.addWidget(self.makegrid, rs+7, 0, 1, 1)
+        self.gridsize = QtGui.QLineEdit(self)
+        self.gridsize.setValidator(QtGui.QIntValidator(0, 500))
+        self.gridsize.setText("10")
+        self.gridsize.setFixedWidth(45)
+        self.gridsize.setAlignment(QtCore.Qt.AlignRight)
+        self.gridsize.returnPressed.connect(self.make_grid)
+        self.l0.addWidget(self.gridsize, rs+7, 1, 1, 1)
+
+        ysm = QtGui.QLabel("<font color='white'>y-binning</font>")
+        ysm.setFixedWidth(100)
+        self.l0.addWidget(ysm, rs+6, 0, 1, 1)
         self.smooth = QtGui.QLineEdit(self)
         self.smooth.setValidator(QtGui.QIntValidator(0, 500))
         self.smooth.setText("10")
@@ -228,8 +252,6 @@ class MainW(QtGui.QMainWindow):
         self.smooth.returnPressed.connect(self.plot_activity)
         self.l0.addWidget(self.smooth, rs+6, 1, 1, 1)
 
-        #satlab = QtGui.QLabel("<font color='white'>saturation</font>")
-        #self.l0.addWidget(satlab, 23, 1, 1, 1)
         # add slider for levels
         self.sl = []
         txt = ["lower saturation", 'upper saturation']
@@ -308,16 +330,17 @@ class MainW(QtGui.QMainWindow):
         self.p0.addItem(self.se)
 
     def smooth_activity(self):
-        if self.sp.shape[0] == self.selected.size:
-            self.sp_smoothed = self.sp[self.selected, :]
-        else:
-            N = int(self.smooth.text())
-            if N > 1:
-                cumsum = np.cumsum(np.concatenate((np.zeros((N,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
-                self.sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
-                self.sp_smoothed = zscore(self.sp_smoothed, axis=1)
-                self.sp_smoothed = np.maximum(-4, np.minimum(8, self.sp_smoothed)) + 4
-                self.sp_smoothed /= 12
+        N = int(self.smooth.text())
+        if N > 1:
+            NN = self.selected.size
+            nn = int(np.floor(NN/N))
+            self.sp_smoothed = np.reshape(self.sp[self.selected][:nn*N].copy(), (nn, N, -1)).mean(axis=1)
+            #cumsum = np.cumsum(np.concatenate((np.zeros((N,self.sp.shape[1])), self.sp[self.selected,:]), axis=0), axis=0)
+            #self.sp_smoothed = (cumsum[N:, :] - cumsum[:-N, :]) / float(N)
+
+            self.sp_smoothed = zscore(self.sp_smoothed, axis=1)
+            self.sp_smoothed = np.maximum(-4, np.minimum(8, self.sp_smoothed)) + 4
+            self.sp_smoothed /= 12
 
     def plot_activity(self):
         self.smooth_activity()
@@ -336,15 +359,34 @@ class MainW(QtGui.QMainWindow):
         self.imgROI.setPos(-.5,-.5)
         self.imgROI.setSize([nt+.5,nn+.5])
         self.imgROI.maxBounds = QtCore.QRectF(-1.,-1.,nt+1,nn+1)
+        if 0:
+            nn = self.sp.shape[0]
+            nt = self.sp.shape[1]
+            self.imgfull.setImage(self.sp)
+            self.imgfull.setLevels([self.sat[0],self.sat[1]])
+            self.img.setImage(self.sp)
+            self.img.setLevels([self.sat[0],self.sat[1]])
+            self.p1.setXRange(0, nt, padding=0)
+            self.p1.setYRange(0, nn, padding=0)
+            self.p1.setLimits(xMin=0,xMax=nt,yMin=0,yMax=nn)
+            self.pfull.setXRange(0, nt, padding=0)
+            self.pfull.setYRange(0, nn, padding=0)
+            self.pfull.setLimits(xMin=-1,xMax=nt+1,yMin=-1,yMax=nn+1)
+            self.imgROI.setPos(-.5,-.5)
+            self.imgROI.setSize([nt+.5,nn+.5])
+            self.imgROI.maxBounds = QtCore.QRectF(-1.,-1.,nt+1,nn+1)
+            self.yrange = np.arange(0,nn,1,int)
         self.show()
         self.win.show()
 
     def plot_colorbar(self):
         nneur = self.colormat_plot.shape[0]
         self.colorimg.setImage(self.colormat_plot)
-        self.p3.setYRange(self.yrange[0],self.yrange[-1])
+        N = int(self.smooth.text())
+        NN = self.sp_smoothed.shape[0]*N
+        self.p3.setYRange(self.yrange[0]*N, self.yrange[-1]*N)
         self.p3.setXRange(0,10)
-        self.p3.setLimits(yMin=self.yrange[0],yMax=self.yrange[-1],xMin=0,xMax=10)
+        self.p3.setLimits(yMin=self.yrange[0]*N,yMax=self.yrange[-1]*N,xMin=0,xMax=10)
         self.p3.getAxis('bottom').setTicks([[(0,'')]])
         self.win.show()
 
@@ -369,26 +411,34 @@ class MainW(QtGui.QMainWindow):
         posy = pos.y()
         posx = pos.x()
         sizex,sizey = self.imgROI.size()
-        xrange = (np.arange(0,int(sizex)) + int(posx)).astype(np.int32)
-        yrange = (np.arange(0,int(sizey)) + int(posy)).astype(np.int32)
+        xrange = (np.arange(0,int(sizex)) + np.floor(posx)).astype(np.int32)
+        yrange = (np.arange(0,int(sizey)) + np.floor(posy)).astype(np.int32)
         xrange = xrange[xrange>=0]
-        xrange = xrange[xrange<self.sp_smoothed.shape[1]]
         yrange = yrange[yrange>=0]
+        #if self.embedded:
+        xrange = xrange[xrange<self.sp_smoothed.shape[1]]
         yrange = yrange[yrange<self.sp_smoothed.shape[0]]
+        #else:
+        #    xrange = xrange[xrange<self.sp.shape[1]]
+        #    yrange = yrange[yrange<self.sp.shape[0]]
         return xrange,yrange
 
     def imgROI_position(self):
         xrange,yrange = self.imgROI_range()
-        self.img.setImage(self.sp_smoothed[np.ix_(yrange,xrange)])
+        if 1:
+            self.img.setImage(self.sp_smoothed[np.ix_(yrange,xrange)])
+        else:
+            self.img.setImage(self.sp[np.ix_(yrange,xrange)])
         self.img.setLevels([self.sat[0],self.sat[1]])
         self.p1.setXRange(0,xrange.size)
         self.p1.setYRange(0,yrange.size)
         self.p1.setLimits(xMin=0,xMax=xrange.size,yMin=0,yMax=yrange.size)
+        self.yrange = yrange
         axy = self.p3.getAxis('left')
         axx = self.p1.getAxis('bottom')
-        self.yrange = yrange
         self.plot_colorbar()
-        axy.setTicks([[(yrange[0],str(yrange[0])),(float(yrange[-1]),str(yrange[-1]))]])
+        N = int(self.smooth.text())
+        axy.setTicks([[(0,str(self.yrange[0])),(self.yrange[-1]*N,str(self.yrange[-1]*N))]])
         axx.setTicks([[(0.0,str(xrange[0])),(float(xrange.size),str(xrange[-1]))]])
 
     def ROI_selection(self, loaded=False):
@@ -451,6 +501,20 @@ class MainW(QtGui.QMainWindow):
             ineur = self.selected[ineur]
             self.xp.setData(pos=self.embedding[ineur,:][np.newaxis,:])
 
+    def make_grid(self):
+        ng = int(self.gridsize.text())
+        if len(self.ROIs) > 0:
+            for n in range(len(self.ROIs)):
+                self.ROI_delete()
+        sz = self.embedding.max() / ng
+        print(sz)
+        corners = np.array([j*sz for j in range(0,ng)])
+        print(corners)
+        #for j in range(ng):
+        #    for k in range(ng):
+        #        prect = np.array([[corners[j],corners[k]],
+        #                          [corners[j],corners[k]],
+
     def ROI_add(self, pos, prect, color=None):
         if color is None:
             color =  np.random.randint(255,size=(3,))
@@ -505,15 +569,18 @@ class MainW(QtGui.QMainWindow):
     def enable_embedded(self):
         self.updateROI.setEnabled(True)
         self.saveROI.setEnabled(True)
+        self.makegrid.setEnabled(True)
         self.updateROI.setStyleSheet(self.styleUnpressed)
         self.saveROI.setStyleSheet(self.styleUnpressed)
+        self.makegrid.setStyleSheet(self.styleUnpressed)
 
     def disable_embedded(self):
         self.updateROI.setEnabled(False)
         self.saveROI.setEnabled(False)
+        self.makegrid.setEnabled(False)
         self.updateROI.setStyleSheet(self.styleInactive)
         self.saveROI.setStyleSheet(self.styleInactive)
-
+        self.makegrid.setStyleSheet(self.styleInactive)
 
     def mouse_moved_embedding(self, pos):
         if self.embedded:
@@ -547,13 +614,16 @@ class MainW(QtGui.QMainWindow):
                     ineur = np.argmin(dists.flatten()).astype(int)
                     self.update_selected(ineur)
 
-
     def mouse_moved_activity(self, pos):
         if self.loaded:
             if self.p1.sceneBoundingRect().contains(pos):
                 y = self.p1.vb.mapSceneToView(pos).y()
-                ineur = min(self.yrange.size-1, max(0, int(np.floor(y))))
-                ineur = ineur + self.yrange[0]
+                #y += self.yrange[0]
+                N = int(self.smooth.text())
+                ineur = float(y) * float(N)
+                ineur += (self.yrange[0]) * float(N)
+                ineur = min((self.yrange[-1])*N, max((self.yrange[0])*N, int(np.floor(ineur))))
+                #ineur = ineur + self.yrange[0]
                 self.update_selected(ineur)
 
     def mouse_moved_bar(self, pos):
@@ -622,6 +692,7 @@ class MainW(QtGui.QMainWindow):
                             self.endROI = False
                             for lp in self.lp:
                                 self.p0.removeItem(lp)
+                            print(self.posAll, self.prect)
                             self.ROI_add(self.posAll, self.prect)
                             self.posAll = []
                             self.lp = []
@@ -695,9 +766,10 @@ class MainW(QtGui.QMainWindow):
                 X = X.mean(axis=-1)
             self.p0.clear()
             self.sp = zscore(X, axis=1)
+            del X
             self.sp = np.maximum(-4, np.minimum(8, self.sp)) + 4
             self.sp /= 12
-            self.selected = np.arange(0, X.shape[0]).astype(np.int64)
+            self.selected = np.arange(0, self.sp.shape[0]).astype(np.int64)
             self.embedding = self.selected[:, np.newaxis]
             nn = self.sp.shape[0]
             #self.yrange = np.arange(0, nn).astype(np.int32)

@@ -48,8 +48,11 @@ if __name__ == '__main__':
         proc  = {'embedding': model.embedding, 'uv': [model.u, model.v],
                  'ops': ops, 'filename': args.S, 'train_time': train_time}
         basename, fname = os.path.split(args.S)
-        np.save(os.path.join(basename, 'embedding.npy'), proc)
-        #os.path.dirname(args.ops)
-        np.save('embedding.npy', proc)
+        try:
+            np.save(os.path.join(basename, 'embedding.npy'), proc)
+        except:
+            print('no permission to write to data folder')
+            #os.path.dirname(args.ops)
+            np.save('embedding.npy', proc)
     else:
         gui.run()
