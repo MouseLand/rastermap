@@ -180,7 +180,7 @@ class MainW(QtGui.QMainWindow):
         self.p1 = self.win.addPlot(row=1, col=2, colspan=3,
                                    rowspan=3, invertY=True, padding=0)
         self.p1.setMouseEnabled(x=False, y=False)
-        self.img = pg.ImageItem(autoDownsample=False)
+        self.img = pg.ImageItem(autoDownsample=True)
         self.p1.hideAxis('left')
         self.p1.setMenuEnabled(False)
         self.p1.scene().contextMenuItem = self.p1
@@ -343,23 +343,24 @@ class MainW(QtGui.QMainWindow):
             self.sp_smoothed /= 12
 
     def plot_activity(self):
-        self.smooth_activity()
-        nn = self.sp_smoothed.shape[0]
-        nt = self.sp_smoothed.shape[1]
-        self.imgfull.setImage(self.sp_smoothed)
-        self.imgfull.setLevels([self.sat[0],self.sat[1]])
-        self.img.setImage(self.sp_smoothed)
-        self.img.setLevels([self.sat[0],self.sat[1]])
-        self.p1.setXRange(0, nt, padding=0)
-        self.p1.setYRange(0, nn, padding=0)
-        self.p1.setLimits(xMin=0,xMax=nt,yMin=0,yMax=nn)
-        self.pfull.setXRange(0, nt, padding=0)
-        self.pfull.setYRange(0, nn, padding=0)
-        self.pfull.setLimits(xMin=-1,xMax=nt+1,yMin=-1,yMax=nn+1)
-        self.imgROI.setPos(-.5,-.5)
-        self.imgROI.setSize([nt+.5,nn+.5])
-        self.imgROI.maxBounds = QtCore.QRectF(-1.,-1.,nt+1,nn+1)
-        if 0:
+        if self.embedded:
+            self.smooth_activity()
+            nn = self.sp_smoothed.shape[0]
+            nt = self.sp_smoothed.shape[1]
+            self.imgfull.setImage(self.sp_smoothed)
+            self.imgfull.setLevels([self.sat[0],self.sat[1]])
+            self.img.setImage(self.sp_smoothed)
+            self.img.setLevels([self.sat[0],self.sat[1]])
+            self.p1.setXRange(0, nt, padding=0)
+            self.p1.setYRange(0, nn, padding=0)
+            self.p1.setLimits(xMin=0,xMax=nt,yMin=0,yMax=nn)
+            self.pfull.setXRange(0, nt, padding=0)
+            self.pfull.setYRange(0, nn, padding=0)
+            self.pfull.setLimits(xMin=-1,xMax=nt+1,yMin=-1,yMax=nn+1)
+            self.imgROI.setPos(-.5,-.5)
+            self.imgROI.setSize([nt+.5,nn+.5])
+            self.imgROI.maxBounds = QtCore.QRectF(-1.,-1.,nt+1,nn+1)
+        else:
             nn = self.sp.shape[0]
             nt = self.sp.shape[1]
             self.imgfull.setImage(self.sp)
@@ -382,8 +383,10 @@ class MainW(QtGui.QMainWindow):
     def plot_colorbar(self):
         nneur = self.colormat_plot.shape[0]
         self.colorimg.setImage(self.colormat_plot)
-        N = int(self.smooth.text())
-        NN = self.sp_smoothed.shape[0]*N
+        if self.embedded:
+            N = int(self.smooth.text())
+        else:
+            N = 1
         self.p3.setYRange(self.yrange[0]*N, self.yrange[-1]*N)
         self.p3.setXRange(0,10)
         self.p3.setLimits(yMin=self.yrange[0]*N,yMax=self.yrange[-1]*N,xMin=0,xMax=10)
@@ -415,17 +418,17 @@ class MainW(QtGui.QMainWindow):
         yrange = (np.arange(0,int(sizey)) + np.floor(posy)).astype(np.int32)
         xrange = xrange[xrange>=0]
         yrange = yrange[yrange>=0]
-        #if self.embedded:
-        xrange = xrange[xrange<self.sp_smoothed.shape[1]]
-        yrange = yrange[yrange<self.sp_smoothed.shape[0]]
-        #else:
-        #    xrange = xrange[xrange<self.sp.shape[1]]
-        #    yrange = yrange[yrange<self.sp.shape[0]]
+        if self.embedded:
+            xrange = xrange[xrange<self.sp_smoothed.shape[1]]
+            yrange = yrange[yrange<self.sp_smoothed.shape[0]]
+        else:
+            xrange = xrange[xrange<self.sp.shape[1]]
+            yrange = yrange[yrange<self.sp.shape[0]]
         return xrange,yrange
 
     def imgROI_position(self):
         xrange,yrange = self.imgROI_range()
-        if 1:
+        if self.embedded:
             self.img.setImage(self.sp_smoothed[np.ix_(yrange,xrange)])
         else:
             self.img.setImage(self.sp[np.ix_(yrange,xrange)])
@@ -437,7 +440,10 @@ class MainW(QtGui.QMainWindow):
         axy = self.p3.getAxis('left')
         axx = self.p1.getAxis('bottom')
         self.plot_colorbar()
-        N = int(self.smooth.text())
+        if self.embedded:
+            N = int(self.smooth.text())
+        else:
+            N = 1
         axy.setTicks([[(0,str(self.yrange[0])),(self.yrange[-1]*N,str(self.yrange[-1]*N))]])
         axx.setTicks([[(0.0,str(xrange[0])),(float(xrange.size),str(xrange[-1]))]])
 
@@ -481,7 +487,9 @@ class MainW(QtGui.QMainWindow):
 
         self.colormat_plot = self.colormat.copy()
         self.plot_activity()
+        print('plotted activity')
         self.plot_colorbar()
+        print('plotted colorbar')
         self.win.show()
 
     def update_selected(self, ineur):
@@ -786,6 +794,7 @@ class MainW(QtGui.QMainWindow):
             self.ROI_selection()
             self.enable_loaded()
             self.show()
+            print('done loading')
             self.loaded = True
 
     def load_iscell(self):
