@@ -234,8 +234,8 @@ class MainW(QtGui.QMainWindow):
         self.makegrid.setFixedWidth(100)
         self.l0.addWidget(self.makegrid, rs+7, 0, 1, 1)
         self.gridsize = QtGui.QLineEdit(self)
-        self.gridsize.setValidator(QtGui.QIntValidator(0, 500))
-        self.gridsize.setText("10")
+        self.gridsize.setValidator(QtGui.QIntValidator(2, 20))
+        self.gridsize.setText("5")
         self.gridsize.setFixedWidth(45)
         self.gridsize.setAlignment(QtCore.Qt.AlignRight)
         self.gridsize.returnPressed.connect(self.make_grid)
@@ -506,14 +506,22 @@ class MainW(QtGui.QMainWindow):
         if len(self.ROIs) > 0:
             for n in range(len(self.ROIs)):
                 self.ROI_delete()
-        sz = self.embedding.max() / ng
-        print(sz)
-        corners = np.array([j*sz for j in range(0,ng)])
-        print(corners)
-        #for j in range(ng):
-        #    for k in range(ng):
-        #        prect = np.array([[corners[j],corners[k]],
-        #                          [corners[j],corners[k]],
+        sz = (self.embedding.max() - self.embedding.min()) / ng
+        corners = np.linspace(self.embedding.min(), self.embedding.max(), ng+1)
+        jet = cm.get_cmap('jet')
+        jet = jet(np.linspace(0,1,ng**2))
+        jet = jet[:,:3]
+        for j in range(ng):
+            for k in range(ng):
+                prect = [np.array([[corners[j],corners[k]],
+                                  [corners[j+1],corners[k]],
+                                  [corners[j+1],corners[k+1]],
+                                  [corners[j],corners[k+1]],
+                                  [corners[j],corners[k]]])]
+                pos = [np.array([[corners[j+1],corners[k]+sz/2],
+                                [corners[j],corners[k]+sz/2]])]
+                self.ROI_add(pos, prect, color=jet[j+k*ng]*255.0)
+        self.ROI_selection()
 
     def ROI_add(self, pos, prect, color=None):
         if color is None:
