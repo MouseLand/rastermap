@@ -8,9 +8,10 @@ import pyqtgraph as pg
 from pyqtgraph import GraphicsScene
 from scipy.stats import zscore
 from matplotlib import cm
-from rastermap.roi import gROI
+from rastermap.roi import gROI, dbROI
 import rastermap.run
 from rastermap import Rastermap
+from sklearn.cluster import DBSCAN
 
 def triangle_area(p):
     area = 0.5 * np.abs(p[0,0] * p[1,1] - p[0,0] * p[2,1] +
@@ -231,7 +232,7 @@ class MainW(QtGui.QMainWindow):
         self.makegrid.clicked.connect(self.make_grid)
         self.makegrid.setStyleSheet(self.styleInactive)
         self.makegrid.setEnabled(False)
-        self.makegrid.setFixedWidth(100)
+        self.makegrid.setFixedWidth(200)
         self.l0.addWidget(self.makegrid, rs+7, 0, 1, 1)
         self.gridsize = QtGui.QLineEdit(self)
         self.gridsize.setValidator(QtGui.QIntValidator(2, 20))
@@ -240,6 +241,21 @@ class MainW(QtGui.QMainWindow):
         self.gridsize.setAlignment(QtCore.Qt.AlignRight)
         self.gridsize.returnPressed.connect(self.make_grid)
         self.l0.addWidget(self.gridsize, rs+7, 1, 1, 1)
+
+        self.dbbutton = QtGui.QPushButton("DBSCAN clusters, ms=")
+        self.dbbutton.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
+        self.dbbutton.clicked.connect(self.dbscan)
+        self.dbbutton.setStyleSheet(self.styleInactive)
+        self.dbbutton.setEnabled(False)
+        self.dbbutton.setFixedWidth(200)
+        self.l0.addWidget(self.dbbutton, rs+8, 0, 1, 1)
+        self.min_samples = QtGui.QLineEdit(self)
+        self.min_samples.setValidator(QtGui.QIntValidator(5, 200))
+        self.min_samples.setText("50")
+        self.min_samples.setFixedWidth(45)
+        self.min_samples.setAlignment(QtCore.Qt.AlignRight)
+        self.min_samples.returnPressed.connect(self.dbscan)
+        self.l0.addWidget(self.min_samples, rs+8, 1, 1, 1)
 
         ysm = QtGui.QLabel("<font color='white'>y-binning</font>")
         ysm.setFixedWidth(100)
@@ -295,10 +311,12 @@ class MainW(QtGui.QMainWindow):
         # self.load_behavior('C:/Users/carse/github/TX4/beh.npy')
         self.file_iscell = None
         #self.fname = '/media/carsen/DATA2/grive/rastermap/DATA/embedding.npy'
-        #self.load_proc(self.fname)
+        self.fname = 'D:/grive/cshl_suite2p/TX39/embedding.npy'
+        self.load_proc(self.fname)
 
         self.show()
         self.win.show()
+
 
     def add_imgROI(self):
         if hasattr(self, 'imgROI'):
@@ -509,6 +527,22 @@ class MainW(QtGui.QMainWindow):
             ineur = self.selected[ineur]
             self.xp.setData(pos=self.embedding[ineur,:][np.newaxis,:])
 
+    def dbscan(self):
+        ms = int(self.min_samples.text())
+        # remove previous ROIs
+        if len(self.ROIs) > 0:
+            for n in range(len(self.ROIs)):
+                self.ROI_delete()
+
+        db = DBSCAN(eps=0.8, min_samples=ms).fit(self.embedding)
+        ilabels = np.unique(db.labels_)
+        ilabels = ilabels[ilabels>=0]
+        print(ilabels)
+        #ilabels = ilabels[:1]
+        for i in ilabels:
+            self.dbROI_add((db.labels_==i).nonzero()[0])
+        self.ROI_selection()
+
     def make_grid(self):
         ng = int(self.gridsize.text())
         if len(self.ROIs) > 0:
@@ -530,6 +564,15 @@ class MainW(QtGui.QMainWindow):
                                 [corners[j],corners[k]+sz/2]])]
                 self.ROI_add(pos, prect, color=jet[j+k*ng]*255.0)
         self.ROI_selection()
+
+    def dbROI_add(self, selected, color=None):
+        if color is None:
+            color =  np.random.randint(255,size=(3,))
+        self.ROIs.append(dbROI(selected, color, self))
+        self.Rselected.append(self.ROIs[-1].selected)
+        self.Rcolors.append(np.reshape(np.tile(self.ROIs[-1].color, 10 * self.Rselected[-1].size),
+                            (self.Rselected[-1].size, 10, 3)))
+        self.ROIorder.append(len(self.ROIs)-1)
 
     def ROI_add(self, pos, prect, color=None):
         if color is None:
@@ -586,9 +629,12 @@ class MainW(QtGui.QMainWindow):
         self.updateROI.setEnabled(True)
         self.saveROI.setEnabled(True)
         self.makegrid.setEnabled(True)
+        self.dbbutton.setEnabled(True)
+
         self.updateROI.setStyleSheet(self.styleUnpressed)
         self.saveROI.setStyleSheet(self.styleUnpressed)
         self.makegrid.setStyleSheet(self.styleUnpressed)
+        self.dbbutton.setStyleSheet(self.styleUnpressed)
 
     def disable_embedded(self):
         self.updateROI.setEnabled(False)
@@ -648,8 +694,6 @@ class MainW(QtGui.QMainWindow):
                 y = self.p3.vb.mapSceneToView(pos).y()
                 ineur = min(self.colormat.shape[0]-1, max(0, int(np.floor(y))))
                 self.update_selected(ineur)
-
-
 
     def plot_clicked(self, event):
         """left-click chooses a cell, right-click flips cell to other view"""

@@ -11,6 +11,34 @@ def triangle_area(p0, p1, p2):
            p2[:,0] * p0[1] - p2[:,0] * p1[1])
     return area
 
+class dbROI():
+    """
+    ROI that is premade from DBSCAN clustering
+    """
+    def __init__(self, selected, color, parent=None):
+        self.color = color
+        self.selected = selected
+        self.positions = parent.embedding[self.selected, :]
+        self.pen = pg.mkPen(pg.mkColor(self.color),
+                                width=1,
+                                style=QtCore.Qt.SolidLine)
+        self.ROIplot = pg.ScatterPlotItem(pos=self.positions, pen=self.pen, symbol='o', size=2)
+        parent.p0.addItem(self.ROIplot)
+        parent.p0.removeItem(parent.xp)
+        parent.p0.addItem(parent.xp)
+
+    def inROI(self, Y):
+        dists = np.zeros((Y.shape[0],))
+        for k,y in enumerate(Y):
+            dists[k] = (((self.positions - self.y)**2).sum(axis=1)**0.5).min()
+        inroi = dists < 0.5
+
+        return Y[inroi], dists[inroi]
+
+    def remove(self, parent):
+        '''remove ROI'''
+        parent.p0.removeItem(self.ROIplot)
+
 class gROI():
     '''
     draw a line segment which is the gradient over which to plot the points
@@ -21,7 +49,7 @@ class gROI():
         self.d = ((prect[0][0,:] - prect[0][1,:])**2).sum()**0.5 / 2
         #self.slope = (pos[1,1] - pos[0,1]) / (pos[1,0] - pos[0,0])
         #self.yint  = pos[1,0] - self.slope * pos[0,0]
-        np.save('groi.npy', {'prect': self.prect, 'pos': self.pos})
+        #np.save('groi.npy', {'prect': self.prect, 'pos': self.pos})
         self.color = color
         self.pen = pg.mkPen(pg.mkColor(self.color),
                                 width=3,
