@@ -48,6 +48,37 @@ def create_ND_basis(dims, nclust, K, flag=True):
     else:
         return S[1:], fxx[1:]
 
+def upsample_grad(CC, dims, nX):
+    NN, nnodes = CC.shape
+    CC /= np.amax(CC, axis=1)[:, np.newaxis]
+    xid = np.argmax(CC, axis=1)
+
+    ys, xs = np.meshgrid(np.arange(nX), np.arange(nX))
+    y0 = np.vstack((xs.flatten(), ys.flatten()))
+    eta = .1
+    CC, yinit, ynodes, eta = CC, y0[:,xid], y0, eta
+    
+    yf = np.zeros((NN,dims))
+    niter = 201 # 201
+    eta = np.linspace(eta, eta/10, niter)
+    sig = 1.
+    alpha = 1.
+    y = yinit.T.copy()
+    
+    device = torch.device('cuda')
+    CC = torch.from_numpy(CC.astype('float32')).to(device)
+    y = torch.from_numpy(y.astype('float32')).to(device)
+    ynodes = torch.from_numpy(ynodes.astype('float32')).to(device)
+    for it in range(niter):
+        yy0 =  y.unsqueeze(2) - ynodes
+        K = torch.exp(-(yy0**2).sum(axis=1)/2)#(2*sig**2))
+        x = (K * CC).sum(axis=1, keepdim=True) / (K**2).sum(axis=1, keepdim=True)
+        err = x * K - CC
+        Kprime = - x.unsqueeze(1) * yy0 * K.unsqueeze(1)
+        dy = (Kprime * err.unsqueeze(1)).sum(axis=-1)
+        y = y - eta[it] * dy
+    
+    return y.cpu().numpy()
 
 def run_gmm(data, n_X=21, basis=0.25, lam=1, upsample=True):
     n_components = 2
@@ -106,13 +137,15 @@ def run_gmm(data, n_X=21, basis=0.25, lam=1, upsample=True):
             print('%d \t train %0.5f \t %0.2fs'%
                 (it, likelihood.item(), time.time()-tic))
     inds = np.array(np.unravel_index(torch.argmax(P, axis=1).cpu().numpy(), (n_X, n_X))).T
+    
     if upsample:
         cv = (X[:,:,0] @ V @ B).cpu().numpy()
         vnorm = ((V @ B)**2).sum(axis=0).cpu().numpy()
         cmap = mapping.assign_neurons2(vnorm, cv)
-        embedding = mapping.upsample_grad(np.sqrt(cmap), n_components, n_X).T
+        embedding = upsample_grad(np.sqrt(cmap), n_components, n_X)
     else:
         embedding = inds
+
     return embedding, inds, cmap
 
 def ziegler_colors():
