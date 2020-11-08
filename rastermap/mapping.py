@@ -202,7 +202,6 @@ def distances(x, y):
 
 def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
-    flag = True
     if dims==1:
         xs = np.arange(0,nclust)
         S = np.ones((K, nclust), 'float64')
@@ -222,8 +221,9 @@ def create_ND_basis(dims, nclust, K, flag=True):
         for kx in range(K):
             for ky in range(S0.shape[0]):
                 S[ky,kx,:,:] = np.outer(S0[ky, :], Kx[kx, :])
-                # fxx[ky,kx] = fy[ky] + fx[kx]
-                fxx[ky,kx] = max(fy[ky], fx[kx]) + min(fy[ky], fx[kx])/1000.
+                fxx[ky,kx] = ((0+fy[ky])**2 + (0+fx[kx])**2)**0.5
+                #fxx[ky,kx] = fy[ky] + fx[kx]
+                #fxx[ky,kx] = max(fy[ky], fx[kx]) + min(fy[ky], fx[kx])/1000.
         S = np.reshape(S, (K*S0.shape[0], nclust*S0.shape[1]))
     fxx = fxx.flatten()
     ix = np.argsort(fxx)
