@@ -57,14 +57,14 @@ def upsample_grad(CC, dims, nX):
     y0 = np.vstack((xs.flatten(), ys.flatten()))
     eta = .1
     CC, yinit, ynodes, eta = CC, y0[:,xid], y0, eta
-    
+
     yf = np.zeros((NN,dims))
     niter = 201 # 201
     eta = np.linspace(eta, eta/10, niter)
     sig = 1.
     alpha = 1.
     y = yinit.T.copy()
-    
+
     device = torch.device('cuda')
     CC = torch.from_numpy(CC.astype('float32')).to(device)
     y = torch.from_numpy(y.astype('float32')).to(device)
@@ -77,7 +77,7 @@ def upsample_grad(CC, dims, nX):
         Kprime = - x.unsqueeze(1) * yy0 * K.unsqueeze(1)
         dy = (Kprime * err.unsqueeze(1)).sum(axis=-1)
         y = y - eta[it] * dy
-    
+
     return y.cpu().numpy()
 
 def run_gmm(data, n_X=21, basis=0.25, lam=1, upsample=True):
@@ -119,29 +119,37 @@ def run_gmm(data, n_X=21, basis=0.25, lam=1, upsample=True):
     tic = time.time()
     n_iter = int(500)
     dV = torch.zeros_like(V)
-    LAM = np.linspace(lam, lam, n_iter-20)
-    for it in range(n_iter+1):
-        #if it==n_iter:
-        #    lam = 0
+    LAM = np.linspace(lam, 0, n_iter-100)
+    for it in range(n_iter):
+        if it==n_iter:
+            lam = 0
         if it<len(LAM):
             lam = LAM[it]
         P    = - ((X**2).sum(axis=1) + ((V @ B)**2).sum(axis=0) - 2 * X[:,:,0]@V@B)/(2*sig)
         Pmax = P.max(axis=1)[0].unsqueeze(1)
         eP   = torch.exp(P - Pmax)
         dLdP = eP / eP.sum(axis=1).unsqueeze(1)
-        V, _ = torch.solve(B @ dLdP.T @ X[:,:,0], lam * torch.eye(B.shape[0]).to(device) 
+        V, _ = torch.solve(B @ dLdP.T @ X[:,:,0], lam * torch.eye(B.shape[0]).to(device)
                         + B @ torch.diag(dLdP.sum(axis=0)) @ B.T)
         V = V.T
         likelihood = (torch.log(torch.exp(P - Pmax).sum(axis=1)) + Pmax).mean()
-        if it%100==0 or it==n_iter:
+        if it%100==0:
             print('%d \t train %0.5f \t %0.2fs'%
                 (it, likelihood.item(), time.time()-tic))
     inds = np.array(np.unravel_index(torch.argmax(P, axis=1).cpu().numpy(), (n_X, n_X))).T
-    
+
+    lam = 0
+    V, _ = torch.solve(B @ dLdP.T @ X[:,:,0], B @ torch.diag(dLdP.sum(axis=0)) @ B.T)
+    V = V.T
+    P    = - ((X**2).sum(axis=1) + ((V @ B)**2).sum(axis=0) - 2 * X[:,:,0]@V@B)/(2*sig)
+    Pmax = P.max(axis=1)[0].unsqueeze(1)
+    likelihood = (torch.log(torch.exp(P - Pmax).sum(axis=1)) + Pmax).mean()
+    print('%d \t train %0.5f \t %0.2fs'%(it, likelihood.item(), time.time()-tic))
+
+    cv = (X[:,:,0] @ V @ B).cpu().numpy()
+    vnorm = ((V @ B)**2).sum(axis=0).cpu().numpy()
+    cmap = mapping.assign_neurons2(vnorm, cv)
     if upsample:
-        cv = (X[:,:,0] @ V @ B).cpu().numpy()
-        vnorm = ((V @ B)**2).sum(axis=0).cpu().numpy()
-        cmap = mapping.assign_neurons2(vnorm, cv)
         embedding = upsample_grad(np.sqrt(cmap), n_components, n_X)
     else:
         embedding = inds
@@ -160,10 +168,10 @@ def plot_output(embedding, colors=None, rand=0, alpha=.25):
     #embedding = np.array(np.unravel_index(xid.astype('int'), (n_X, n_X))).T
     plt.figure(figsize=(8,8))
     if colors is None:
-        plt.scatter(embedding[:,0]+np.random.randn(NN)*rand, 
+        plt.scatter(embedding[:,0]+np.random.randn(NN)*rand,
                     embedding[:,1]+np.random.randn(NN)*rand, s=8, alpha = alpha)
     else:
-        plt.scatter(embedding[:,0]+np.random.randn(NN)*rand, 
+        plt.scatter(embedding[:,0]+np.random.randn(NN)*rand,
                     embedding[:,1]+np.random.randn(NN)*rand, s=8, alpha = alpha, c=colors, cmap='jet')
-        
+
     plt.show()
