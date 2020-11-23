@@ -211,8 +211,10 @@ def create_ND_basis(dims, nclust, K, flag=True):
             else:
                 S[k, :] = np.cos(math.pi/nclust * (xs+0.5) * k)
         S /= np.sum(S**2, axis = 1)[:, np.newaxis]**.5
-        fxx = np.floor((np.arange(K)+1)/2).astype('int')
-        #fxx = np.arange(K).astype('int')
+        if flag:
+            fxx = np.floor((np.arange(K)+1)/2).astype('int')
+        else:
+            fxx = np.arange(K).astype('int')
     else:
         S0, fy = create_ND_basis(dims-1, nclust, K, flag)
         Kx, fx = create_ND_basis(1, nclust, K, flag)

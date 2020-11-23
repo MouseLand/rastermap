@@ -7,9 +7,9 @@ from scipy.spatial.distance import pdist
 import numpy as np
 import scipy
 
-def distance_matrix(Z, wrapping=False):
+def distance_matrix(Z, n_X = None, wrapping=False):
     if wrapping:
-        n_X = int(np.floor(Z.max() + 1))
+        #n_X = int(np.floor(Z.max() + 1))
         dists = (Z - Z[:,np.newaxis,:]) % n_X
         Zdist = (np.minimum(dists, n_X - dists)**2).sum(axis=-1)
     else:
@@ -17,13 +17,16 @@ def distance_matrix(Z, wrapping=False):
     return Zdist
 
 def embedding_quality(X, Z, classes=None, knn=10, knn_classes=3, subsetsize=1000,
-                        wrapping=True):
+                        wrapping=True, n_X = 0):
+
+    np.random.seed(101)
     subset = np.random.choice(X.shape[0], size=subsetsize, replace=False)
     Xdist = distance_matrix(X[subset])
-    Zdist = distance_matrix(Z[subset], wrapping=wrapping)
+    Zdist = distance_matrix(Z[subset], n_X = n_X, wrapping=wrapping)
 
     nbrs1 = NearestNeighbors(n_neighbors=knn, metric='precomputed').fit(Xdist)
     ind1 = nbrs1.kneighbors(return_distance=False)
+
     
     nbrs2 = NearestNeighbors(n_neighbors=knn, metric='precomputed').fit(Zdist)
     ind2 = nbrs2.kneighbors(return_distance=False)
@@ -32,7 +35,7 @@ def embedding_quality(X, Z, classes=None, knn=10, knn_classes=3, subsetsize=1000
     for i in range(subsetsize):
         intersections += len(set(ind1[i]) & set(ind2[i]))
     mnn = intersections / subsetsize / knn
-    
+
     if classes is not None:
         cl, cl_inv = np.unique(classes, return_inverse=True)
         C = cl.size
@@ -45,16 +48,16 @@ def embedding_quality(X, Z, classes=None, knn=10, knn_classes=3, subsetsize=1000
         ind1 = nbrs1.kneighbors(return_distance=False)
         nbrs2 = NearestNeighbors(n_neighbors=knn_classes).fit(mu2)
         ind2 = nbrs2.kneighbors(return_distance=False)
-        
+
         intersections = 0.0
         for i in range(C):
             intersections += len(set(ind1[i]) & set(ind2[i]))
         mnn_global = intersections / C / knn_classes
     else:
         mnn_global = None
-    
+
     rho = spearmanr(Xdist.flatten(), Zdist.flatten()).correlation
-    
+
     return (mnn, mnn_global, rho)
 
 def split_traintest(NT, Tblock, nfrac):
@@ -102,7 +105,7 @@ def peer_pred_worker(data):
         if alg=='corr':
             dists = -1 * Xtest[ics,:] @ Xtest.T / Xtest.shape[1]
         else:
-            dists = embedding_distance(y[ics,:], y, alg)        
+            dists = embedding_distance(y[ics,:], y, alg)
         dists[np.arange(0,ics.size).astype(int), ics] = np.inf
         nbest = np.argsort(dists, axis=1)
         peers = nbest[:, :npeers[-1]]
@@ -139,7 +142,7 @@ def peer_pred(Xtest, y, alg, npeers):
     with Pool(ncores) as p:
         results = p.map(peer_pred_worker, dsplit)
     for c in range(ncores):
-        cc_pred += results[c]       
+        cc_pred += results[c]
     cc_pred /= ncores
     return cc_pred
 
@@ -157,7 +160,7 @@ def dist_corr_worker(data):
         if alg=='corr':
             dists = -1 * Xtest[ics,:] @ Xtest.T / Xtest.shape[1]
         else:
-            dists = embedding_distance(y[ics,:], y, alg)        
+            dists = embedding_distance(y[ics,:], y, alg)
         dists[nr, ics] = np.inf
         nbest = np.argsort(dists, axis=1)
         cmat = Xtest[ics,:] @ Xtest.T / Xtest.shape[1]
@@ -188,7 +191,7 @@ def dist_corr(Xtest, y, alg):
     with Pool(ncores) as p:
         results = p.map(dist_corr_worker, dsplit)
     for c in range(ncores):
-        csort += results[c]       
+        csort += results[c]
     csort /= ncores
     return csort
 
@@ -200,7 +203,7 @@ def global_corr_worker(data):
     cc[np.arange(0,ic.size).astype(int), ic] = np.inf
     cc_pred = spearman(cc, dists, True)
     return cc_pred
-    
+
 def spearman(x,y,remove_diag=False):
     ''' spearman correlation of x[i,:] with y[i,:] for all i '''
     # rank correlations
