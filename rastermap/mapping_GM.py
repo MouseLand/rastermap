@@ -111,7 +111,7 @@ def run_gmm(data, n_X=21, lam = 0.5,  basis=0.25, upsample=True):
 
     nb = np.linspace(V.shape[1], B.shape[0], n_iter-50).astype('int32')
     nb = np.hstack((nb, B.shape[0] * np.ones(50, 'int32')))
-
+    #nb[:] = B.shape[0]
     alph = 1.
     torch0 = torch.tensor((0,)).to(device)
     for it in range(n_iter):
