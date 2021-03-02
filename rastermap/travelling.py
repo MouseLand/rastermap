@@ -194,3 +194,19 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False):
             inds = inds[inds2]
 
     return cc, inds, seg_len
+
+def embedding(S, V):
+    """ S is raw data (time by neurons); V is time x clusters (sorted)
+    """
+
+    corr_V = (S.T @ V / 
+            np.outer((S**2).sum(axis=0)**0.5, 
+            (V**2).sum(axis=0)**0.5))
+
+    cmap = np.maximum(0., corr_V)**2
+    from mapping import upsample
+    n_nodes = V.shape[1]
+    iclustup, cmax = upsample(np.sqrt(cmap), 1, n_nodes, n_nodes)
+    isort = iclustup[:,0].argsort()
+
+    return isort
