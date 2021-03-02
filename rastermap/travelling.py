@@ -7,6 +7,15 @@ from mapping_GM import create_ND_basis
 #def elementwise_mult(x, y):
 #    return (x * y)
 
+
+def bin1d(X, tbin):
+    """ bin over first axis of data with bin tbin """
+    size = list(X.shape)
+    X = X[:size[0]//tbin*tbin].reshape((size[0]//tbin, tbin, -1)).mean(axis=1)
+    size[0] = X.shape[0]
+    return X.reshape(size)
+
+
 @njit('float32 (float32[:,:], float32[:,:])', nogil=True)
 def elementwise_mult_sum(x, y):
     return (x * y).sum()
