@@ -16,8 +16,8 @@ def distance_matrix(Z, n_X = None, wrapping=False):
         Zdist = ((Z - Z[:,np.newaxis,:])**2).sum(axis=-1)
     return Zdist
 
-def embedding_quality(X, Z, classes=None, knn=10, knn_classes=3, subsetsize=1000,
-                        wrapping=True, n_X = 0):
+def embedding_quality(X, Z, classes=None, knn=20, knn_classes=3, subsetsize=1000,
+                        wrapping=False, n_X = 0):
 
     np.random.seed(101)
     subset = np.random.choice(X.shape[0], size=subsetsize, replace=False)
