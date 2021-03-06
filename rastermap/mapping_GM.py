@@ -120,6 +120,7 @@ def run_gmm(data, n_X=21, lam = 0.5,  basis=0.25, upsample=True):
         vn = (vb**2).sum(axis = 0)
         xi = X @ vb
         alph = torch.maximum(xi, torch0) / vn
+        #alph[:] = alph.mean()
         P    = - ((X**2).sum(axis=1).unsqueeze(1) + alph**2 * vn - 2 * alph * xi)/(2*sig)
 
         Pmax = P.max(axis=1)[0].unsqueeze(1)

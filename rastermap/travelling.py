@@ -39,12 +39,12 @@ def shift_inds(i0, i1, inode, isforward, n_nodes):
     if isforward:
         inds[seg_pos+1 : seg_pos+1 + n_seg] = inds0[i0 : i1+1]
     else:
-        inds[seg_pos+1 : seg_pos+1 + n_seg] = inds0[i0 : i1+1][::-1] 
+        inds[seg_pos+1 : seg_pos+1 + n_seg] = inds0[i0 : i1+1][::-1]
     return inds
 
 @njit('float32 (float32[:,:], int64, int64, int64, int64, int64, float32[:,:])', nogil=True)
 def new_correlation(cc, i0, i1, inode, n_nodes, isforward, BBt):
-    """ compute correlation change of moving segment i0:i1+1 to position inode 
+    """ compute correlation change of moving segment i0:i1+1 to position inode
     inode=-1 is at beginning of sequence
     """
     ishift = shift_inds(i0, i1, inode, isforward, n_nodes)
@@ -93,18 +93,18 @@ def tsp_greedy(cc, n_iter, n_nodes, BBt, test_segs):
             inode, corr_change_min, isforward = test_segment(
                         cc, i0, i1, n_nodes, BBt, corr_orig)
             params[ix] = np.array([i0, i1, inode, corr_change_min, isforward])
-                
+
         ix = params[:,3].argmin()
         i0, i1, inode, corr_change_min, isforward = params[ix]
         i0, i1, inode = int(i0), int(i1), int(inode)
         n_seg = i1 - i0 + 1
         if corr_change_min < -1e-3:
             print(i0, i1, inode)
-            true_dists = (cc * BBt).sum()                
-            
+            true_dists = (cc * BBt).sum()
+
             # move segment
             ishift = shift_inds(i0, i1, inode, isforward, n_nodes)
-            inds = inds[ishift]    
+            inds = inds[ishift]
             cc = shift_matrix(cc, ishift)#np.ix_(ishift, ishift)]
 
             new_dists = elementwise_mult_sum(cc, BBt)
@@ -123,13 +123,13 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt):
     test_lengths = np.arange(0, ((n_nodes-1)//n_len)*n_len).reshape(-1,n_len)
     corr_orig = 0
     corr_change_seg = -np.inf * np.ones(n_len * n_nodes * n_test, np.float32)
-    isforward_seg = -np.inf * np.ones(n_len *  n_nodes * n_test, np.float32)        
+    isforward_seg = -np.inf * np.ones(n_len *  n_nodes * n_test, np.float32)
     for k in range(n_iter):
         improved = False
         if corr_orig==0:
             corr_orig = elementwise_mult_sum(cc, BBt)
         for tl in range(len(test_lengths)):
-            corr_change_seg[:] = -np.inf 
+            corr_change_seg[:] = -np.inf
             for ix in prange(0, n_len*n_nodes*n_test):
                 seg_length = (ix // n_test // n_nodes) + test_lengths[tl,0]
                 i0 = ((ix // n_test) % n_nodes)
@@ -151,10 +151,10 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt):
             if corr_change > 1e-3:
                 improved = True
                 break
-        
+
         if not improved:
             break
-        else:      
+        else:
             isforward = isforward_seg[ix]
             seg_length = (ix // n_test // n_nodes) + test_lengths[tl,0]
             i0 = ((ix // n_test) % n_nodes)
@@ -163,13 +163,13 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt):
             if corr_change > 1e-3:
                 # move segment
                 ishift = shift_inds(i0, i1, inode, isforward, n_nodes)
-                inds = inds[ishift]    
+                inds = inds[ishift]
                 cc = shift_matrix(cc, ishift)
                 corr_new = elementwise_mult_sum(cc, BBt)
                 print(k, i0, i1, inode, corr_change, corr_new - corr_orig, corr_new)
                 corr_orig = corr_new
                 seg_len[k] = i1 - i0
-            
+
     return cc, inds, seg_len
 
 def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False):
@@ -178,7 +178,7 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False):
     if n_skip is None:
         n_skip = max(1, n_nodes // 30)
     cc = cc.astype(np.float32)
-    
+
     n_components = 1
     n_X = n_nodes
     basis = .5
@@ -190,6 +190,9 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False):
     B_norm = (B**2).sum(axis=0)**0.5
     B = (B / B_norm).T
     BBt = (B @ B.T) / (B**2).sum(axis=1)
+
+    BBt = np.ones((n_X, n_X))
+    BBt = np.tril(np.triu(BBt, -1), 1)
 
     n_iter = np.int64(n_iter)
     if greedy:
@@ -204,18 +207,13 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False):
 
     return cc, inds, seg_len
 
-def embedding(S, V):
+def embedding(U):
     """ S is raw data (time by neurons); V is time x clusters (sorted)
     """
 
-    corr_V = (S.T @ V / 
-            np.outer((S**2).sum(axis=0)**0.5, 
-            (V**2).sum(axis=0)**0.5))
-
-    cmap = np.maximum(0., corr_V)**2
     from mapping import upsample
-    n_nodes = V.shape[1]
-    iclustup, cmax = upsample(np.sqrt(cmap), 1, n_nodes, n_nodes)
+    n_nodes = U.shape[1]
+    iclustup, cmax = upsample(U, 1, n_nodes, n_nodes)
     isort = iclustup[:,0].argsort()
 
     return isort

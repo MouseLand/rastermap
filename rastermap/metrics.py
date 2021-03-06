@@ -7,13 +7,23 @@ from scipy.spatial.distance import pdist
 import numpy as np
 import scipy
 
-def distance_matrix(Z, n_X = None, wrapping=False):
+def distance_matrix(Z, n_X = None, wrapping=False, correlation = False):
     if wrapping:
         #n_X = int(np.floor(Z.max() + 1))
         dists = (Z - Z[:,np.newaxis,:]) % n_X
         Zdist = (np.minimum(dists, n_X - dists)**2).sum(axis=-1)
     else:
-        Zdist = ((Z - Z[:,np.newaxis,:])**2).sum(axis=-1)
+        if correlation:
+            Zdist = Z @ Z.T
+            Z2 = np.diag(Zdist)**.5
+            Zdist = 1 - Zdist / np.outer(Z2, Z2)
+        else:
+            #Zdist = ((Z - Z[:,np.newaxis,:])**2).sum(axis=-1)
+            Z2 = np.sum(Z**2, 1)
+            Zdist = Z2 + Z2[:, np.newaxis] - 2 * Z @ Z.T
+        Zdist = np.maximum(0, Zdist)
+
+        #import pdb; pdb.set_trace();
     return Zdist
 
 def embedding_quality(X, Z, classes=None, knn=10, knn_classes=3, subsetsize=1000,
@@ -21,13 +31,13 @@ def embedding_quality(X, Z, classes=None, knn=10, knn_classes=3, subsetsize=1000
 
     np.random.seed(101)
     subset = np.random.choice(X.shape[0], size=subsetsize, replace=False)
-    Xdist = distance_matrix(X[subset])
+    Xdist = distance_matrix(X[subset], correlation=True)
     Zdist = distance_matrix(Z[subset], n_X = n_X, wrapping=wrapping)
 
     nbrs1 = NearestNeighbors(n_neighbors=knn, metric='precomputed').fit(Xdist)
     ind1 = nbrs1.kneighbors(return_distance=False)
 
-    
+
     nbrs2 = NearestNeighbors(n_neighbors=knn, metric='precomputed').fit(Zdist)
     ind2 = nbrs2.kneighbors(return_distance=False)
 
