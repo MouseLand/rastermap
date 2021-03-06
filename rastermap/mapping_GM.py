@@ -158,6 +158,74 @@ def run_gmm(data, n_X=21, lam = 0.5,  basis=0.25, upsample=True):
 
     return embedding, inds, cmap, ypred
 
+def run_procrustes(data, n_X=41, lam = 0.5,  basis=0.25, upsample=True):
+    n_components = 2
+
+    device = torch.device('cuda')
+    n_samples = data.shape[0]
+    
+    # make basis set
+    B, plaw = create_ND_basis(n_components, n_X, int(n_X*basis), flag=True)
+    n_basis = B.shape[0]
+    B = B.astype('float32')
+    B /= plaw[:,np.newaxis]**1.2
+    B = torch.from_numpy(B).to(device)
+
+    # initialize activity traces
+    V = np.zeros((data.shape[1], 4),'float32')
+    V[0,0] = 1
+    V[1,1] = 1
+    V[2,2] = 1
+    V[3,3] = 1
+    V = torch.from_numpy(V).to(device)
+
+    X_size = data.size
+    X = torch.from_numpy(data.astype('float32')).to(device)
+
+    sig = (X**2).mean().cpu().numpy() * .5
+    tic = time.time()
+    n_iter = int(500)
+
+    nb = np.linspace(V.shape[1], B.shape[0], int(n_iter*0.5)).astype('int32')
+    nb = np.hstack((nb, B.shape[0] * np.ones(n_iter - int(n_iter*0.5), 'int32')))
+    #nb[:] = B.shape[0]
+    alph = 1.
+    torch0 = torch.tensor((0,)).to(device)
+    for it in range(n_iter):
+        Up = X @ (V @ B[:V.shape[1]])
+        B_norm = (B[:V.shape[1]]**2).sum(axis=0)**0.5
+        Up_argmax = (Up / B_norm).max(axis=1)[1]
+        Up_max = (Up/B_norm**2)[np.arange(n_samples), Up_argmax]
+        
+        UB = Up_max * B[:nb[it], Up_argmax]
+
+        XUB = X.T @ UB.T
+        Va, _, Vb = torch.svd(XUB)
+        V = Va @ Vb.T
+
+        cost = ((X - UB.T @ V.T)**2).sum() / X_size
+        if it%100==0 or it==n_iter-1:
+            print('%d \t train %0.5f \t %0.2fs'%
+                (it, cost.item(), time.time()-tic))
+
+    imax = Up_argmax.cpu().numpy()
+    inds = np.array(np.unravel_index(imax, (n_X, n_X))).T
+    #import pdb; pdb.set_trace()
+    ypred = (Up[np.arange(n_samples), imax]).unsqueeze(1) * (B.T @ V.T)[imax, :]
+    ypred = ypred.cpu().numpy()
+
+    cv = (X @ V @ B).cpu().numpy()
+    vnorm = ((V @ B)**2).sum(axis=0).cpu().numpy()
+    cmap = mapping.assign_neurons2(vnorm, cv)
+    #cmap = dLdP.cpu().numpy()
+    if upsample:
+        embedding = upsample_grad(cmap, n_components, n_X)
+    else:
+        embedding = inds
+
+    return embedding, inds, cmap, ypred
+
+
 def ziegler_colors():
     cmap = cv2.imread('figs/ziegler.png')
     cmap = cmap.astype(float)/255
