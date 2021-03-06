@@ -3,6 +3,74 @@ from scipy.stats import zscore
 from sklearn.decomposition import PCA
 
 
+def quadratic_upsampling(X, cc, x_m, y_m):
+    n_X = x_m.shape[0]
+    n_samples = X.shape[0]
+
+    cbest = cc.argmax(axis=0)
+
+    ibest, jbest = np.unravel_index(cbest, (n_X, n_X))
+    imin = np.maximum(0, ibest-1)
+    imin[n_X - (ibest+2) < 0] -= 1
+    jmin = np.maximum(0, jbest-1)
+    jmin[n_X - (jbest+2) < 0] -= 1
+    icent, jcent = imin+1, jmin+1
+
+    igrid, jgrid = np.meshgrid(np.arange(0,3), np.arange(0,3), indexing='ij')
+    igrid, jgrid = igrid.flatten(), jgrid.flatten()
+    iinds = igrid + imin[:,np.newaxis]
+    jinds = jgrid + jmin[:,np.newaxis]
+    igrid = igrid.astype(np.float32) - 1.
+    jgrid = jgrid.astype(np.float32) - 1.
+
+    cinds = np.ravel_multi_index((iinds, jinds), (n_X, n_X))
+    C = cc[cinds, np.tile(np.arange(0, n_samples)[:,np.newaxis], (1, 9))]
+    IJ = np.stack((np.ones_like(igrid), igrid**2 + jgrid**2, igrid, jgrid), axis=1)
+    A = np.linalg.solve(IJ.T @ IJ, IJ.T @ C.T)
+    xmax = np.clip(-A[2] / (2*A[1]), -1, 1)
+    ymax = np.clip(-A[3] / (2*A[1]), -1, 1)
+
+    # put in original space
+    xdelta = np.diff(x_m[:,0]).mean()
+    ydelta = np.diff(y_m[0]).mean()
+    xmax = xmax*xdelta + x_m[icent,0]
+    ymax = ymax*ydelta + y_m[0,jcent]
+    #xmax += icent
+    #ymax += jcent
+
+    Y = np.stack((xmax, ymax), axis=1)
+    return Y
+
+def grid_upsampling(X, X_nodes, Y_nodes, n_X=41, n_neighbors=50):
+    n_X = 41
+    x_m = np.linspace(Y_nodes[:,0].min(), Y_nodes[:,0].max(), n_X)
+    y_m = np.linspace(Y_nodes[:,1].min(), Y_nodes[:,1].max(), n_X)
+
+    x_m, y_m = np.meshgrid(x_m, y_m, indexing='ij')
+    xy = np.vstack((x_m.flatten(), y_m.flatten()))
+
+    ds = (xy[0][:,np.newaxis] - Y_nodes[:,0])**2 + (xy[1][:,np.newaxis] - Y_nodes[:,1])**2 
+    isort = np.argsort(ds, 1)[:,:n_neighbors]
+    nraster = xy.shape[1]
+    Xrec = np.zeros((nraster, X_nodes.shape[1]))
+    for j in range(nraster):
+        ineigh = isort[j]
+        dists = ds[j, ineigh]
+        w = np.exp(-dists / dists[7])
+        M, N = X_nodes[ineigh], Y_nodes[ineigh]
+        N = np.concatenate((N, np.ones((n_neighbors,1))), axis=1)
+        R = np.linalg.solve((N.T * w) @ N, (N.T * w) @ M)
+        Xrec[j] = xy[:,j] @ R[:2] + R[-1]
+
+    Xrec = Xrec / (Xrec**2).sum(1)[:,np.newaxis]**.5
+    cc = Xrec @ zscore(X, 1).T
+    cc = np.maximum(0, cc)
+    imax = np.argmax(cc, 0)
+    Y = xy[:, imax].T
+
+    return Y, cc, x_m, y_m
+
+
 def LLE_upsampling(X, X_nodes, Y_nodes, n_neighbors=10, LLE = 1):
     """ X is original space points, X_nodes nodes in original space, Y_nodes nodes in embedding space """
     e_dists = ((Y_nodes[:,:,np.newaxis] - Y_nodes.T)**2).sum(axis=1)
@@ -49,7 +117,7 @@ def knn_upsampling(X, X_nodes, Y_nodes, n_neighbors=10):
     Y_knn = (w[...,np.newaxis] * Y_nodes[inds_k]).sum(axis=0)
     return Y_knn
 
-def subspace_upsampling(X, X_nodes, Y_nodes, n_neighbors=10):
+def subspace_upsampling2(X, X_nodes, Y_nodes, n_neighbors=10):
     e_dists = ((Y_nodes[:,:,np.newaxis] - Y_nodes.T)**2).sum(axis=1)
     cc = -np.sum(X_nodes**2, 1)[:,np.newaxis]  - np.sum(X**2, 1) + 2 * X_nodes @ X.T 
     #cc = zscore(X_nodes,axis=1) @ zscore(X,axis=1).T
