@@ -3,7 +3,47 @@ from scipy.stats import zscore
 from sklearn.decomposition import PCA
 
 
-def quadratic_upsampling(X, cc, x_m, y_m):
+def quadratic_upsampling1D(cc, grid, npts=10):
+    """ upsample grid using quadratic approximation
+        sample correlation with grid is cc - ngrid x n_samples """ 
+    npts = max(3, npts)
+    if npts%2!=1:
+        npts += 1
+
+    dims, n_X = grid.shape
+    n_samples = cc.shape[1]
+
+    cbest = cc.argmax(axis=0)
+
+    # find peaks and shift to have at least 5 pts
+    ibest = cbest
+    imin = np.maximum(0, ibest-npts//2)
+    ishift = n_X - (ibest+npts//2+1) < 0
+    imin[ishift] -= (ibest[ishift]+npts//2+1) - n_X
+    icent = imin + npts//2
+ 
+    # create grid of points
+    igrid = np.arange(0,npts)
+    # convert to cc inds
+    cinds = igrid + imin[:,np.newaxis]
+        
+    # make float and mean centered for regression
+    igrid = igrid.astype(np.float32) - npts//2
+
+    C = cc[cinds, np.tile(np.arange(0, n_samples)[:,np.newaxis], (1, igrid.size))]
+    IJ = np.stack((np.ones_like(igrid), igrid**2, igrid), axis=1)
+    
+    A = np.linalg.solve(IJ.T @ IJ, IJ.T @ C.T)
+    
+    xmax = np.clip(-A[2] / (2*A[1]), -npts//2, npts//2)
+
+    xdelta = np.diff(grid[0,:]).mean()
+    xmax = xmax*xdelta + grid[0,icent]
+    Y = xmax[:,np.newaxis]
+    
+    return Y
+
+def quadratic_upsampling2D(X, cc, x_m, y_m):
     n_X = x_m.shape[0]
     n_samples = X.shape[0]
 
@@ -35,13 +75,11 @@ def quadratic_upsampling(X, cc, x_m, y_m):
     ydelta = np.diff(y_m[0]).mean()
     xmax = xmax*xdelta + x_m[icent,0]
     ymax = ymax*ydelta + y_m[0,jcent]
-    #xmax += icent
-    #ymax += jcent
 
     Y = np.stack((xmax, ymax), axis=1)
     return Y
 
-def grid_upsampling(X, X_nodes, Y_nodes, n_X=41, n_neighbors=50):
+def grid_upsampling2(X, X_nodes, Y_nodes, n_X=41, n_neighbors=50):
     n_X = 41
     x_m = np.linspace(Y_nodes[:,0].min(), Y_nodes[:,0].max(), n_X)
     y_m = np.linspace(Y_nodes[:,1].min(), Y_nodes[:,1].max(), n_X)
@@ -69,6 +107,96 @@ def grid_upsampling(X, X_nodes, Y_nodes, n_X=41, n_neighbors=50):
     Y = xy[:, imax].T
 
     return Y, cc, x_m, y_m
+
+def grid_upsampling(X, X_nodes, Y_nodes, n_X=41, n_neighbors=50, e_neighbor=1):
+    e_neighbor = min(n_neighbors-1, e_neighbor)
+    xy = []
+    n_clusters = Y_nodes.max()+1
+    for i in range(Y_nodes.shape[1]):
+        xy.append(np.arange(0, n_clusters, 1./5))
+            #np.linspace(Y_nodes[:,i].min(), Y_nodes[:,i].max(), n_X))
+    if Y_nodes.shape[1]==2:
+        x_m, y_m = np.meshgrid(xy[0], xy[1], indexing='ij')
+        xy = np.vstack((x_m.flatten(), y_m.flatten()))
+    else:
+        xy = xy[0][np.newaxis,:]
+
+    ds = np.zeros((xy.shape[1], Y_nodes.shape[0]))
+    n_components = len(xy)
+    for i in range(len(xy)):
+        ds += (xy[i][:,np.newaxis] - Y_nodes[:,i])**2 
+    isort = np.argsort(ds, 1)[:,:n_neighbors]
+    nraster = xy.shape[1]
+    Xrec = np.zeros((nraster, X_nodes.shape[1]))
+    for j in range(nraster):
+        ineigh = isort[j]
+        dists = ds[j, ineigh]
+        w = np.exp(-dists / dists[e_neighbor])
+        M, N = X_nodes[ineigh], Y_nodes[ineigh]
+        N = np.concatenate((N, np.ones((n_neighbors,1))), axis=1)
+        R = np.linalg.solve((N.T * w) @ N, (N.T * w) @ M)
+        Xrec[j] = xy[:,j] @ R[:-1] + R[-1]
+
+    Xrec = Xrec / (Xrec**2).sum(1)[:,np.newaxis]**.5
+    cc = Xrec @ zscore(X, 1).T
+    cc = np.maximum(0, cc)
+    imax = np.argmax(cc, 0)
+    Y = xy[:, imax].T
+
+    return Y, cc, xy, Xrec
+
+def upsample_grad(CC, dims, nX):
+    CC /= np.amax(CC, axis=1)[:, np.newaxis]
+    xid = np.argmax(CC, axis=1)
+    if dims==2:
+        ys, xs = np.meshgrid(np.arange(nX), np.arange(nX))
+        y0 = np.vstack((xs.flatten(), ys.flatten()))
+    else:
+        ys = np.arange(nX)
+        y0 = ys[np.newaxis,:]
+
+    eta = .1
+    y = optimize_neurons(CC, y0[:,xid], y0, eta)
+    return y
+
+def gradient_descent_neurons(inputs):
+    CC, yinit, ynodes, eta = inputs
+    flag = 1
+    niter = 201 # 201
+    alpha = 1.
+    y = yinit
+    x = 1.
+    sig = 1.
+    eta = np.linspace(eta, eta/10, niter)
+    for j in range(niter):
+        yy0 =  y[:, np.newaxis] - ynodes
+        if flag:
+            K = np.exp(-np.sum(yy0**2, axis=0)/(2*sig**2))
+        else:
+            yyi = 1 + np.sum(yy0**2, axis=0)
+            K = 1/yyi**alpha
+        x = np.sum(K*CC)/np.sum(K**2)
+        err = (x*K - CC)
+        if flag:
+            Kprime = - x * yy0 * K
+        else:
+            Kprime = - yy0 * alpha * 1/yyi**(alpha+1)
+        dy = np.sum(Kprime *err, axis=-1)
+        y = y - eta[j] * dy
+    return y
+
+def optimize_neurons(CC, y, ynodes, eta):
+    inputs = []
+    for j in range(CC.shape[0]):
+        inputs.append((CC[j,:], y[:, j], ynodes, eta))
+
+    num_cores = multiprocessing.cpu_count()
+    with Pool(num_cores) as p:
+        y = p.map(gradient_descent_neurons, inputs)
+    #y = gradient_descent_neurons((CC, y, ynodes, eta))
+
+    y = np.array(y).T
+    return y
 
 
 def LLE_upsampling(X, X_nodes, Y_nodes, n_neighbors=10, LLE = 1):

@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit, jit, float32, int32, vectorize, prange
+from numba import njit, jit, float32, int32, boolean, int64, vectorize, prange
 import itertools, time
 from mapping_GM import create_ND_basis
 
@@ -114,8 +114,8 @@ def tsp_greedy(cc, n_iter, n_nodes, BBt, test_segs):
             break
     return cc, inds, seg_len
 
-@njit('(float32[:,:], int64, int64, int64, float32[:,:])', nogil=True, parallel=True)
-def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt):
+@njit('(float32[:,:], int64, int64, int64, float32[:,:], boolean)', nogil=True, parallel=True)
+def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
     inds = np.arange(0, n_nodes)
     seg_len = np.ones(n_iter)
     n_len = 2
@@ -166,13 +166,14 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt):
                 inds = inds[ishift]
                 cc = shift_matrix(cc, ishift)
                 corr_new = elementwise_mult_sum(cc, BBt)
-                print(k, i0, i1, inode, corr_change, corr_new - corr_orig, corr_new)
+                if verbose:
+                    print(k, i0, i1, inode, corr_change, corr_new - corr_orig, corr_new)
                 corr_orig = corr_new
                 seg_len[k] = i1 - i0
 
     return cc, inds, seg_len
 
-def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False):
+def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False, verbose=False):
     """ matches correlation matrix cc to B@B.T basis functions """
     n_nodes = (cc.shape[0])
     if n_skip is None:
@@ -180,19 +181,20 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False):
     cc = cc.astype(np.float32)
 
     n_components = 1
-    n_X = n_nodes
-    basis = .5
-    B, plaw = create_ND_basis(n_components, n_X, int(n_X*basis), flag=False)
-    B = B[1:]
-    plaw = plaw[1:]
-    n_basis, n_nodes = B.shape
-    B /= plaw[:,np.newaxis] ** (alpha/2)
-    B_norm = (B**2).sum(axis=0)**0.5
-    B = (B / B_norm).T
-    BBt = (B @ B.T) / (B**2).sum(axis=1)
 
-    BBt = np.ones((n_X, n_X))
-    BBt = np.tril(np.triu(BBt, -1), 1)
+    if alpha > 0:
+        basis = .5
+        B, plaw = create_ND_basis(n_components, n_nodes, int(n_nodes*basis), flag=False)
+        B = B[1:]
+        plaw = plaw[1:]
+        n_basis, n_nodes = B.shape
+        B /= plaw[:,np.newaxis] ** (alpha/2)
+        B_norm = (B**2).sum(axis=0)**0.5
+        B = (B / B_norm).T
+        BBt = (B @ B.T) / (B**2).sum(axis=1)
+    else:
+        BBt = np.ones((n_nodes, n_nodes))
+        BBt = np.tril(np.triu(BBt, -1), 1)
 
     n_iter = np.int64(n_iter)
     if greedy:
@@ -200,9 +202,9 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False):
         test_segs = np.array([ts for ts in seg_iterator]).astype(np.int32)
         cc, inds, seg_len = tsp_greedy(cc, n_iter, n_nodes, BBt.astype(np.float32))
     else:
-        cc, inds, seg_len = tsp_fast(cc, n_iter, n_nodes, n_skip, BBt.astype(np.float32))
+        cc, inds, seg_len = tsp_fast(cc, n_iter, n_nodes, n_skip, BBt.astype(np.float32), verbose)
         if n_skip > 1:
-            cc, inds2, seg_len2 = tsp_fast(cc, n_iter, n_nodes, 1, BBt.astype(np.float32))
+            cc, inds2, seg_len2 = tsp_fast(cc, n_iter, n_nodes, 1, BBt.astype(np.float32), verbose)
             inds = inds[inds2]
 
     return cc, inds, seg_len

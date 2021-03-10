@@ -26,7 +26,7 @@ def distance_matrix(Z, n_X = None, wrapping=False, correlation = False):
         #import pdb; pdb.set_trace();
     return Zdist
 
-def embedding_quality(X, Z, classes=None, knn=20, knn_classes=3, subsetsize=1000,
+def embedding_quality(X, Z, classes=None, knn=20, knn_global=500, subsetsize=1000,
                         wrapping=False, n_X = 0):
 
     np.random.seed(101)
@@ -34,41 +34,22 @@ def embedding_quality(X, Z, classes=None, knn=20, knn_classes=3, subsetsize=1000
     Xdist = distance_matrix(X[subset], correlation=True)
     Zdist = distance_matrix(Z[subset], n_X = n_X, wrapping=wrapping)
 
-    nbrs1 = NearestNeighbors(n_neighbors=knn, metric='precomputed').fit(Xdist)
-    ind1 = nbrs1.kneighbors(return_distance=False)
-
-
-    nbrs2 = NearestNeighbors(n_neighbors=knn, metric='precomputed').fit(Zdist)
-    ind2 = nbrs2.kneighbors(return_distance=False)
-
-    intersections = 0.0
-    for i in range(subsetsize):
-        intersections += len(set(ind1[i]) & set(ind2[i]))
-    mnn = intersections / subsetsize / knn
-
-    if classes is not None:
-        cl, cl_inv = np.unique(classes, return_inverse=True)
-        C = cl.size
-        mu1 = np.zeros((C, X.shape[1]))
-        mu2 = np.zeros((C, Z.shape[1]))
-        for c in range(C):
-            mu1[c,:] = np.mean(X[cl_inv==c,:], axis=0)
-            mu2[c,:] = np.mean(Z[cl_inv==c,:], axis=0)
-        nbrs1 = NearestNeighbors(n_neighbors=knn_classes).fit(mu1)
+    mnn = []
+    for kni in [knn, knn_global]:
+        nbrs1 = NearestNeighbors(n_neighbors=kni, metric='precomputed').fit(Xdist)
         ind1 = nbrs1.kneighbors(return_distance=False)
-        nbrs2 = NearestNeighbors(n_neighbors=knn_classes).fit(mu2)
+
+        nbrs2 = NearestNeighbors(n_neighbors=kni, metric='precomputed').fit(Zdist)
         ind2 = nbrs2.kneighbors(return_distance=False)
 
         intersections = 0.0
-        for i in range(C):
+        for i in range(subsetsize):
             intersections += len(set(ind1[i]) & set(ind2[i]))
-        mnn_global = intersections / C / knn_classes
-    else:
-        mnn_global = None
+        mnn.append( intersections / subsetsize / kni )
 
     rho = spearmanr(Xdist.flatten(), Zdist.flatten()).correlation
 
-    return (mnn, mnn_global, rho)
+    return (mnn[0], mnn[1], rho)
 
 def split_traintest(NT, Tblock, nfrac):
     '''NT: number of timepoints, Tblock: size of blocks, nfrac: fraction of train'''
@@ -84,8 +65,9 @@ def split_traintest(NT, Tblock, nfrac):
     return itrain, itest
 
 def embedding_distance(x, y, alg):
-    dists = ((x[:,0][:,np.newaxis] - y[:,0][np.newaxis,:])**2 +
-               (x[:,1][:,np.newaxis] - y[:,1][np.newaxis,:])**2)
+    dists = np.zeros((x.shape[0], y.shape[0]), np.float32)
+    for i in range(x.shape[1]):
+        dists += (x[:,i][:,np.newaxis] - y[:,i][np.newaxis,:])**2
     return dists
 
 def corr(x,y):
