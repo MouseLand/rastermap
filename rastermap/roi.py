@@ -43,9 +43,10 @@ class gROI():
     '''
     draw a line segment which is the gradient over which to plot the points
     '''
-    def __init__(self, pos, prect, color, parent=None):
+    def __init__(self, pos, prect, color, atlas, parent=None):
         self.prect = prect
         self.pos = pos
+        self.atlas = atlas
         self.d = ((prect[0][0,:] - prect[0][1,:])**2).sum()**0.5 / 2
         #self.slope = (pos[1,1] - pos[0,1]) / (pos[1,0] - pos[0,0])
         #self.yint  = pos[1,0] - self.slope * pos[0,0]
@@ -76,44 +77,14 @@ class gROI():
             nneigh = (dists<=dx+1e-5).sum(axis=1)
             exterior = grid[nneigh<4,:]
 
-            # npts = exterior.shape[0]
-            # distmat = dists[np.ix_(nneigh<4, nneigh<4)]<=1.5*dx
-            # n0 = 0
-            # norder = np.zeros((npts,), np.int32)
-            # for n in range(npts-1):#distmat.shape[0]):
-            #     d = distmat[n0]
-            #     try:
-            #         neigh = (d>0).nonzero()[0]
-            #         ibad = np.isin(neigh, norder)
-            #         neigh = neigh[~ibad]
-            #         n0 = neigh[0]
-            #         norder[n] = n0
-            #     except:
-            #         break
-            # self.ROIplot = pg.PlotDataItem(exterior[norder,0], exterior[norder,1], pen=self.pen)
-            #
+            
             self.ROIplot = pg.ScatterPlotItem(pos=exterior, pen=self.pen, symbol='o', size=4)
         else:
             self.ROIplot = pg.PlotDataItem(self.prect[0][:,0], self.prect[0][:,1], pen=self.pen)
         parent.p0.addItem(self.ROIplot)
         self.dotplot = pg.ScatterPlotItem(pos=self.pos[-1][1,:][np.newaxis], pen=self.pen, symbol='+')
         parent.p0.addItem(self.dotplot)
-
-        # theta = np.linspace(0, 2*np.pi, 50)
-        # self.ROIplot = []
-        # self.dotplot = []
-        # self.circleplot = []
-        # for k in range(len(self.prect)):
-        #     self.ROIplot.append(pg.PlotDataItem(self.prect[k][:,0], self.prect[k][:,1], pen=self.pen))
-        #     parent.p0.addItem(self.ROIplot[-1])
-        #     if k == len(self.prect)-1:
-        #         self.dotplot = pg.ScatterPlotItem(pos=self.pos[k][0,:][np.newaxis], pen=self.pen, symbol='+')
-        #         parent.p0.addItem(self.dotplot)
-        #     else:
-        #         self.circleplot.append(pg.PlotDataItem(np.cos(theta)*self.d + self.pos[k][1,0],
-        #                                           np.sin(theta)*self.d + self.pos[k][1,1], pen=self.pen))
-        #         parent.p0.addItem(self.circleplot[-1])
-
+        self.plot(parent)
         parent.show()
 
     def orthproj(self, p, k):
@@ -164,3 +135,15 @@ class gROI():
         '''remove ROI'''
         parent.p0.removeItem(self.ROIplot)
         parent.p0.removeItem(self.dotplot)
+
+    def plot(self, parent):
+        if len(self.selected) > 0:
+            irand = np.random.choice(len(self.selected), parent.n_examples)
+            for nex,irnd in enumerate(irand):
+                ineur = self.selected[irnd]
+                waveform_img = parent.get_waveform(ineur, self.atlas)
+                waveform_img = np.pad(waveform_img, ((5,5),(5,5),(0,0)), 'constant', 
+                                      constant_values=np.tile(self.color)[:,np.newaxis],(1,2)))
+                parent.waveform_imgs[r][nex].setImage(waveform_img)
+                parent.waveform_imgs[r][nex].setLevels(parent.levels)
+

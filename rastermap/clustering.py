@@ -3,9 +3,7 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from scipy.stats import zscore
-import sys 
-sys.path.insert(0, '/github/procrustean/')
-from pmt import KSD
+
 
 def kmeans(X, n_clusters=201):
     model = KMeans(n_init=1, n_clusters=n_clusters).fit(X)
@@ -26,10 +24,10 @@ def scaled_kmeans(X, n_clusters=201, n_iter = 20):
         X_nodes = X_nodes / (1e-10 + np.sum(X_nodes**2, 1)[:,np.newaxis])**.5  
     return X_nodes
 
-def procrustean_kmeans(X, n_clusters=201, n_iter = 20):
-    V = KSD(X, ncomp=n_clusters, whitening = True)[1]
-    X_nodes = V.T 
-    X_nodes = X_nodes / (1e-10 + np.sum(X_nodes**2, 1)[:,np.newaxis])**.5  
-    return X_nodes
+#def procrustean_kmeans(X, n_clusters=201, n_iter = 20):
+#    V = KSD(X, ncomp=n_clusters, whitening = True)[1]
+#    X_nodes = V.T 
+#    X_nodes = X_nodes / (1e-10 + np.sum(X_nodes**2, 1)[:,np.newaxis])**.5  
+#    return X_nodes
 
 
