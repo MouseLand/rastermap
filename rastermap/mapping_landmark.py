@@ -45,36 +45,40 @@ def embedding_landmarks(X, n_clusters=201, n_components=1, travelling=True):
 
 class Rastermap:
     """Rastermap embedding algorithm
-    Rastermap takes the nPCs (400 default) of the data, and embeds them into
-    n_X clusters. It returns upsampled cluster identities (n_X*upsamp).
-    Optionally, a 1D embeddding is also computed across the second dimension (n_Y>0),
-    smoothed over, and the PCA recomputed before fitting Rastermap.
+    Rastermap takes the n_PCs (200 default) of the data, and embeds them into
+    n_clusters clusters. It then sorts the clusters and upsamples to a grid with 
+    grid_upsample * n_clusters nodes. Each data sample is assigned to a node. 
+    The assignment of the samples to nodes is returned.
 
     data : n_samples x n_features
 
     Parameters
     -----------
-    n_components : int, optional (default: 1)
-        dimension of the embedding space
-    alpha : float, optional (default: 1.0)
-        exponent of the power law enforced on component n as: 1/(K+n)^alpha
-    n_X :  int, optional (default: 40)
-        size of the grid on which the Fourier modes are rasterized
-    nPC : int, optional (default: 200)
+    n_PCs : int, optional (default: 200)
         number of PCs to use during optimization
+    n_clusters : int, optional (default: 100)
+        number of clusters created from data before upsampling and creating embedding
+    grid_upsample : int, optional (default: 10)
+        how much to upsample clusters
+    smoothness : int, optional (default: 1)
+        how much to smooth over clusters when upsampling, number from 1 to number of clusters
+    alpha : float, optional (default: 1.0)
+        exponent of the power law enforced on travelling salesman algorithm for sorting clusters
     verbose: bool (default: True)
         whether to output progress during optimization
     """
-    def __init__(self, n_components=1, n_clusters=201, grid_upsample=10,
-                 nPC = 200, init='pca', alpha = 1., sorting_algorithm='travelling_salesman', 
+    def __init__(self, n_clusters=100, smoothness=1, grid_upsample=10,
+                 n_PCs = 200, alpha = 1., sorting_algorithm='travelling_salesman', 
                  quadratic_upsample=False, keep_norm_X=False, metrics=False, verbose = True):
 
-        self.n_components = n_components
+        self.n_components = 1 ### ONLY IN 1D
         self.n_clusters = n_clusters
         self.alpha = alpha
-        self.nPC = nPC
-        self.sorting_algorithm = sorting_algorithm
+        self.n_PCs = n_PCs
+        self.smoothness = smoothness
         self.grid_upsample = grid_upsample
+
+        self.sorting_algorithm = sorting_algorithm
         self.quadratic_upsample = quadratic_upsample
         self.keep_norm_X = keep_norm_X
         self.metrics = metrics
@@ -108,12 +112,8 @@ class Rastermap:
         ----------
         embedding : array-like, shape (n_samples, n_components)
             Stores the embedding vectors.
-        u,sv,v : singular value decomposition of data S, potentially with smoothing
-        isort1 : sorting along first dimension of matrix
-        isort2 : sorting along second dimension of matrix (if n_Y > 0)
-        cmap: correlation of each item with all locations in the embedding map (before upsampling)
-        A:    PC coefficients of each Fourier mode
-
+        isort : sorting along first dimension of matrix
+        
         """
         t0 = time.time()
 
@@ -124,9 +124,9 @@ class Rastermap:
             X = zscore(data, axis=1) 
             X -= X.mean(axis=0)
 
-            nmin = np.amin(X.shape)
-            nmin = np.minimum(nmin, self.nPC)
-            self.nPCs = nmin
+            nmin = np.min(X.shape) - 1 
+            nmin = min(nmin, self.n_PCs)
+            self.n_PCss = nmin
             if itrain is not None:
                 Vpca = TruncatedSVD(n_components=nmin).fit_transform(X[:,itrain])
             else:
@@ -139,12 +139,12 @@ class Rastermap:
             if self.keep_norm_X:
                 self.X = X
 
-            print('nPCs = {0} computed, time {1:0.2f}'.format(self.nPCs, time.time() - t0))
+            print('n_PCss = {0} computed, time {1:0.2f}'.format(self.n_PCss, time.time() - t0))
 
         else:
             self.U = u
-            self.nPCs = self.U.shape[1]
-            print('nPCs = {0} precomputed'.format(self.nPCs))
+            self.n_PCss = self.U.shape[1]
+            print('n_PCss = {0} precomputed'.format(self.n_PCss))
 
 
         X_nodes, Y_nodes = embedding_landmarks(self.U, 
@@ -161,9 +161,12 @@ class Rastermap:
         self.Y_nodes = Y_nodes
         self.n_X = int(self.n_clusters**(1/self.n_components) * max(2, self.grid_upsample))
 
+        n_neighbors = min(8, self.n_clusters//4)
+        e_neighbor = min(self.smoothness, n_neighbors-1)
         Y, cc, g, Xrec = grid_upsampling(self.U, X_nodes, Y_nodes, 
                                          n_X=self.n_X, 
-                                         n_neighbors=min(8, self.n_clusters//4))
+                                         n_neighbors=n_neighbors,
+                                         e_neighbor=e_neighbor)
         print('grid upsampled, time {0:0.2f}'.format(time.time() - t0))
         
         self.embedding_grid = Y
