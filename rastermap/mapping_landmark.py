@@ -2,7 +2,7 @@ import time
 from sklearn.decomposition import TruncatedSVD
 import numpy as np
 from scipy.stats import zscore
-from clustering import scaled_kmeans, procrustean_kmeans, kmeans
+from clustering import scaled_kmeans, kmeans
 from travelling import travelling_salesman
 from upsampling import grid_upsampling, quadratic_upsampling1D, upsample_grad
 from metrics import embedding_quality
