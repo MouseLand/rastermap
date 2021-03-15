@@ -27,14 +27,13 @@ def embed_clusters(X_nodes, n_components=2):
     #             metric='precomputed').fit(cc_nodes)
     return Y_nodes
 
-def embedding_landmarks(X, n_clusters=201, n_components=1, travelling=True):
-    #X_nodes = procrustean_kmeans(X, n_clusters=n_clusters)
+def embedding_landmarks(X, n_clusters=201, n_components=1, travelling=True, alpha=1):
     #X_nodes = scaled_kmeans(X, n_clusters=n_clusters, n_iter=100)
     X_nodes = kmeans(X, n_clusters=n_clusters)
     if n_components==1 and travelling:
         igood = (X_nodes**2).sum(axis=1)> 0.9
         cc = X_nodes[igood] @ X_nodes[igood].T
-        cc,inds,seg_len = travelling_salesman(cc, verbose=False)
+        cc,inds,seg_len = travelling_salesman(cc, verbose=False, alpha=alpha)
         Y_nodes_igood = np.zeros((len(inds), 1))
         Y_nodes_igood[inds, 0] = np.arange(len(inds))
         Y_nodes = -1 * np.ones((n_clusters, 1))
@@ -126,7 +125,7 @@ class Rastermap:
 
             nmin = np.min(X.shape) - 1 
             nmin = min(nmin, self.n_PCs)
-            self.n_PCss = nmin
+            self.n_PCs = nmin
             if itrain is not None:
                 Vpca = TruncatedSVD(n_components=nmin).fit_transform(X[:,itrain])
             else:
@@ -139,12 +138,18 @@ class Rastermap:
             if self.keep_norm_X:
                 self.X = X
 
-            print('n_PCss = {0} computed, time {1:0.2f}'.format(self.n_PCss, time.time() - t0))
+            print('n_PCs = {0} computed, time {1:0.2f}'.format(self.n_PCs, time.time() - t0))
 
         else:
             self.U = u
-            self.n_PCss = self.U.shape[1]
-            print('n_PCss = {0} precomputed'.format(self.n_PCss))
+            if itrain is not None:
+                # normalize X
+                X = zscore(data, axis=1) 
+                X -= X.mean(axis=0)
+                self.X_test = U @ (U.T @ X[:,~itrain])
+
+            self.n_PCs = self.U.shape[1]
+            print('n_PCs = {0} precomputed'.format(self.n_PCs))
 
 
         X_nodes, Y_nodes = embedding_landmarks(self.U, 
@@ -152,7 +157,8 @@ class Rastermap:
                                                 n_components=self.n_components, 
                                                 travelling=(True 
                                                             if self.sorting_algorithm=='travelling_salesman'
-                                                            else False)
+                                                            else False),
+                                                alpha=self.alpha
                                               )
         print('landmarks computed and embedded, time {0:0.2f}'.format(time.time() - t0))
 
@@ -161,14 +167,15 @@ class Rastermap:
         self.Y_nodes = Y_nodes
         self.n_X = int(self.n_clusters**(1/self.n_components) * max(2, self.grid_upsample))
 
-        n_neighbors = min(8, self.n_clusters//4)
-        e_neighbor = min(self.smoothness, n_neighbors-1)
+        n_neighbors = max(min(8, self.n_clusters-1), self.n_clusters//5)
+        e_neighbor = max(1, min(self.smoothness, n_neighbors-1))
         Y, cc, g, Xrec = grid_upsampling(self.U, X_nodes, Y_nodes, 
                                          n_X=self.n_X, 
                                          n_neighbors=n_neighbors,
                                          e_neighbor=e_neighbor)
         print('grid upsampled, time {0:0.2f}'.format(time.time() - t0))
         
+        self.Xrec = Xrec
         self.embedding_grid = Y
         
         if self.quadratic_upsample:

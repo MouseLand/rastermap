@@ -5,7 +5,7 @@ from sklearn.cluster import KMeans
 from scipy.stats import zscore
 
 
-def kmeans(X, n_clusters=201):
+def kmeans(X, n_clusters=100):
     model = KMeans(n_init=1, n_clusters=n_clusters).fit(X)
     X_nodes = model.cluster_centers_
     X_nodes = X_nodes / (1e-10 + np.sum(X_nodes**2, 1)[:,np.newaxis])**.5  
@@ -23,11 +23,3 @@ def scaled_kmeans(X, n_clusters=201, n_iter = 20):
         X_nodes = cc.T @ X 
         X_nodes = X_nodes / (1e-10 + np.sum(X_nodes**2, 1)[:,np.newaxis])**.5  
     return X_nodes
-
-#def procrustean_kmeans(X, n_clusters=201, n_iter = 20):
-#    V = KSD(X, ncomp=n_clusters, whitening = True)[1]
-#    X_nodes = V.T 
-#    X_nodes = X_nodes / (1e-10 + np.sum(X_nodes**2, 1)[:,np.newaxis])**.5  
-#    return X_nodes
-
-

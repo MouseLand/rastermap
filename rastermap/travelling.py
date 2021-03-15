@@ -190,8 +190,8 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, greedy=False, ve
         n_basis, n_nodes = B.shape
         B /= plaw[:,np.newaxis] ** (alpha/2)
         B_norm = (B**2).sum(axis=0)**0.5
-        B = (B / B_norm).T
-        BBt = (B @ B.T) / (B**2).sum(axis=1)
+        B = B / B_norm
+        BBt = B.T @ B #/ (B**2).sum(axis=1)
     else:
         BBt = np.ones((n_nodes, n_nodes))
         BBt = np.tril(np.triu(BBt, -1), 1)

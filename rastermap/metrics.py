@@ -26,13 +26,15 @@ def distance_matrix(Z, n_X = None, wrapping=False, correlation = False):
         #import pdb; pdb.set_trace();
     return Zdist
 
-def embedding_quality(X, Z, classes=None, knn=20, knn_global=500, subsetsize=1000,
+def embedding_quality(X, Z, classes=None, knn=20, knn_global=500, subsetsize=2000,
                         wrapping=False, n_X = 0):
 
     np.random.seed(101)
     subset = np.random.choice(X.shape[0], size=subsetsize, replace=False)
     Xdist = distance_matrix(X[subset], correlation=True)
     Zdist = distance_matrix(Z[subset], n_X = n_X, wrapping=wrapping)
+    xd = Xdist[np.tril_indices(Xdist.shape[0],-1)]
+    zd = Zdist[np.tril_indices(Xdist.shape[0],-1)]
 
     mnn = []
     for kni in [knn, knn_global]:
@@ -47,7 +49,7 @@ def embedding_quality(X, Z, classes=None, knn=20, knn_global=500, subsetsize=100
             intersections += len(set(ind1[i]) & set(ind2[i]))
         mnn.append( intersections / subsetsize / kni )
 
-    rho = spearmanr(Xdist.flatten(), Zdist.flatten()).correlation
+    rho = spearmanr(xd, zd).correlation
 
     return (mnn[0], mnn[1], rho)
 

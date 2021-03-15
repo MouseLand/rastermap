@@ -108,13 +108,14 @@ def grid_upsampling2(X, X_nodes, Y_nodes, n_X=41, n_neighbors=50):
 
     return Y, cc, x_m, y_m
 
-def grid_upsampling(X, X_nodes, Y_nodes, n_X=41, n_neighbors=50, e_neighbor=1):
+def grid_upsampling(X, X_nodes, Y_nodes, n_X, n_neighbors=50, e_neighbor=1):
     e_neighbor = min(n_neighbors-1, e_neighbor)
     xy = []
     n_clusters = Y_nodes.max()+1
+    grid_upsample = np.round(n_X/n_clusters)
     for i in range(Y_nodes.shape[1]):
-        xy.append(np.arange(0, n_clusters, 1./5))
-            #np.linspace(Y_nodes[:,i].min(), Y_nodes[:,i].max(), n_X))
+        xy.append(np.arange(0, n_clusters, 1./grid_upsample))
+        #xy.append(np.linspace(Y_nodes[:,i].min(), Y_nodes[:,i].max(), n_X))
     if Y_nodes.shape[1]==2:
         x_m, y_m = np.meshgrid(xy[0], xy[1], indexing='ij')
         xy = np.vstack((x_m.flatten(), y_m.flatten()))
