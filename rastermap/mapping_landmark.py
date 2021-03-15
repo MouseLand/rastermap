@@ -152,7 +152,7 @@ class Rastermap:
             print('n_PCs = {0} precomputed'.format(self.n_PCs))
 
 
-        X_nodes, Y_nodes = embedding_landmarks(self.U, 
+        U_nodes, Y_nodes = embedding_landmarks(self.U, 
                                                 n_clusters=self.n_clusters, 
                                                 n_components=self.n_components, 
                                                 travelling=(True 
@@ -163,19 +163,21 @@ class Rastermap:
         print('landmarks computed and embedded, time {0:0.2f}'.format(time.time() - t0))
 
 
-        self.X_nodes = X_nodes 
+        self.U_nodes = U_nodes 
+        self.X_nodes = U_nodes @ (U.T @ X)
         self.Y_nodes = Y_nodes
         self.n_X = int(self.n_clusters**(1/self.n_components) * max(2, self.grid_upsample))
 
         n_neighbors = max(min(8, self.n_clusters-1), self.n_clusters//5)
         e_neighbor = max(1, min(self.smoothness, n_neighbors-1))
-        Y, cc, g, Xrec = grid_upsampling(self.U, X_nodes, Y_nodes, 
+        Y, cc, g, Xrec = grid_upsampling(self.U, U_nodes, Y_nodes, 
                                          n_X=self.n_X, 
                                          n_neighbors=n_neighbors,
                                          e_neighbor=e_neighbor)
         print('grid upsampled, time {0:0.2f}'.format(time.time() - t0))
         
-        self.Xrec = Xrec
+        self.U_upsampled = Xrec
+        self.X_upsampled = Xrec @ (U.T @ X)
         self.embedding_grid = Y
         
         if self.quadratic_upsample:
