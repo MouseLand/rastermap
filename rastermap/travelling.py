@@ -1,7 +1,7 @@
 import numpy as np
 from numba import njit, jit, float32, int32, boolean, int64, vectorize, prange
 import itertools, time
-from mapping import create_ND_basis
+from .mapping import create_ND_basis
 
 #@vectorize([float32(float32, float32)], nopython=True, target='parallel')
 #def elementwise_mult(x, y):

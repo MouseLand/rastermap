@@ -2,10 +2,10 @@ import time
 from sklearn.decomposition import TruncatedSVD
 import numpy as np
 from scipy.stats import zscore
-from clustering import scaled_kmeans, kmeans
-from travelling import travelling_salesman
-from upsampling import grid_upsampling, quadratic_upsampling1D, upsample_grad
-from metrics import embedding_quality
+from .clustering import scaled_kmeans, kmeans
+from .travelling import travelling_salesman
+from .upsampling import grid_upsampling, quadratic_upsampling1D, upsample_grad
+from .metrics import embedding_quality
 
 def embed_clusters(X_nodes, n_components=2):
     W = PCA(n_components=n_components).fit_transform(X_nodes)*0.01
@@ -137,11 +137,12 @@ class Rastermap:
 
             if self.keep_norm_X:
                 self.X = X
-
-            print('n_PCs = {0} computed, time {1:0.2f}'.format(self.n_PCs, time.time() - t0))
+            pc_time = time.time()
+            print('n_PCs = {0} computed, time {1:0.2f}'.format(self.n_PCs, pc_time - t0))
 
         else:
             self.U = u
+            pc_time = 0
             if itrain is not None:
                 # normalize X
                 X = zscore(data, axis=1) 
@@ -176,7 +177,7 @@ class Rastermap:
                                          e_neighbor=e_neighbor)
         print('grid upsampled, time {0:0.2f}'.format(time.time() - t0))
         
-        self.U_upsampled = Xrec
+        self.U_upsampled = Xrec.copy()
         self.X_upsampled = Xrec @ (U.T @ X)
         self.embedding_grid = Y
         
@@ -193,4 +194,8 @@ class Rastermap:
 
         self.isort = isort
         self.embedding = Y
+
+        self.pc_time = pc_time 
+        self.map_time = time.time() -t0 - pc_time
+
         return self

@@ -26,7 +26,7 @@ def distance_matrix(Z, n_X = None, wrapping=False, correlation = False):
         #import pdb; pdb.set_trace();
     return Zdist
 
-def embedding_score(X, Z, knn=[10, 100, 500], subsetsize=5000,
+def embedding_score(X, Z, knn=[10, 100, 1000], subsetsize=5000,
                         wrapping=False, n_X = 0):
 
     np.random.seed(101)
