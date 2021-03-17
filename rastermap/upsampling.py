@@ -108,6 +108,31 @@ def grid_upsampling2(X, X_nodes, Y_nodes, n_X=41, n_neighbors=50):
 
     return Y, cc, x_m, y_m
 
+def kriging_upsampling(X, X_nodes, Y_nodes, grid_upsample=10, sig=0.5):
+    # assume the input is 5 by 5 by 5 by 5.... vectorized
+    if (Y_nodes==-1).sum()>0:
+        Xn = X_nodes.copy()[X_nodes!=-1]
+        Yn = Y_nodes.copy()[Y_nodes!=-1]
+
+    nclust = Y_nodes.max()+1
+    xs = np.arange(0, nclust)
+    xu = np.arange(0, nclust, 1./grid_upsample)
+    Kxx = np.exp(-(xs[:,np.newaxis] - xs)**2 / sig)
+    Kxu = np.exp(-(xs[:,np.newaxis] - xu)**2 / sig)
+    Km = np.linalg.solve(Kxx + np.eye(Kxx.shape[0]), Kxu)
+
+    Xrec = X_nodes[Y_nodes[:,0].argsort()].T @ Km
+    Xrec = Xrec.T
+    Xrec = Xrec / (1e-10 + (Xrec**2).sum(axis=1)[:,np.newaxis]**.5)
+
+    cc = Xrec @ zscore(X, axis=1).T
+    cc = np.maximum(0, cc)
+    imax = np.argmax(cc, 0)
+    Y = xu[imax].T
+    Y = Y[:,np.newaxis]
+
+    return Y, cc, xu, Xrec
+
 def grid_upsampling(X, X_nodes, Y_nodes, n_X, n_neighbors=50, e_neighbor=1):
     e_neighbor = min(n_neighbors-1, e_neighbor)
     xy = []

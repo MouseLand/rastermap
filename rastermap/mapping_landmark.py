@@ -1,10 +1,10 @@
 import time 
-from sklearn.decomposition import TruncatedSVD
+from sklearn.decomposition import TruncatedSVD, PCA
 import numpy as np
 from scipy.stats import zscore
 from .clustering import scaled_kmeans, kmeans
 from .travelling import travelling_salesman
-from .upsampling import grid_upsampling, quadratic_upsampling1D, upsample_grad
+from .upsampling import grid_upsampling, kriging_upsampling, quadratic_upsampling1D, upsample_grad
 from .metrics import embedding_quality
 
 def embed_clusters(X_nodes, n_components=2):
@@ -29,7 +29,7 @@ def embed_clusters(X_nodes, n_components=2):
 
 def embedding_landmarks(X, n_clusters=201, n_components=1, travelling=True, alpha=1):
     #X_nodes = scaled_kmeans(X, n_clusters=n_clusters, n_iter=100)
-    X_nodes = kmeans(X, n_clusters=n_clusters)
+    X_nodes, imax = kmeans(X, n_clusters=n_clusters)
     if n_components==1 and travelling:
         igood = (X_nodes**2).sum(axis=1)> 0.9
         cc = X_nodes[igood] @ X_nodes[igood].T
@@ -40,7 +40,7 @@ def embedding_landmarks(X, n_clusters=201, n_components=1, travelling=True, alph
         Y_nodes[igood] = Y_nodes_igood
     else:
         Y_nodes = embed_clusters(X_nodes, n_components=n_components)
-    return X_nodes, Y_nodes
+    return X_nodes, Y_nodes, imax
 
 class Rastermap:
     """Rastermap embedding algorithm
@@ -153,7 +153,7 @@ class Rastermap:
             print('n_PCs = {0} precomputed'.format(self.n_PCs))
 
 
-        U_nodes, Y_nodes = embedding_landmarks(self.U, 
+        U_nodes, Y_nodes, imax = embedding_landmarks(self.U, 
                                                 n_clusters=self.n_clusters, 
                                                 n_components=self.n_components, 
                                                 travelling=(True 
@@ -163,17 +163,19 @@ class Rastermap:
                                               )
         print('landmarks computed and embedded, time {0:0.2f}'.format(time.time() - t0))
 
-
+        self.embedding_clust = imax
         self.U_nodes = U_nodes 
         self.X_nodes = U_nodes @ (U.T @ X)
         self.Y_nodes = Y_nodes
-        self.n_X = int(self.n_clusters**(1/self.n_components) * max(2, self.grid_upsample))
+        self.n_X = int(self.n_clusters * max(2, self.grid_upsample))
 
         n_neighbors = max(min(8, self.n_clusters-1), self.n_clusters//5)
         e_neighbor = max(1, min(self.smoothness, n_neighbors-1))
+        #Y, cc, g, Xrec = kriging_upsampling(self.U, U_nodes, Y_nodes, 
+        #                                 grid_upsample=max(2,self.grid_upsample),
+        #                                 sig = 0.5)
         Y, cc, g, Xrec = grid_upsampling(self.U, U_nodes, Y_nodes, 
-                                         n_X=self.n_X, 
-                                         n_neighbors=n_neighbors,
+                                         n_X=self.n_X, n_neighbors=n_neighbors,
                                          e_neighbor=e_neighbor)
         print('grid upsampled, time {0:0.2f}'.format(time.time() - t0))
         

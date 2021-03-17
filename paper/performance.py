@@ -17,7 +17,6 @@ def run_TSNE(U, perplexities=[30]):
             random_state=1,
             #verbose=True
         )
-    else:
         affinities = affinity.PerplexityBasedNN(
             U,
             perplexity=perplexities[0],
@@ -26,15 +25,26 @@ def run_TSNE(U, perplexities=[30]):
             random_state=1,
             #verbose=True
         )
-
-    fitter = TSNEEmbedding(
-        U[:,[0]]*0.001,
-        affinities,
-        n_jobs=16,
-        random_state=1,
-        #verbose=True
-    )
-    embeddingOPENTSNE = fitter.optimize(n_iter=250)
+        fitter = TSNEEmbedding(
+            U[:,:1]*0.0001,
+            affinities,
+            n_jobs=16,
+            random_state=1,
+            #verbose=True
+        )
+        embeddingOPENTSNE = fitter.optimize(n_iter=250)
+    else:
+        tsne = TSNE(
+            perplexity=perplexities[0],
+            metric="cosine",
+            n_jobs=8,
+            random_state=42,
+            verbose = True,
+            n_components = 1,
+            initialization = .0001 * U[:,:1],
+        )
+        embeddingOPENTSNE = tsne.fit(U)
+        
     return embeddingOPENTSNE
 
 def run_UMAP(U, n_neighbors=15):
@@ -42,6 +52,7 @@ def run_UMAP(U, n_neighbors=15):
     return embeddingUMAP
 
 def benchmark_embeddings(S, bin_size=0):
+    """ S is n_samples by n_features, optional bin_size to bin over features """
     
     if bin_size > 0:
         Sb = bin1d(S.T, bin_size).T
@@ -51,7 +62,7 @@ def benchmark_embeddings(S, bin_size=0):
     itest, itrain = split_testtrain(Sb.shape[1])
     
     model = Rastermap(smoothness=1, 
-                        n_clusters=100, 
+                        n_clusters=200, 
                         n_PCs=200, 
                         grid_upsample=10, 
                         alpha=1.).fit(Sb, itrain=itrain)
