@@ -15,7 +15,7 @@ def distance_matrix(Z, n_X = None, wrapping=False, correlation = False):
     else:
         if correlation:
             Zdist = Z @ Z.T
-            Z2 = np.diag(Zdist)**.5
+            Z2 = 1e-10 + np.diag(Zdist)**.5
             Zdist = 1 - Zdist / np.outer(Z2, Z2)
         else:
             #Zdist = ((Z - Z[:,np.newaxis,:])**2).sum(axis=-1)
@@ -32,8 +32,11 @@ def embedding_score(X, Z, knn=[10, 100, 1000], subsetsize=5000,
     np.random.seed(101)
     subset = np.random.choice(X.shape[0], size=subsetsize, replace=False)
     Xdist = distance_matrix(X[subset], correlation=True)
-    Zdist = distance_matrix(Z[subset], n_X = n_X, wrapping=wrapping)
-    
+    if Z.shape[1]>2:
+        Zdist = distance_matrix(Z[subset], correlation=True)
+    else:
+        Zdist = distance_matrix(Z[subset], n_X = n_X, wrapping=wrapping)
+
     mnn = []
     for kni in knn:
         nbrs1 = NearestNeighbors(n_neighbors=kni, metric='precomputed').fit(Xdist)
