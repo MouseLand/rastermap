@@ -45,15 +45,17 @@ class Rastermap:
     verbose: bool (default: True)
         whether to output progress during optimization
     """
-    def __init__(self, n_clusters=50, n_splits=4, smoothness=1, grid_upsample=10,
+    def __init__(self, n_clusters=50, n_splits=4, smoothness=1, grid_upsample=10, sticky=True,
                  n_PCs = 200, bin_size=50, keep_norm_X=False, metrics=False, verbose = True):
 
         self.n_components = 1 ### ONLY IN 1D
         self.n_clusters = n_clusters
         self.n_PCs = n_PCs
+        self.n_splits = n_splits
         self.smoothness = smoothness
         self.grid_upsample = grid_upsample
         self.bin_size = 50
+        self.sticky = sticky
 
         self.keep_norm_X = keep_norm_X
         self.metrics = metrics
@@ -133,6 +135,8 @@ class Rastermap:
 
         U_nodes, Y_nodes, imax = cluster_split_and_sort(self.U, 
                                                 n_clusters=self.n_clusters, 
+                                                n_splits=self.n_splits,
+                                                sticky=self.sticky
                                                 )
         print('landmarks computed and embedded, time {0:0.2f}'.format(time.time() - t0))
 

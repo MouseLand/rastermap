@@ -355,18 +355,20 @@ def compute_BBt(xi, yi, alpha=1e3):
     #BBt = 1 / (1 + alpha * (xi[:,np.newaxis] - yi)**2)**0.5
     return BBt
 
-def cluster_split_and_sort(U, n_clusters=50, nc=25, n_splits=4, alpha=1.0):
+def cluster_split_and_sort(U, n_clusters=50, nc=25, n_splits=4, alpha=1.0, sticky=True):
     U_nodes, imax = kmeans(U, n_clusters=n_clusters)
     cc = U_nodes @ U_nodes.T
     cc,inds,seg_len = travelling_salesman(cc, verbose=False, alpha=alpha)
     U_nodes = U_nodes[inds]
     
     n_PCs = U_nodes.shape[1]
-    tic=time.time()
+    ineurons = (U @ U_nodes.T).argmax(axis=1)
     for k in range(n_splits):
         U_nodes_new = np.zeros((0, n_PCs))
         n_nodes = U_nodes.shape[0]
-        ineurons = (U @ U_nodes.T).argmax(axis=1)
+        if not sticky:
+            ineurons = (U @ U_nodes.T).argmax(axis=1)
+        ineurons_new = -1*np.ones(U.shape[0], np.int64)
         for i in range(n_nodes//nc):
             ii = np.arange(n_nodes)
             node_set = np.logical_and(ii>=i*nc, ii<(i+1)*nc)
@@ -383,11 +385,14 @@ def cluster_split_and_sort(U, n_clusters=50, nc=25, n_splits=4, alpha=1.0):
             BBt_add = compute_BBt(x, y)
 
             cc_out,inds,seg_len = matrix_matching(cc, BBt, 
-                                                            cc_add, BBt_add, 
-                                                            verbose=False)#cc.shape[0]-25)
-            U_nodes_new = np.vstack((U_nodes_new, U_nodes0[inds]))
+                                                    cc_add, BBt_add, 
+                                                    verbose=False)#cc.shape[0]-25)
+            U_nodes0 = U_nodes0[inds]
+            ineurons_new[in_set] = 2*nc*i + (U[in_set] @ U_nodes0.T).argmax(axis=1)
+            U_nodes_new = np.vstack((U_nodes_new, U_nodes0))
         n_nodes = U_nodes_new.shape[0]
-        U_nodes = U_nodes_new
+        U_nodes = U_nodes_new.copy()
+        ineurons = ineurons_new.copy()
     Y_nodes = np.arange(0, U_nodes.shape[0])[:,np.newaxis]
     ineurons = (U @ U_nodes.T).argmax(axis=1)
     return U_nodes, Y_nodes, ineurons
