@@ -1,14 +1,14 @@
 # rastermap
 
-This algorithm computes a 1D or 2D embedding of neural activity. It assumes that the spike matrix `S` is neurons by timepoints. We have a python 3 and a matlab implementation, and have a GUI for running it in the python implementation. See the [demos](demos/) for jupyter notebooks using it, and some example data. We also have a guided [tutorial](tutorial/) integrating suite2p, rastermap, and facemap in an attempt to understand visual cortical responses.
+WARNING: DOCUMENTATION OUT-OF-DATE FOR March 2021 UPDATE
 
-![guigif](figs/rguifast.gif)
+This algorithm computes a 1D or 2D embedding of neural activity. It assumes that the spike matrix `S` is neurons by timepoints. We have a python 3 and a matlab implementation, and have a GUI for running it in the python implementation. See the [demos](demos/) for jupyter notebooks using it, and some example data. We also have a guided [tutorial](tutorial/) integrating suite2p, rastermap, and facemap in an attempt to understand visual cortical responses.
 
 Here is what the output looks like for a segment of a mesoscope recording (2.5Hz sampling rate) (sorted in neural space, but not time space):
 
 ![rastersorted](figs/example.png)
 
-Here is what the output looks like for a recording of 64,000 neurons in a larval zebrafish (data [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1), thanks to Chen, Mu, Hu, Kuan et al / Ahrens lab for sharing!). The upper left plot is the 2D embedding with boxes around clusters (which the user draws in the GUI). The plot on the right shows the activity of the clusters. The lower left plot is a Z-stack of the neurons in the tissue, colored according to their 2D position in the Rastermap embedding.
+Here is what the output looks like for a recording of 64,000 neurons in a larval zebrafish (data [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1), thanks to Chen, Mu, Hu, Kuan et al / Ahrens lab for sharing!). The plot on the left shows the activity of the clusters. The right plot is a Z-stack of the neurons in the tissue, colored according to their 1D position in the Rastermap embedding.
 
 ![fishbrain](figs/fish_GUI3.png)
 

@@ -5,6 +5,7 @@ import pyqtgraph as pg
 from PyQt5 import QtGui, QtCore
 from matplotlib import cm
 from scipy.stats import zscore
+from .mapping import Rastermap
 
 # custom vertical label
 class VerticalLabel(QtGui.QWidget):
@@ -743,8 +744,19 @@ class MainW(QtGui.QMainWindow):
             self.loaded = True
 
     def run_RMAP(self):
-        RW = RunWindow(self)
-        RW.show()
+        n_clusters = 50
+        n_neurons = self.sp.shape[0] 
+        n_splits = min(4, n_neurons//1000)
+        grid_upsample = min(10, n_neurons // (n_splits * (n_clusters+1)))
+        model = Rastermap(smoothness=1, 
+                                       n_clusters=n_clusters, 
+                                       n_PCs=200, 
+                                       n_splits=n_splits,
+                                       grid_upsample=grid_upsample).fit(self.sp)
+
+        self.embedding = model.embedding
+        self.sorting = model.isort
+        self.plot_activity()
 
     def load_behavior(self):
         name = QtGui.QFileDialog.getOpenFileName(
@@ -755,7 +767,7 @@ class MainW(QtGui.QMainWindow):
         try:
             beh = np.load(name)
             beh = beh.flatten()
-            if beh.size == self.Fcell.shape[1]:
+            if beh.size == self.sp.shape[1]:
                 self.bloaded = True
         except (ValueError, KeyError, OSError,
                 RuntimeError, TypeError, NameError):

@@ -394,5 +394,7 @@ def cluster_split_and_sort(U, n_clusters=50, nc=25, n_splits=4, alpha=1.0, stick
         U_nodes = U_nodes_new.copy()
         ineurons = ineurons_new.copy()
     Y_nodes = np.arange(0, U_nodes.shape[0])[:,np.newaxis]
-    ineurons = (U @ U_nodes.T).argmax(axis=1)
+    
+    if not sticky:
+        ineurons = (U @ U_nodes.T).argmax(axis=1)
     return U_nodes, Y_nodes, ineurons

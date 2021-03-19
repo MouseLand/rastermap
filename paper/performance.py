@@ -4,7 +4,7 @@ import numpy as np
 from openTSNE import TSNE, affinity, TSNEEmbedding
 from umap import UMAP
 from rastermap.utils import bin1d, split_testtrain
-from rastermap.mapping_landmark import Rastermap
+from rastermap.mapping import Rastermap
 from rastermap.metrics import embedding_score
 
 def run_TSNE(U, perplexities=[30]):
@@ -62,10 +62,9 @@ def benchmark_embeddings(S, bin_size=0):
     itest, itrain = split_testtrain(Sb.shape[1])
     
     model = Rastermap(smoothness=1, 
-                        n_clusters=200, 
+                        n_clusters=50, 
                         n_PCs=200, 
-                        grid_upsample=10, 
-                        alpha=1.).fit(Sb, itrain=itrain)
+                        grid_upsample=10).fit(Sb, itrain=itrain)
 
     timings, embeddings = [], []
     embeddings.append(model.embedding)
