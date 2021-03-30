@@ -54,7 +54,7 @@ class Rastermap:
         self.n_splits = n_splits
         self.smoothness = smoothness
         self.grid_upsample = grid_upsample
-        self.bin_size = 50
+        self.bin_size = bin_size
         self.sticky = sticky
 
         self.keep_norm_X = keep_norm_X
@@ -123,11 +123,12 @@ class Rastermap:
         else:
             self.U = u
             pc_time = 0
-            if itrain is not None:
+            if data is not None:
                 # normalize X
                 X = zscore(data, axis=1) 
                 X -= X.mean(axis=0)
-                self.X_test = U @ (U.T @ X[:,~itrain])
+                if itrain is not None:
+                    self.X_test = self.U @ (self.U.T @ X[:,~itrain])
 
             self.n_PCs = self.U.shape[1]
             print('n_PCs = {0} precomputed'.format(self.n_PCs))
@@ -142,7 +143,8 @@ class Rastermap:
 
         self.embedding_clust = imax
         self.U_nodes = U_nodes 
-        self.X_nodes = U_nodes @ (U.T @ X)
+        if data is not None:
+            self.X_nodes = U_nodes @ (self.U.T @ X)
         self.Y_nodes = Y_nodes
 
         self.n_clusters = U_nodes.shape[0]
@@ -156,7 +158,8 @@ class Rastermap:
         print('grid upsampled, time {0:0.2f}'.format(time.time() - t0))
         
         self.U_upsampled = Xrec.copy()
-        self.X_upsampled = Xrec @ (U.T @ X)
+        if data is not None:
+            self.X_upsampled = Xrec @ (self.U.T @ X)
         self.embedding_grid = Y
         
         if self.quadratic_upsample:
@@ -173,12 +176,13 @@ class Rastermap:
         self.isort = isort
         self.embedding = Y
 
-        if X.shape[0] < self.bin_size or (self.bin_size==50 and X.shape[0] < 1000):
-            bin_size = X.shape[0]//20
-        else:
-            bin_size = self.bin_size
+        if data is not None:
+            if X.shape[0] < self.bin_size or (self.bin_size==50 and X.shape[0] < 1000):
+                bin_size = X.shape[0]//20
+            else:
+                bin_size = self.bin_size
         
-        self.X_embedding = zscore(bin1d(X[isort], bin_size), axis=1)
+            self.X_embedding = zscore(bin1d(X[isort], bin_size), axis=1)
 
         self.pc_time = pc_time 
         self.map_time = time.time() -t0 - pc_time
