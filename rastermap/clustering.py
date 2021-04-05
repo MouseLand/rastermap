@@ -6,12 +6,15 @@ from sklearn.cluster import KMeans
 from scipy.stats import zscore
 
 def kmeans(X, n_clusters=100):
-    X_norm = 1 #(1e-10 + (X**2).sum(axis=0)**.5)
-    model = KMeans(n_init=1, n_clusters=n_clusters, random_state=0).fit(X / X_norm)
-    X_nodes = model.cluster_centers_ * X_norm
+    model = KMeans(n_init=1, init='random', 
+                   n_clusters=n_clusters, random_state=0).fit(X)
+    X_nodes = model.cluster_centers_ 
     X_nodes = X_nodes / (1e-10 + ((X_nodes**2).sum(axis=1))[:,np.newaxis])**.5  
-    cc = X @ X_nodes.T 
-    imax = cc.argmax(axis=1)
+    imax = model.labels_
+
+    #cc = X @ X_nodes.T 
+    #imax = cc.argmax(axis=1)
+
     return X_nodes, imax
 
 def create_ND_basis(dims, nclust, K, flag=True):
@@ -51,8 +54,258 @@ def create_ND_basis(dims, nclust, K, flag=True):
 def elementwise_mult_sum(x, y):
     return (x * y).sum()
 
+@njit('int64[:] (int64, int64, int64, int64)', nogil=True)
+def shift_inds(i0, i1, inode, n_nodes):
+    """ shift segment from i0->i1 to position inode"""
+    n_seg = i1 - i0 
+    l_seg = inode - i0 
+    if l_seg>=0:
+        inds = np.concatenate((np.arange(i0), 
+                               np.arange(i1,i1+l_seg),  
+                               np.arange(i0, i1), 
+                               np.arange(i1+l_seg, n_nodes))) 
+    else:
+        inds = np.concatenate((np.arange(inode), 
+                               np.arange(i0, i1), 
+                               np.arange(inode, i0), 
+                               np.arange(i1,n_nodes)))
+    return inds
+
+@njit('(float32[:,:], int64[:])', nogil=True)
+def shift_matrix_inds(cc, ishift):
+    return cc[ishift][:,ishift]
+
+@njit('(float32[:,:], int64, int64, int64, int64)', nogil=True)
+def shift_matrix_forward(cc, i0, i1, inode, n_nodes):
+    ishift = shift_inds(i0, i1, inode, n_nodes)
+    cc2 = cc[ishift][:,ishift]
+    return cc2, ishift
+
+@njit('(float32[:,:], int64, int64, int64, int64, int64)', nogil=True)
+def shift_matrix(cc, i0, i1, inode, n_nodes, ordering):
+    cc2, ishift = shift_matrix_forward(cc, i0, i1, inode, n_nodes)
+    ilength = i1 - i0
+    if ordering==1:
+        cc2[inode:inode+ilength] = cc2[inode:inode+ilength][::-1]
+        cc2[:, inode:inode+ilength] = cc2[:, inode:inode+ilength][:, ::-1]
+        ishift[inode:inode+ilength] = ishift[inode:inode+ilength][::-1].copy()
+    return cc2, ishift
+
+@njit('float32[:] (float32[:,:], int64, int64, int64, int64, float32[:,:])', nogil=True)
+def new_correlation(cc, i0, i1, inode, n_nodes, BBt):
+    """ compute correlation change of moving segment i0:i1+1 to position inode
+    inode=-1 is at beginning of sequence
+    """
+    cc_new = shift_matrix_forward(cc, i0, i1, inode, n_nodes)[0]
+    ilength = i1 - i0
+    
+    corr_new = elementwise_mult_sum(cc_new, BBt)
+    ordering = 0
+
+    if ilength > 1:
+        cc0 = cc_new.copy()
+        cc0[inode:inode+ilength] = cc0[inode:inode+ilength][::-1]
+        cc0[:, inode:inode+ilength] = cc0[:, inode:inode+ilength][:, ::-1]
+
+        corr_new0 = elementwise_mult_sum(cc0, BBt)
+        if corr_new0 > corr_new:
+            corr_new = corr_new0 
+            ordering = 1
+
+    corr_out = np.zeros(2, np.float32)
+    corr_out[0] = corr_new
+    corr_out[1] = ordering
+
+    return corr_out
+
+
+@njit('(float32[:,:], int64, int64, int64, float32[:,:], boolean)', nogil=True, parallel=True)
+def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
+    inds = np.arange(0, n_nodes).astype(np.int32)
+    iinds = np.arange(0, n_nodes).astype(np.int32)
+    seg_len = np.ones(n_iter)
+    n_len = 3
+    n_test = n_nodes//n_skip
+    test_lengths = np.arange(0, ((n_nodes)//n_len)*n_len).reshape(-1,n_len) + 1
+    corr_orig = 0
+
+    corr_change_seg = -np.inf * np.ones(n_len * n_nodes * n_test, np.float32)
+    ordering_seg = -np.inf * np.ones(n_len *  n_nodes * n_test, np.float32)
+    for k in range(n_iter):
+        improved = False
+        if corr_orig==0:
+            corr_orig = elementwise_mult_sum(cc, BBt) 
+        for tl in range(len(test_lengths)):
+            corr_change_seg[:] = -np.inf
+            for ix in prange(0, n_len*n_nodes*n_test):
+                ilength = (ix // n_test // n_nodes) + test_lengths[tl,0]
+                i0 = ((ix // n_test) % n_nodes)
+                inode = (ix % n_test)*n_skip + k%n_skip
+                i1 = (i0 + ilength)
+                if i1 <= n_nodes and inode + ilength <= n_nodes:
+                    new_corr = new_correlation(cc, i0, i1, inode, n_nodes, BBt)
+                    corr_change = new_corr[0] - corr_orig
+                    corr_change_seg[ix] = corr_change
+                    ordering_seg[ix] = new_corr[1]
+            ix = corr_change_seg.argmax()
+            corr_change = corr_change_seg[ix]
+            if corr_change > 1e-3:
+                improved = True
+                break
+
+        if not improved:
+            break
+        else:
+            ordering = ordering_seg[ix]
+            ilength = (ix // n_test // n_nodes) + test_lengths[tl,0]
+            i0 = ((ix // n_test) % n_nodes)
+            inode = (ix % n_test)*n_skip + k%n_skip
+            i1 = (i0 + ilength)
+            if corr_change > 1e-3:
+                # move segment
+                cc, ishift = shift_matrix(cc, i0, i1, inode, n_nodes, ordering)
+                inds = inds[ishift]
+                corr_new = elementwise_mult_sum(cc, BBt)
+                if verbose:
+                    print(k, i0, i1, inode, ordering, corr_change, corr_new - corr_orig, corr_new)
+                corr_orig = corr_new
+                seg_len[k] = i1 - i0
+    return cc, inds, seg_len
+
+@njit('float32[:] (float32[:,:], float32[:,:], int64, int64, int64, int64, float32[:,:], float32[:,:])', nogil=True)
+def new_correlation_tdelay(cc, cc_tdelay, i0, i1, inode, n_nodes, BBt, BBt_triu):
+    """ compute correlation change of moving segment i0:i1 to position inode
+    """
+    ishift = shift_inds(i0, i1, inode, n_nodes)
+    cc_new = cc.copy()[ishift][:,ishift]
+    cc_new_tdelay = cc_tdelay.copy()[ishift][:,ishift]
+    ilength = i1 - i0
+    
+    corr_new = (elementwise_mult_sum(cc_new, BBt) + 
+                    2*elementwise_mult_sum(cc_new_tdelay, BBt_triu))
+    ordering = 0
+
+    if ilength > 1:
+        ishift[inode:inode+ilength] = ishift[inode:inode+ilength][::-1].copy()
+        cc_new = cc.copy()[ishift][:,ishift]
+        cc_new_tdelay = cc_tdelay.copy()[ishift][:,ishift]
+        corr_new0 = (elementwise_mult_sum(cc_new, BBt) + 
+                        2*elementwise_mult_sum(cc_new_tdelay, BBt_triu))
+        if corr_new0 > corr_new:
+            corr_new = corr_new0 
+            ordering = 1
+
+    corr_out = np.zeros(2, np.float32)
+    corr_out[0] = corr_new
+    corr_out[1] = ordering
+
+    return corr_out
+
+@njit('(float32[:,:], float32[:,:], int64, int64, int64, float32[:,:], float32[:,:], boolean)', nogil=True, parallel=True)
+def tsp_tdelay(cc, cc_tdelay, n_iter, n_nodes, n_skip, BBt, BBt_triu, verbose):
+    inds = np.arange(0, n_nodes).astype(np.int32)
+    iinds = np.arange(0, n_nodes).astype(np.int32)
+    seg_len = np.ones(n_iter)
+    n_len = 2
+    n_test = n_nodes//n_skip
+    test_lengths = np.arange(0, ((n_nodes)//n_len)*n_len).reshape(-1,n_len) + 1
+    corr_orig = 0
+
+    corr_change_seg = -np.inf * np.ones(n_len * n_nodes * n_test, np.float32)
+    ordering_seg = -np.inf * np.ones(n_len *  n_nodes * n_test, np.float32)
+    for k in range(n_iter):
+        improved = False
+        if corr_orig==0:
+            corr_orig = (elementwise_mult_sum(cc, BBt) + 
+                            2*elementwise_mult_sum(cc_tdelay, BBt_triu))
+        for tl in range(len(test_lengths)):
+            corr_change_seg[:] = -np.inf
+            for ix in prange(0, n_len*n_nodes*n_test):
+                ilength = (ix // n_test // n_nodes) + test_lengths[tl,0]
+                i0 = ((ix // n_test) % n_nodes)
+                inode = (ix % n_test)*n_skip + k%n_skip
+                i1 = (i0 + ilength)
+                if i1 <= n_nodes and inode + ilength <= n_nodes:
+                    new_corr = new_correlation_tdelay(cc, cc_tdelay, 
+                                                        i0, i1, inode, n_nodes, 
+                                                        BBt, BBt_triu)
+                    corr_change = new_corr[0] - corr_orig
+                    corr_change_seg[ix] = corr_change
+                    ordering_seg[ix] = new_corr[1]
+            ix = corr_change_seg.argmax()
+            corr_change = corr_change_seg[ix]
+            if corr_change > 1e-3:
+                improved = True
+                break
+
+        if not improved:
+            break
+        else:
+            ordering = ordering_seg[ix]
+            ilength = (ix // n_test // n_nodes) + test_lengths[tl,0]
+            i0 = ((ix // n_test) % n_nodes)
+            inode = (ix % n_test)*n_skip + k%n_skip
+            i1 = (i0 + ilength)
+            if corr_change > 1e-3:
+                # move segment
+                ishift = shift_inds(i0, i1, inode, n_nodes)
+                if ordering==1:
+                    ishift[inode:inode+ilength] = ishift[inode:inode+ilength][::-1].copy()
+                cc_new = cc[ishift][:,ishift]
+                cc_new_tdelay = cc_tdelay[ishift][:,ishift]
+                inds = inds[ishift]
+                corr_new = (elementwise_mult_sum(cc_new, BBt) + 
+                                2*elementwise_mult_sum(cc_new_tdelay, BBt_triu))
+                if verbose:
+                    print(k, i0, i1, inode, ordering, corr_change, (corr_new - corr_orig), corr_new)
+                cc = cc_new 
+                cc_tdelay = cc_new_tdelay
+                corr_orig = corr_new
+                seg_len[k] = i1 - i0
+    return cc, cc_tdelay, inds, seg_len
+
+
+def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, verbose=False):
+    """ matches correlation matrix cc to B@B.T basis functions """
+    n_nodes = (cc.shape[0])
+    if n_skip is None:
+        n_skip = max(1, n_nodes // 30)
+    cc = cc.astype(np.float32)
+
+    n_components = 1
+
+    if alpha > 0:
+        basis = .5
+        B, plaw = create_ND_basis(n_components, n_nodes, int(n_nodes*basis), flag=False)
+        B = B[1:]
+        plaw = plaw[1:]
+        n_basis, n_nodes = B.shape
+        B /= plaw[:,np.newaxis] ** (alpha/2)
+        B_norm = (B**2).sum(axis=0)**0.5
+        B = B / B_norm
+        BBt = B.T @ B #/ (B**2).sum(axis=1)
+
+        x = np.arange(0, 1.0, 1.0/n_nodes)[:n_nodes]
+        BBt = compute_BBt(x, x)
+        #TS = np.tril(np.triu(BBt, -1), 1)
+        #BBt += TS
+        BBt = BBt.astype(np.float32)
+
+    else:
+        BBt = np.ones((n_nodes, n_nodes))
+        BBt = np.tril(np.triu(BBt, -1), 1)
+
+    n_iter = np.int64(n_iter)
+    
+    cc, inds, seg_len = tsp_fast(cc, n_iter, n_nodes, n_skip, BBt.astype(np.float32), verbose)
+    if n_skip > 1:
+        cc, inds2, seg_len2 = tsp_fast(cc, n_iter, n_nodes, 1, BBt.astype(np.float32), verbose)
+        inds = inds[inds2]
+
+    return cc, inds, seg_len
+
 @njit('int32[:] (int64, int64, int64, int64, int64)', nogil=True)
-def shift_inds(i0, i1, inode, isforward, n_nodes):
+def shift_inds_sub(i0, i1, inode, isforward, n_nodes):
     """ shift segment from i0->i1 to position inode"""
     n_seg = i1 - i0 + 1
     inds = np.arange(0, n_nodes, 1, np.int32)
@@ -70,204 +323,24 @@ def shift_inds(i0, i1, inode, isforward, n_nodes):
     return inds
 
 @njit('(float32[:,:], int32[:])', nogil=True)
-def shift_matrix(cc, ishift):
+def shift_matrix_sub(cc, ishift):
     return cc[ishift][:,ishift]
 
 @njit('(float32[:,:], int32[:])', nogil=True)
 def shift_rows(cc, ishift):
     return cc[ishift]
 
-@njit('float32 (float32[:,:], int64, int64, int64, int64, int64, float32[:,:], int64, int64)', nogil=True)
-def new_correlation(cc, i0, i1, inode, n_nodes, isforward, BBt, edge_min, edge_max):
-    """ compute correlation change of moving segment i0:i1+1 to position inode
-    inode=-1 is at beginning of sequence
-    """
-    ishift = shift_inds(i0, i1, inode, isforward, edge_max - edge_min)
-    iinds = np.arange(0, n_nodes).astype(np.int32)
-    iinds[edge_min : edge_max] = ishift + edge_min
-    cc2 = shift_matrix(cc, iinds)
-    corr_new = elementwise_mult_sum(cc2, BBt)
-    return corr_new
-
 @njit('float32 (float32[:,:], float32[:,:], int64, int64, int64, int64, int64, float32[:,:], float32[:,:])', nogil=True)
 def new_correlation_sub(cc, cc_add, i0, i1, inode, n_nodes, isforward, BBt, BBt_add):
     """ compute correlation change of moving segment i0:i1+1 to position inode
     inode=-1 is at beginning of sequence
     """
-    ishift = shift_inds(i0, i1, inode, isforward, n_nodes)
-    cc2 = shift_matrix(cc, ishift)
+    ishift = shift_inds_sub(i0, i1, inode, isforward, n_nodes)
+    cc2 = shift_matrix_sub(cc, ishift)
     cc_add2 = shift_rows(cc_add, ishift)
     corr_new = elementwise_mult_sum(cc2, BBt) + 4*elementwise_mult_sum(cc_add2, BBt_add)
     return corr_new
 
-@njit('(float32[:,:], int32, int32, int32, float32[:,:], float32)', nogil=True)
-def test_segment(cc, i0, i1, n_nodes, BBt, corr_orig):
-    """ test movements of segment i0 and i1 and return optimal """
-    test_nodes = np.arange(-1, n_nodes, 1, np.int32)
-    n_test = len(test_nodes)
-    iinds = np.arange(0, n_nodes, 1, np.int32)
-    if n_test > 0:
-        corr_changes = np.inf * np.ones((n_test))
-        forward_min = np.zeros(n_test, np.int32)
-        for ip in range(len(test_nodes)):
-            inode = test_nodes[ip]
-            if inode < i0 or inode > i1+1:
-                for isforward in [0,1]:
-                    new_dist = new_correlation(cc, i0, i1, inode, n_nodes, isforward, BBt, 0, n_nodes)
-                    if not isforward:
-                        corr_changes[ip] = corr_orig - new_dist
-                    else:
-                        if corr_orig - new_dist < corr_changes[ip]:
-                            corr_changes[ip] = corr_orig - new_dist
-                            forward_min[ip] = 1
-        ip = corr_changes.argmin()
-        corr_change_min = corr_changes[ip]
-        inode = test_nodes[ip]
-        isforward = forward_min[ip]
-        return inode, corr_change_min, isforward
-    else:
-        return 0, 0, 0
-
-@njit('(float32[:,:], int32, int32, float32[:,:], int32[:,:])', nogil=True, parallel=True)
-def tsp_greedy(cc, n_iter, n_nodes, BBt, test_segs):
-    inds = np.arange(0, n_nodes)
-    n_segs = len(test_segs)
-    seg_len = np.ones(n_iter)
-    for k in range(n_iter):
-        params = np.inf * np.ones((n_segs, 5), np.float32)
-        corr_orig = (cc * BBt).sum()
-        for ix in prange(len(test_segs)):
-            i0, i1 = test_segs[ix]
-            inode, corr_change_min, isforward = test_segment(
-                        cc, i0, i1, n_nodes, BBt, corr_orig)
-            params[ix] = np.array([i0, i1, inode, corr_change_min, isforward])
-
-        ix = params[:,3].argmin()
-        i0, i1, inode, corr_change_min, isforward = params[ix]
-        i0, i1, inode = int(i0), int(i1), int(inode)
-        n_seg = i1 - i0 + 1
-        if corr_change_min < -1e-3:
-            print(i0, i1, inode)
-            true_dists = (cc * BBt).sum()
-
-            # move segment
-            ishift = shift_inds(i0, i1, inode, isforward, n_nodes)
-            inds = inds[ishift]
-            cc = shift_matrix(cc, ishift)#np.ix_(ishift, ishift)]
-
-            new_dists = elementwise_mult_sum(cc, BBt)
-            print(k, corr_change_min, new_dists - true_dists, new_dists)
-            seg_len[k] = i1 - i0
-        else:
-            break
-    return cc, inds, seg_len
-
-@njit('(float32[:,:], int64, int64, int64, float32[:,:], int64, int64, boolean)', nogil=True, parallel=True)
-def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, edge_min, edge_max, verbose):
-    n_nodes_check = edge_max - edge_min
-    inds = np.arange(0, n_nodes_check).astype(np.int32)
-    iinds = np.arange(0, n_nodes).astype(np.int32)
-    seg_len = np.ones(n_iter)
-    n_len = 2
-    n_test = n_nodes_check//n_skip + 1
-    test_lengths = np.arange(0, ((n_nodes_check - 1)//n_len)*n_len).reshape(-1,n_len)
-    corr_orig = 0
-
-    corr_change_seg = -np.inf * np.ones(n_len * n_nodes_check * n_test, np.float32)
-    isforward_seg = -np.inf * np.ones(n_len *  n_nodes_check * n_test, np.float32)
-    for k in range(n_iter):
-        improved = False
-        if corr_orig==0:
-            corr_orig = elementwise_mult_sum(cc, BBt) 
-        for tl in range(len(test_lengths)):
-            corr_change_seg[:] = -np.inf
-            for ix in prange(0, n_len*n_nodes_check*n_test):
-                seg_length = (ix // n_test // n_nodes_check) + test_lengths[tl,0]
-                i0 = ((ix // n_test) % n_nodes_check)
-                inode = (ix % n_test)*n_skip - 1 + k%n_skip
-                i1 = (i0 + seg_length)
-                if i1 < n_nodes_check and (inode < i0 or inode > i1+1) and inode < n_nodes_check:
-                    isforward = 1
-                    new_corr = new_correlation(cc, i0, i1, inode, n_nodes, 1, BBt, edge_min, edge_max)
-                    if seg_length > 0:
-                        new_corr_backward = new_correlation(cc, i0, i1, inode, n_nodes, 0, BBt, edge_min, edge_max)
-                        if new_corr < new_corr_backward:
-                            isforward = 0
-                            new_corr = new_corr_backward
-                    corr_change = new_corr - corr_orig
-                    corr_change_seg[ix] = corr_change
-                    isforward_seg[ix] = isforward
-            ix = corr_change_seg.argmax()
-            corr_change = corr_change_seg[ix]
-            if corr_change > 1e-3:
-                improved = True
-                break
-
-        if not improved:
-            break
-        else:
-            isforward = isforward_seg[ix]
-            seg_length = (ix // n_test // n_nodes_check) + test_lengths[tl,0]
-            i0 = ((ix // n_test) % n_nodes_check) 
-            inode = (ix % n_test)*n_skip - 1 + k%n_skip
-            i1 = (i0 + seg_length)
-            if corr_change > 1e-3:
-                # move segment
-                ishift = shift_inds(i0, i1, inode, isforward, n_nodes_check)
-                inds = inds[ishift]
-                iinds[edge_min : edge_max] = ishift + edge_min
-                cc = shift_matrix(cc, iinds)
-                corr_new = elementwise_mult_sum(cc, BBt)
-                if verbose:
-                    print(k, i0, i1, inode, corr_change, corr_new - corr_orig, corr_new)
-                corr_orig = corr_new
-                seg_len[k] = i1 - i0
-    iinds = np.arange(0, n_nodes).astype(np.int32)
-    iinds[edge_min : edge_max] = inds + edge_min
-    return cc, iinds, seg_len
-
-
-def travelling_salesman(cc, n_iter=400, alpha=1.0, edge_min=0, edge_max=-1, n_skip=None, greedy=False, verbose=False):
-    """ matches correlation matrix cc to B@B.T basis functions """
-    n_nodes = (cc.shape[0])
-    if n_skip is None:
-        n_skip = max(1, n_nodes // 30)
-    cc = cc.astype(np.float32)
-
-    if edge_max==-1:
-        edge_max = n_nodes
-
-    n_components = 1
-
-    if alpha > 0:
-        basis = .5
-        B, plaw = create_ND_basis(n_components, n_nodes, int(n_nodes*basis), flag=False)
-        B = B[1:]
-        plaw = plaw[1:]
-        n_basis, n_nodes = B.shape
-        B /= plaw[:,np.newaxis] ** (alpha/2)
-        B_norm = (B**2).sum(axis=0)**0.5
-        B = B / B_norm
-        BBt = B.T @ B #/ (B**2).sum(axis=1)
-
-        #x = np.arange(0, 1.0, 1.0/n_nodes)
-        #BBt = compute_BBt(x, x)
-    else:
-        BBt = np.ones((n_nodes, n_nodes))
-        BBt = np.tril(np.triu(BBt, -1), 1)
-
-    n_iter = np.int64(n_iter)
-    if greedy:
-        seg_iterator = itertools.combinations_with_replacement(np.arange(0, n_nodes), 2)
-        test_segs = np.array([ts for ts in seg_iterator]).astype(np.int32)
-        cc, inds, seg_len = tsp_greedy(cc, n_iter, n_nodes, BBt.astype(np.float32))
-    else:
-        cc, inds, seg_len = tsp_fast(cc, n_iter, n_nodes, n_skip, BBt.astype(np.float32), edge_min, edge_max, verbose)
-        if n_skip > 1:
-            cc, inds2, seg_len2 = tsp_fast(cc, n_iter, n_nodes, 1, BBt.astype(np.float32), edge_min, edge_max, verbose)
-            inds = inds[inds2]
-
-    return cc, inds, seg_len
 
 @njit('(float32[:,:], float32[:,:], int64, int64, int64, float32[:,:],float32[:,:], boolean)', nogil=True, parallel=True)
 def tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add, verbose):
@@ -318,8 +391,8 @@ def tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add, verbose):
             i1 = (i0 + seg_length)
             if corr_change > 1e-3:
                 # move segment
-                ishift = shift_inds(i0, i1, inode, isforward, n_nodes)
-                cc = shift_matrix(cc, ishift)
+                ishift = shift_inds_sub(i0, i1, inode, isforward, n_nodes)
+                cc = shift_matrix_sub(cc, ishift)
                 cc_add = shift_rows(cc_add, ishift)
                 corr_new = elementwise_mult_sum(cc, BBt) + 4*elementwise_mult_sum(cc_add, BBt_add)
                 inds = inds[ishift]
@@ -328,6 +401,7 @@ def tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add, verbose):
                 corr_orig = corr_new
                 seg_len[k] = i1 - i0
     return cc, inds, seg_len
+
 
 def matrix_matching(cc, BBt, cc_add, BBt_add, n_iter=400, n_skip=None, verbose=False):
     """ matches correlation matrix cc to BBt and cc_add to BBt_add """
@@ -355,10 +429,12 @@ def compute_BBt(xi, yi, alpha=1e3):
     #BBt = 1 / (1 + alpha * (xi[:,np.newaxis] - yi)**2)**0.5
     return BBt
 
-def cluster_split_and_sort(U, n_clusters=50, nc=25, n_splits=4, alpha=1.0, sticky=True):
+def cluster_split_and_sort(U, n_clusters=50, nc=25, 
+                            n_splits=4, alpha=1.0, 
+                            sticky=True, verbose=False):
     U_nodes, imax = kmeans(U, n_clusters=n_clusters)
     cc = U_nodes @ U_nodes.T
-    cc,inds,seg_len = travelling_salesman(cc, verbose=False, alpha=alpha)
+    cc,inds,seg_len = travelling_salesman(cc, verbose=verbose, alpha=alpha)
     U_nodes = U_nodes[inds]
     
     n_PCs = U_nodes.shape[1]
