@@ -7,10 +7,10 @@ from scipy.stats import zscore
 
 def kmeans(X, n_clusters=100):
     X_norm = 1 #(1e-10 + (X**2).sum(axis=0)**.5)
-    model = KMeans(n_init=1, n_clusters=n_clusters, random_state=0).fit(X / X_norm)
+    model = KMeans(n_init=1, n_clusters=n_clusters, init = 'random', random_state=0).fit(X / X_norm)
     X_nodes = model.cluster_centers_ * X_norm
-    X_nodes = X_nodes / (1e-10 + ((X_nodes**2).sum(axis=1))[:,np.newaxis])**.5  
-    cc = X @ X_nodes.T 
+    X_nodes = X_nodes / (1e-10 + ((X_nodes**2).sum(axis=1))[:,np.newaxis])**.5
+    cc = X @ X_nodes.T
     imax = cc.argmax(axis=1)
     return X_nodes, imax
 
@@ -50,6 +50,23 @@ def create_ND_basis(dims, nclust, K, flag=True):
 @njit('float32 (float32[:,:], float32[:,:])', nogil=True)
 def elementwise_mult_sum(x, y):
     return (x * y).sum()
+
+@njit('int64[:] (int64, int64, int64, int64)', nogil=True)
+def shift_inds2(i0, i1, inode, n_nodes):
+   """ shift segment from i0->i1 to position inode"""
+   n_seg = i1 + 1 - i0
+   l_seg = inode + 1 - i0
+   if l_seg>=0:
+       inds = np.concatenate((np.arange(i0),
+                              np.arange(i1+1,i1+1+l_seg),
+                              np.arange(i0, i1+1),
+                              np.arange(i1+1+l_seg, n_nodes)))
+   else:
+       inds = np.concatenate((np.arange(inode+1),
+                              np.arange(i0, i1+1),
+                              np.arange(inode+1, i0),
+                              np.arange(i1+1,n_nodes)))
+   return inds
 
 @njit('int32[:] (int64, int64, int64, int64, int64)', nogil=True)
 def shift_inds(i0, i1, inode, isforward, n_nodes):
@@ -178,7 +195,7 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, edge_min, edge_max, verbose):
     for k in range(n_iter):
         improved = False
         if corr_orig==0:
-            corr_orig = elementwise_mult_sum(cc, BBt) 
+            corr_orig = elementwise_mult_sum(cc, BBt)
         for tl in range(len(test_lengths)):
             corr_change_seg[:] = -np.inf
             for ix in prange(0, n_len*n_nodes_check*n_test):
@@ -208,7 +225,7 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, edge_min, edge_max, verbose):
         else:
             isforward = isforward_seg[ix]
             seg_length = (ix // n_test // n_nodes_check) + test_lengths[tl,0]
-            i0 = ((ix // n_test) % n_nodes_check) 
+            i0 = ((ix // n_test) % n_nodes_check)
             inode = (ix % n_test)*n_skip - 1 + k%n_skip
             i1 = (i0 + seg_length)
             if corr_change > 1e-3:
@@ -250,8 +267,10 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, edge_min=0, edge_max=-1, n_sk
         B = B / B_norm
         BBt = B.T @ B #/ (B**2).sum(axis=1)
 
-        #x = np.arange(0, 1.0, 1.0/n_nodes)
-        #BBt = compute_BBt(x, x)
+        x = np.arange(0, 1.0, 1.0/n_nodes)
+        BBt = compute_BBt(x, x)
+
+        #BBt = np.tril(np.triu(BBt, -1), 1)
     else:
         BBt = np.ones((n_nodes, n_nodes))
         BBt = np.tril(np.triu(BBt, -1), 1)
@@ -313,7 +332,7 @@ def tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add, verbose):
         else:
             isforward = isforward_seg[ix]
             seg_length = (ix // n_test // n_nodes) + test_lengths[tl,0]
-            i0 = ((ix // n_test) % n_nodes) 
+            i0 = ((ix // n_test) % n_nodes)
             inode = (ix % n_test)*n_skip - 1 + k%n_skip
             i1 = (i0 + seg_length)
             if corr_change > 1e-3:
@@ -331,7 +350,7 @@ def tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add, verbose):
 
 def matrix_matching(cc, BBt, cc_add, BBt_add, n_iter=400, n_skip=None, verbose=False):
     """ matches correlation matrix cc to BBt and cc_add to BBt_add """
-    
+
     n_nodes = (cc.shape[0])
     if n_skip is None:
         n_skip = max(1, n_nodes // 30)
@@ -339,7 +358,7 @@ def matrix_matching(cc, BBt, cc_add, BBt_add, n_iter=400, n_skip=None, verbose=F
     cc_add = cc_add.astype(np.float32)
     BBt = BBt.astype(np.float32)
     BBt_add = BBt_add.astype(np.float32)
-    
+
     n_components = 1
 
     n_iter = np.int64(n_iter)
@@ -351,16 +370,18 @@ def matrix_matching(cc, BBt, cc_add, BBt_add, n_iter=400, n_skip=None, verbose=F
     return cc, inds, seg_len
 
 def compute_BBt(xi, yi, alpha=1e3):
-    BBt = - np.log(1e-10 + ((xi[:,np.newaxis] - yi)**2)**0.5)
+    ds = np.abs(xi[:,np.newaxis] - yi)
+    mask = ds < 1/len(xi) + .001
+    BBt = - np.log(1e-10 + ds) * (1 + 5*mask)
     #BBt = 1 / (1 + alpha * (xi[:,np.newaxis] - yi)**2)**0.5
     return BBt
 
 def cluster_split_and_sort(U, n_clusters=50, nc=25, n_splits=4, alpha=1.0, sticky=True):
     U_nodes, imax = kmeans(U, n_clusters=n_clusters)
     cc = U_nodes @ U_nodes.T
-    cc,inds,seg_len = travelling_salesman(cc, verbose=False, alpha=alpha)
+    cc,inds,seg_len = travelling_salesman(cc, verbose=True, alpha=alpha)
     U_nodes = U_nodes[inds]
-    
+
     n_PCs = U_nodes.shape[1]
     ineurons = (U @ U_nodes.T).argmax(axis=1)
     for k in range(n_splits):
@@ -384,8 +405,8 @@ def cluster_split_and_sort(U, n_clusters=50, nc=25, n_splits=4, alpha=1.0, stick
 
             BBt_add = compute_BBt(x, y)
 
-            cc_out,inds,seg_len = matrix_matching(cc, BBt, 
-                                                    cc_add, BBt_add, 
+            cc_out,inds,seg_len = matrix_matching(cc, BBt,
+                                                    cc_add, BBt_add,
                                                     verbose=False)#cc.shape[0]-25)
             U_nodes0 = U_nodes0[inds]
             ineurons_new[in_set] = 2*nc*i + (U[in_set] @ U_nodes0.T).argmax(axis=1)
@@ -394,7 +415,7 @@ def cluster_split_and_sort(U, n_clusters=50, nc=25, n_splits=4, alpha=1.0, stick
         U_nodes = U_nodes_new.copy()
         ineurons = ineurons_new.copy()
     Y_nodes = np.arange(0, U_nodes.shape[0])[:,np.newaxis]
-    
+
     if not sticky:
         ineurons = (U @ U_nodes.T).argmax(axis=1)
     return U_nodes, Y_nodes, ineurons
