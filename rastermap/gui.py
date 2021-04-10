@@ -1,12 +1,11 @@
 import sys, time, os
-
 import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtCore
 from matplotlib import cm
 from scipy.stats import zscore
 from .mapping import Rastermap
-from . import menus, guiparts
+from . import menus, guiparts, io
 
 class MainW(QtGui.QMainWindow):
     def __init__(self):
@@ -102,26 +101,46 @@ class MainW(QtGui.QMainWindow):
         layout.setRowStretchFactor(1,3)
 
         # add bin size across neurons
-        ysm = QtGui.QLabel("<font color='gray'>bin_neurons</font>")
-        ysm.setFixedWidth(60)
-        self.l0.addWidget(ysm, 0, 0, 1, 1)
+        ysm = QtGui.QLabel("<font color='gray'>Bin neurons:</font>")
         self.smooth = QtGui.QLineEdit(self)
         self.smooth.setValidator(QtGui.QIntValidator(0, 500))
         self.smooth.setText("10")
         self.smooth.setFixedWidth(45)
         self.smooth.setAlignment(QtCore.Qt.AlignRight)
         self.smooth.returnPressed.connect(self.plot_activity)
-        self.l0.addWidget(self.smooth, 0, 1, 1, 1)
 
-        self.heatmap_checkBox = QtGui.QCheckBox("Heatmap (Behaviour)")
+        params = QtGui.QLabel("<font color='gray'>Rastermap parameters</font>")
+        params.setAlignment(QtCore.Qt.AlignCenter)
+        self.run_embedding_button = QtGui.QPushButton('Run embedding')
+        self.run_embedding_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.run_embedding_button.clicked.connect(self.run_RMAP)
+        self.run_embedding_button.setEnabled(False)
+
+        self.RadioGroup = QtGui.QButtonGroup()
+        self.default_param_radiobutton = QtGui.QRadioButton("Default")
+        self.default_param_radiobutton.setStyleSheet("color: gray;")
+        self.default_param_radiobutton.setChecked(True)
+        self.default_param_radiobutton.toggled.connect(lambda: io.set_params(self))
+        self.RadioGroup.addButton(self.default_param_radiobutton)
+        self.custom_param_radiobutton = QtGui.QRadioButton("Custom")
+        self.custom_param_radiobutton.setStyleSheet("color: gray;")
+        self.custom_param_radiobutton.toggled.connect(lambda: io.get_params(self))
+        self.RadioGroup.addButton(self.custom_param_radiobutton)
+
+        self.heatmap_checkBox = QtGui.QCheckBox("Behaviour")
         self.heatmap_checkBox.setStyleSheet("color: gray;")
         self.heatmap_checkBox.stateChanged.connect(self.update_plot_p4)
-        self.l0.addWidget(self.heatmap_checkBox, 1, 0, 1, 1)
-
+        self.upload_behav_button = QtGui.QPushButton('Upload behavior')
+        self.upload_behav_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.upload_behav_button.clicked.connect(lambda: io.load_behav_data(self))
+        self.upload_behav_button.setEnabled(False)
         self.scatterplot_checkBox = QtGui.QCheckBox("Scatter plot")
         self.scatterplot_checkBox.setStyleSheet("color: gray;")
         self.scatterplot_checkBox.stateChanged.connect(self.update_plot_p5)
-        self.l0.addWidget(self.scatterplot_checkBox, 2, 0, 1, 1)
+        self.upload_run_button = QtGui.QPushButton('Upload run')
+        self.upload_run_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.upload_run_button.clicked.connect(lambda: io.load_run_data(self))
+        self.upload_run_button.setEnabled(False)
 
         # add slider for levels
         self.sat = [0.3,0.7]
@@ -132,7 +151,6 @@ class MainW(QtGui.QMainWindow):
         qlabel.setStyleSheet('color: white;')
         self.img.setLevels([self.sat[0], self.sat[1]])
         self.imgROI.setLevels([self.sat[0], self.sat[1]])
-        self.l0.addWidget(qlabel,3,1,3,2)
 
         # ROI on main plot
         redpen = pg.mkPen(pg.mkColor(255, 0, 0),
@@ -166,30 +184,59 @@ class MainW(QtGui.QMainWindow):
         self.p2.addItem(self.LINE)
         self.LINE.setZValue(10)  # make sure ROI is drawn above image
 
-
         greenpen = pg.mkPen(pg.mkColor(0, 255, 0),
                                 width=3,
                                 style=QtCore.Qt.SolidLine)
         
         self.tpos = -0.5
         self.tsize = 1
-        self.bloaded = False 
         self.loaded = False
+        self.behav_loaded = False
+        self.run_loaded = False 
+
+        # Add features to window
+        ops_row_pos = 0
+        self.l0.addWidget(ysm, ops_row_pos, 0, 1, 1)
+        self.l0.addWidget(self.smooth, ops_row_pos, 1, 1, 1)
+        self.l0.addWidget(params, ops_row_pos+1, 0, 1, 2)
+        self.l0.addWidget(self.default_param_radiobutton, ops_row_pos+2, 0, 1, 1)
+        self.l0.addWidget(self.custom_param_radiobutton, ops_row_pos+2, 1, 1, 1)
+        self.l0.addWidget(self.run_embedding_button, ops_row_pos+3, 0, 1, 2)
+        self.l0.addWidget(self.upload_behav_button, ops_row_pos+4, 0, 1, 1)
+        self.l0.addWidget(self.heatmap_checkBox, ops_row_pos+4, 1, 1, 1)
+        self.l0.addWidget(self.upload_run_button, ops_row_pos+5, 0, 1, 1)
+        self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+5, 1, 1, 1)
+        self.l0.addWidget(qlabel,ops_row_pos+3,1,3,2)
 
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
         self.show()
 
+    def reset(self):
+        self.run_embedding_button.setEnabled(False)
+        self.heatmap_checkBox.setEnabled(False)
+        self.scatterplot_checkBox.setEnabled(False)
+        self.p1.clear()
+        self.p2.clear()
+        self.p3.clear()
+        self.p4.clear()
+        self.p5.clear()
+        self.loaded = False
+        self.run_loaded = False 
+        self.behav_loaded = False
+
     def update_plot_p4(self):
-        if self.heatmap_checkBox.isChecked():
+        if self.heatmap_checkBox.isChecked() and self.behav_loaded:
             self.win.addItem(self.p4, row=3, col=0, colspan=2)
         else:
+            print("Please upload a behav file")
             self.win.removeItem(self.p4)
         
     def update_plot_p5(self):
-        if self.scatterplot_checkBox.isChecked():
+        if self.scatterplot_checkBox.isChecked() and self.run_loaded:
             self.win.addItem(self.p5, row=1, col=2)
         else:
+            print("Please upload a behav file")
             self.win.removeItem(self.p5)
 
     def plot_clicked(self,event):
@@ -285,7 +332,6 @@ class MainW(QtGui.QMainWindow):
                     self.LINE.setPos([-1, yrange.min()])
                     self.LINE.setSize([self.xrange.size+1,  yrange.size])
 
-    
     def roi_range(self, roi):
         pos = roi.pos()
         posy = pos.y()
@@ -306,7 +352,7 @@ class MainW(QtGui.QMainWindow):
             avg /= avg.max()
             self.p3.clear()
             self.p3.plot(self.xrange,avg,pen=(255,0,0))
-            if self.bloaded:
+            if self.run_loaded:
                 self.p3.plot(self.parent.beh_time,self.parent.beh,pen='w')
             self.p3.setXRange(self.xrange[0],self.xrange[-1])
             self.p3.show()
@@ -464,48 +510,21 @@ class MainW(QtGui.QMainWindow):
                 self.p0.addItem(self.xp)
             self.show()
             self.loaded = True
+            self.upload_behav_button.setEnabled(True)
+            self.upload_run_button.setEnabled(True)
 
     def run_RMAP(self):
-        n_clusters = 50
-        n_neurons = self.sp.shape[0] 
-        n_splits = min(4, n_neurons//1000)
-        grid_upsample = min(10, n_neurons // (n_splits * (n_clusters+1)))
+        if self.default_param_radiobutton.isChecked():
+            io.set_params(self)
         model = Rastermap(smoothness=1, 
-                                       n_clusters=n_clusters, 
+                                       n_clusters=self.n_clusters, 
                                        n_PCs=200, 
-                                       n_splits=n_splits,
-                                       grid_upsample=grid_upsample).fit(self.sp)
+                                       n_splits=self.n_splits,
+                                       grid_upsample=self.grid_upsample).fit(self.sp)
 
         self.embedding = model.embedding
         self.sorting = model.isort
         self.plot_activity()
-
-    def load_behavior(self):
-        name = QtGui.QFileDialog.getOpenFileName(
-            self, "Open *.npy", filter="*.npy"
-        )
-        name = name[0]
-        bloaded = False
-        try:
-            beh = np.load(name)
-            beh = beh.flatten()
-            if beh.size == self.sp.shape[1]:
-                self.bloaded = True
-        except (ValueError, KeyError, OSError,
-                RuntimeError, TypeError, NameError):
-            print("ERROR: this is not a 1D array with length of data")
-        if self.bloaded:
-            beh -= beh.min()
-            beh /= beh.max()
-            self.beh = beh
-            b = len(self.colors)
-            self.colorbtns.button(b).setEnabled(True)
-            self.colorbtns.button(b).setStyleSheet(self.styleUnpressed)
-            fig.beh_masks(self)
-            fig.plot_trace(self)
-            self.show()
-        else:
-            print("ERROR: this is not a 1D array with length of data")
 
 def run():
     # Always start by initializing Qt (only once per application)
