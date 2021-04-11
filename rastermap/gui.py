@@ -76,7 +76,7 @@ class MainW(QtGui.QMainWindow):
         self.p2.setMouseEnabled(x=False,y=False)
         self.p2.hideAxis('bottom')
         self.p3 = self.win.addPlot(title='Avg. activity (zoomed in neurons)',row=2,col=0,
-                                    colspan=2)
+                                    colspan=2, padding=0)
         self.p3.setMouseEnabled(x=False,y=False)
         self.p3.setLabel('bottom', 'Time')
         self.p4 = self.win.addPlot(title='Heatmap',row=3,col=0,colspan=2)
@@ -120,11 +120,11 @@ class MainW(QtGui.QMainWindow):
         self.default_param_radiobutton = QtGui.QRadioButton("Default")
         self.default_param_radiobutton.setStyleSheet("color: gray;")
         self.default_param_radiobutton.setChecked(True)
-        self.default_param_radiobutton.toggled.connect(lambda: io.set_params(self))
+        self.default_param_radiobutton.toggled.connect(lambda: io.set_rastermap_params(self))
         self.RadioGroup.addButton(self.default_param_radiobutton)
         self.custom_param_radiobutton = QtGui.QRadioButton("Custom")
         self.custom_param_radiobutton.setStyleSheet("color: gray;")
-        self.custom_param_radiobutton.toggled.connect(lambda: io.get_params(self))
+        self.custom_param_radiobutton.toggled.connect(lambda: io.get_rastermap_params(self))
         self.RadioGroup.addButton(self.custom_param_radiobutton)
 
         self.heatmap_checkBox = QtGui.QCheckBox("Behaviour")
@@ -146,9 +146,8 @@ class MainW(QtGui.QMainWindow):
         self.sat = [0.3,0.7]
         slider = guiparts.SatSlider(self)
         slider.setTickPosition(QtGui.QSlider.TicksBelow)
-        self.l0.addWidget(slider, 0,2,3,1)
-        qlabel = guiparts.VerticalLabel(text='saturation')
-        qlabel.setStyleSheet('color: white;')
+        sat_label = guiparts.VerticalLabel(text='Saturation')
+        sat_label.setStyleSheet('color: white;')
         self.img.setLevels([self.sat[0], self.sat[1]])
         self.imgROI.setLevels([self.sat[0], self.sat[1]])
 
@@ -206,7 +205,8 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(self.heatmap_checkBox, ops_row_pos+4, 1, 1, 1)
         self.l0.addWidget(self.upload_run_button, ops_row_pos+5, 0, 1, 1)
         self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+5, 1, 1, 1)
-        self.l0.addWidget(qlabel,ops_row_pos+3,1,3,2)
+        self.l0.addWidget(slider, ops_row_pos,2,3,1)
+        self.l0.addWidget(sat_label,ops_row_pos,2,3,2)
 
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
@@ -228,16 +228,30 @@ class MainW(QtGui.QMainWindow):
     def update_plot_p4(self):
         if self.heatmap_checkBox.isChecked() and self.behav_loaded:
             self.win.addItem(self.p4, row=3, col=0, colspan=2)
+        elif self.heatmap_checkBox.isChecked() and self.behav_loaded:
+            try:
+                print("Please upload a behav file")
+                self.win.removeItem(self.p4)
+            except Exception as e:
+                return
         else:
-            print("Please upload a behav file")
-            self.win.removeItem(self.p4)
+            return
         
     def update_plot_p5(self):
         if self.scatterplot_checkBox.isChecked() and self.run_loaded:
             self.win.addItem(self.p5, row=1, col=2)
+            self.win.removeItem(self.p1)
+            self.win.addItem(self.p1, row=0, col=1, colspan=2)
+        elif not self.scatterplot_checkBox.isChecked() and self.run_loaded:
+            try:
+                print("Please upload a run data file")
+                self.win.removeItem(self.p5)
+                self.win.removeItem(self.p1)
+                self.win.addItem(self.p1, row=0, col=1)
+            except Exception as e:
+                return
         else:
-            print("Please upload a behav file")
-            self.win.removeItem(self.p5)
+            return
 
     def plot_clicked(self,event):
         items = self.win.scene().items(event.scenePos())
@@ -353,8 +367,9 @@ class MainW(QtGui.QMainWindow):
             self.p3.clear()
             self.p3.plot(self.xrange,avg,pen=(255,0,0))
             if self.run_loaded:
-                self.p3.plot(self.parent.beh_time,self.parent.beh,pen='w')
+                self.plot_run_data()
             self.p3.setXRange(self.xrange[0],self.xrange[-1])
+            self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
             self.p3.show()
         
     def LINE_position(self):
@@ -398,7 +413,6 @@ class MainW(QtGui.QMainWindow):
             self.smooth_activity()
             nn = self.sp_smoothed.shape[0]
             nt = self.sp_smoothed.shape[1]
-            print(nn, nt)
             self.img.setImage(self.sp_smoothed)
             self.img.setLevels([self.sat[0],self.sat[1]])
             self.p1.setXRange(-nt*0.01, nt*1.01, padding=0)
@@ -414,6 +428,28 @@ class MainW(QtGui.QMainWindow):
         self.show()
         self.win.show()
 
+    def plot_run_data(self):
+        avg = self.run_data
+        avg -= avg.min()
+        avg /= avg.max()
+        avg = avg[self.xrange]
+        self.p3.plot(self.xrange, avg, pen=(0,255,0))
+        self.p3.setXRange(self.xrange[0],self.xrange[-1])
+        self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
+        self.p3.show()
+
+    def plot_behav_data(self):
+        beh = zscore(self.behav_data, axis=1)
+        heatmap = pg.ImageItem(beh)
+        colormap = cm.get_cmap("gray_r")
+        colormap._init()
+        lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
+        lut = lut[0:-3,:]
+        # apply the colormap
+        heatmap.setLookupTable(lut)
+        self.p4.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
+        self.p4.addItem(heatmap)
+
     def load_iscell(self):
         basename,filename = os.path.split(self.filebase)
         try:
@@ -426,96 +462,9 @@ class MainW(QtGui.QMainWindow):
             file_iscell = None
         return iscell, file_iscell
 
-    def load_proc(self, name=None):
-        if name is None:
-            name = QtGui.QFileDialog.getOpenFileName(
-                self, "Open processed file", filter="*.npy"
-                )
-            self.fname = name[0]
-            name = self.fname
-            print(name)
-        else:
-            self.fname = name
-        try:
-            proc = np.load(name, allow_pickle=True)
-            proc = proc.item()
-            self.proc = proc
-            # do not load X, use reconstruction
-            #X    = np.load(self.proc['filename'])
-            self.filebase = self.proc['filename']
-            y    = self.proc['embedding']
-            print(y.shape)
-            u    = self.proc['uv'][0]
-            v    = self.proc['uv'][1]
-            ops  = self.proc['ops']
-            X    = u @ v.T
-        except (ValueError, KeyError, OSError,
-                RuntimeError, TypeError, NameError):
-            print('ERROR: this is not a *.npy file :( ')
-            X = None
-        if X is not None:
-            self.filebase = self.proc['filename']
-            iscell, file_iscell = self.load_iscell()
-
-            # check if training set used
-            if 'train_time' in self.proc:
-                if self.proc['train_time'].sum() < self.proc['train_time'].size:
-                    # not all training pts used
-                    X    = np.load(self.proc['filename'])
-                    # show only test timepoints
-                    X    = X[:,~self.proc['train_time']]
-                    if iscell is not None:
-                        if iscell.size == X.shape[0]:
-                            X = X[iscell, :]
-                            print('using iscell.npy in folder')
-                    if len(X.shape) > 2:
-                        X = X.mean(axis=-1)
-                    v = (u.T @ X).T
-                    v /= ((v**2).sum(axis=0))**0.5
-                    X = u @ v.T
-                    print(X.shape)
-            self.startROI = False
-            self.endROI = False
-            self.posROI = np.zeros((3,2))
-            self.prect = np.zeros((5,2))
-            self.ROIs = []
-            self.ROIorder = []
-            self.Rselected = []
-            self.Rcolors = []
-            self.p0.clear()
-            self.sp = X#zscore(X, axis=1)
-            del X
-            self.sp += 1
-            self.sp /= 9
-            self.embedding = y
-            if ops['n_components'] > 1:
-                self.embedded = True
-                self.enable_embedded()
-            else:
-                self.p0.clear()
-                self.embedded=False
-                self.disable_embedded()
-
-            self.enable_loaded()
-            #self.usv = usv
-            self.U   = u #@ np.diag(usv[1])
-            ineur = 0
-
-            self.ROI_position()
-            if self.embedded:
-                self.plot_embedding()
-                self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
-                                         symbol='x', pen=pg.mkPen(color=(255,0,0,255), width=3),
-                                         size=12)#brush=pg.mkBrush(color=(255,0,0,255)), size=14)
-                self.p0.addItem(self.xp)
-            self.show()
-            self.loaded = True
-            self.upload_behav_button.setEnabled(True)
-            self.upload_run_button.setEnabled(True)
-
     def run_RMAP(self):
         if self.default_param_radiobutton.isChecked():
-            io.set_params(self)
+            io.set_rastermap_params(self)
         model = Rastermap(smoothness=1, 
                                        n_clusters=self.n_clusters, 
                                        n_PCs=200, 

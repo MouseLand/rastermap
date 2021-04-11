@@ -224,7 +224,7 @@ class Slider(QtGui.QSlider):
         self.setTickPosition(QtGui.QSlider.TicksLeft)
         self.setTickInterval(10)
         self.valueChanged.connect(lambda: self.level_change(parent,bid))
-        self.setTracking(False)
+        self.setTracking(True)
 
     def level_change(self, parent, bid):
         parent.sat[bid] = float(self.value())/100
