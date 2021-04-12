@@ -3,7 +3,7 @@ import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtCore
 from matplotlib import cm
-from scipy.stats import zscore
+from scipy.stats import zscore, pearsonr
 from .mapping import Rastermap
 from . import menus, guiparts, io
 
@@ -84,12 +84,14 @@ class MainW(QtGui.QMainWindow):
         self.p4.setLabel('bottom', 'Time')
         self.p5 = self.win.addPlot(title='Scatter plot',row=1,col=2)
         self.p5.setMouseEnabled(x=False,y=False)
-        self.p5.setLabel('bottom', 'time')
         
+        self.run_corr_scatter = pg.ScatterPlotItem()
+        self.neuron_pos_scatter = pg.ScatterPlotItem()
+
         self.win.removeItem(self.p4)
         self.win.removeItem(self.p5)
 
-        # set colormap to viridis
+        # set colormap 
         colormap = cm.get_cmap("gray_r")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
@@ -100,6 +102,7 @@ class MainW(QtGui.QMainWindow):
         layout.setColumnStretchFactor(1,3)
         layout.setRowStretchFactor(1,3)
 
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Options ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # add bin size across neurons
         ysm = QtGui.QLabel("<font color='gray'>Bin neurons:</font>")
         self.smooth = QtGui.QLineEdit(self)
@@ -141,15 +144,36 @@ class MainW(QtGui.QMainWindow):
         self.upload_run_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
         self.upload_run_button.clicked.connect(lambda: io.load_run_data(self))
         self.upload_run_button.setEnabled(False)
+        self.run_corr_checkBox = QtGui.QCheckBox("All neurons")
+        self.run_corr_checkBox.setStyleSheet("color: gray;")
+        self.run_corr_checkBox.stateChanged.connect(self.update_run_corr_plot)
 
         # add slider for levels
         self.sat = [0.3,0.7]
-        slider = guiparts.SatSlider(self)
-        slider.setTickPosition(QtGui.QSlider.TicksBelow)
-        sat_label = guiparts.VerticalLabel(text='Saturation')
+        slider = QtGui.QSlider(QtCore.Qt.Horizontal)      
+        slider.setTickInterval(5)
+        slider.setTracking(False)#guiparts.SatSlider(self)
+        slider.setMaximum(100)
+        slider.setMinimum(0)
+        #slider.setTickPosition(QtGui.QSlider)
+        sat_label = QtGui.QLabel("Saturation")#guiparts.VerticalLabel(text='Saturation')
         sat_label.setStyleSheet('color: white;')
         self.img.setLevels([self.sat[0], self.sat[1]])
         self.imgROI.setLevels([self.sat[0], self.sat[1]])
+
+        # Add drop down options for scatter plot
+        self.scatter_comboBox = QtGui.QComboBox(self)
+        self.scatter_comboBox.setFixedWidth(120)
+        scatter_comboBox_ops = ["-- Select --", "Run correlation", "Neuron position"]
+        self.scatter_comboBox.setEditable(True)
+        self.scatter_comboBox.addItems(scatter_comboBox_ops)
+        self.scatter_comboBox.setCurrentIndex(0)
+        line_edit = self.scatter_comboBox.lineEdit()
+        line_edit.setAlignment(QtCore.Qt.AlignCenter)  
+        line_edit.setReadOnly(True)
+        self.scatter_comboBox.setCurrentIndex(0)
+        self.scatter_comboBox.hide()
+        self.scatter_comboBox.currentIndexChanged.connect(self.scatter_comboBox_changed)
 
         # ROI on main plot
         redpen = pg.mkPen(pg.mkColor(255, 0, 0),
@@ -192,6 +216,7 @@ class MainW(QtGui.QMainWindow):
         self.loaded = False
         self.behav_loaded = False
         self.run_loaded = False 
+        self.embedded = False
 
         # Add features to window
         ops_row_pos = 0
@@ -202,11 +227,13 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(self.custom_param_radiobutton, ops_row_pos+2, 1, 1, 1)
         self.l0.addWidget(self.run_embedding_button, ops_row_pos+3, 0, 1, 2)
         self.l0.addWidget(self.upload_behav_button, ops_row_pos+4, 0, 1, 1)
-        self.l0.addWidget(self.heatmap_checkBox, ops_row_pos+4, 1, 1, 1)
-        self.l0.addWidget(self.upload_run_button, ops_row_pos+5, 0, 1, 1)
+        self.l0.addWidget(self.upload_run_button, ops_row_pos+4, 1, 1, 1)
+        self.l0.addWidget(self.heatmap_checkBox, ops_row_pos+5, 0, 1, 1)
         self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+5, 1, 1, 1)
-        self.l0.addWidget(slider, ops_row_pos,2,3,1)
-        self.l0.addWidget(sat_label,ops_row_pos,2,3,2)
+        self.l0.addWidget(slider, ops_row_pos,2,1,2)
+        self.l0.addWidget(sat_label,ops_row_pos,2,1,1)
+        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+12,11,1,1)
+        self.l0.addWidget(self.run_corr_checkBox,ops_row_pos+12,12,1,1)
 
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
@@ -225,16 +252,46 @@ class MainW(QtGui.QMainWindow):
         self.run_loaded = False 
         self.behav_loaded = False
 
+    def scatter_comboBox_changed(self):
+        request = self.scatter_comboBox.currentIndex()
+        if request == 1 and self.run_loaded and self.embedded:
+            self.run_corr = self.get_run_corr()
+            self.run_corr_scatter.setData(self.run_corr, self.embedding[self.selected].squeeze(), symbol='o', 
+                                            brush=(1,1,1,1),hoverable=True, hoverSize=15)
+            self.p5.addItem(self.run_corr_scatter)
+            self.p5.setLabel('bottom', "Pearson's correlation")
+            self.p5.setLabel('left', "Embedding position")
+        elif request == 2:
+            self.p5.removeItem(self.run_corr_scatter)
+            print("get xpos ypos dat")
+        else:
+            return
+
+    def get_run_corr(self, all_neurons=False):
+        if all_neurons:
+            r = np.zeros(self.sp.shape[0])
+            for i in range(len((r)):
+                r[i], _ = pearsonr(self.sp_smoothed[i], self.run_data)
+        else:
+            r = np.zeros(len(self.selected))
+            for i, neuron in enumerate(self.selected):
+                r[i], _ = pearsonr(self.sp_smoothed[neuron], self.run_data)
+        return r, r_all
+
+    def update_run_corr_plot(self):
+        if self.run_corr_checkBox.isChecked():
+            self.get_run_corr
+
     def update_plot_p4(self):
         if self.heatmap_checkBox.isChecked() and self.behav_loaded:
             self.win.addItem(self.p4, row=3, col=0, colspan=2)
-        elif self.heatmap_checkBox.isChecked() and self.behav_loaded:
+        elif not self.heatmap_checkBox.isChecked() and self.behav_loaded:
             try:
-                print("Please upload a behav file")
                 self.win.removeItem(self.p4)
             except Exception as e:
                 return
         else:
+            print("Please upload a behav file")
             return
         
     def update_plot_p5(self):
@@ -242,15 +299,17 @@ class MainW(QtGui.QMainWindow):
             self.win.addItem(self.p5, row=1, col=2)
             self.win.removeItem(self.p1)
             self.win.addItem(self.p1, row=0, col=1, colspan=2)
+            self.scatter_comboBox.show()
         elif not self.scatterplot_checkBox.isChecked() and self.run_loaded:
             try:
-                print("Please upload a run data file")
                 self.win.removeItem(self.p5)
                 self.win.removeItem(self.p1)
                 self.win.addItem(self.p1, row=0, col=1)
+                self.scatter_comboBox.hide()
             except Exception as e:
                 return
         else:
+            print("Please upload a run data file")
             return
 
     def plot_clicked(self,event):
@@ -377,14 +436,18 @@ class MainW(QtGui.QMainWindow):
         self.selected = yrange.astype('int')
         self.plot_traces()
 
-
     def ROI_position(self):
         xrange,_ = self.roi_range(self.ROI)
         self.xrange = xrange
+        # Update zoom in plot
         self.imgROI.setImage(self.sp_smoothed[:, self.xrange])
         self.p2.setXRange(0,self.xrange.size)
-
+        # Update avg. activity and other data loaded (behaviour and running)
         self.plot_traces()
+        if self.run_loaded:
+            self.plot_run_data()
+        if self.behav_loaded:
+            self.plot_behav_data()
 
         # reset ROIs
         self.LINE.maxBounds = QtCore.QRectF(-1,-1.,
@@ -396,7 +459,6 @@ class MainW(QtGui.QMainWindow):
         axx = self.p2.getAxis('bottom')
         #axy.setTicks([[(0.0,str(yrange[0])),(float(yrange.size),str(yrange[-1]))]])
         self.imgROI.setLevels([self.sat[0], self.sat[1]])
-
 
     def smooth_activity(self):
         N = int(self.smooth.text())
@@ -439,9 +501,9 @@ class MainW(QtGui.QMainWindow):
         self.p3.show()
 
     def plot_behav_data(self):
-        beh = zscore(self.behav_data, axis=1)
+        beh = zscore(self.behav_data, axis=1)[:,self.xrange]
         heatmap = pg.ImageItem(beh)
-        colormap = cm.get_cmap("gray_r")
+        colormap = cm.get_cmap("coolwarm")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
         lut = lut[0:-3,:]
@@ -472,6 +534,7 @@ class MainW(QtGui.QMainWindow):
                                        grid_upsample=self.grid_upsample).fit(self.sp)
 
         self.embedding = model.embedding
+        self.embedded = True
         self.sorting = model.isort
         self.plot_activity()
 

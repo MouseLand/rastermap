@@ -221,7 +221,7 @@ class Slider(QtGui.QSlider):
         self.setMinimum(0)
         self.setMaximum(100)
         self.setValue(parent.sat[bid]*100)
-        self.setTickPosition(QtGui.QSlider.TicksLeft)
+        self.setTickPosition(QtGui.QSlider)
         self.setTickInterval(10)
         self.valueChanged.connect(lambda: self.level_change(parent,bid))
         self.setTracking(True)

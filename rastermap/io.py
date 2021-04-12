@@ -44,103 +44,106 @@ def load_mat(parent, name=None):
         parent.run_embedding_button.setEnabled(True)
         parent.upload_behav_button.setEnabled(True)
         parent.upload_run_button.setEnabled(True)
-        print('File loaded')
 
 def get_rastermap_params(parent):
-    dialog = QtWidgets.QDialog()
-    dialog.setWindowTitle("Set rastermap parameters")
-    dialog.verticalLayout = QtWidgets.QVBoxLayout(dialog)
+    if parent.custom_param_radiobutton.isChecked():
+        dialog = QtWidgets.QDialog()
+        dialog.setWindowTitle("Set rastermap parameters")
+        dialog.verticalLayout = QtWidgets.QVBoxLayout(dialog)
 
-    # Param options
-    dialog.n_clusters_label = QtWidgets.QLabel(dialog)
-    dialog.n_clusters_label.setTextFormat(QtCore.Qt.RichText)
-    dialog.n_clusters_label.setText("n_clusters:")
-    dialog.n_clusters = QtGui.QLineEdit()
-    dialog.n_clusters.setText(str(50))
+        # Param options
+        dialog.n_clusters_label = QtWidgets.QLabel(dialog)
+        dialog.n_clusters_label.setTextFormat(QtCore.Qt.RichText)
+        dialog.n_clusters_label.setText("n_clusters:")
+        dialog.n_clusters = QtGui.QLineEdit()
+        dialog.n_clusters.setText(str(50))
 
-    dialog.n_neurons_label = QtWidgets.QLabel(dialog)
-    dialog.n_neurons_label.setTextFormat(QtCore.Qt.RichText)
-    dialog.n_neurons_label.setText("n_neurons:")
-    dialog.n_neurons = QtGui.QLineEdit()
-    dialog.n_neurons.setText(str(parent.sp.shape[0]))
+        dialog.n_neurons_label = QtWidgets.QLabel(dialog)
+        dialog.n_neurons_label.setTextFormat(QtCore.Qt.RichText)
+        dialog.n_neurons_label.setText("n_neurons:")
+        dialog.n_neurons = QtGui.QLineEdit()
+        dialog.n_neurons.setText(str(parent.sp.shape[0]))
 
-    dialog.grid_upsample_label = QtWidgets.QLabel(dialog)
-    dialog.grid_upsample_label.setTextFormat(QtCore.Qt.RichText)
-    dialog.grid_upsample_label.setText("grid_upsample:")
-    dialog.grid_upsample = QtGui.QLineEdit()
-    dialog.grid_upsample.setText(str(10))
+        dialog.grid_upsample_label = QtWidgets.QLabel(dialog)
+        dialog.grid_upsample_label.setTextFormat(QtCore.Qt.RichText)
+        dialog.grid_upsample_label.setText("grid_upsample:")
+        dialog.grid_upsample = QtGui.QLineEdit()
+        dialog.grid_upsample.setText(str(10))
 
-    dialog.n_splits_label = QtWidgets.QLabel(dialog)
-    dialog.n_splits_label.setTextFormat(QtCore.Qt.RichText)
-    dialog.n_splits_label.setText("n_splits:")
-    dialog.n_splits = QtGui.QLineEdit()
-    dialog.n_splits.setText(str(4))
+        dialog.n_splits_label = QtWidgets.QLabel(dialog)
+        dialog.n_splits_label.setTextFormat(QtCore.Qt.RichText)
+        dialog.n_splits_label.setText("n_splits:")
+        dialog.n_splits = QtGui.QLineEdit()
+        dialog.n_splits.setText(str(4))
 
-    dialog.ok_button = QtGui.QPushButton('Ok')
-    dialog.ok_button.setDefault(True)
-    dialog.ok_button.clicked.connect(lambda: custom_set_params(parent, dialog))
-    dialog.cancel_button = QtGui.QPushButton('Cancel')
-    dialog.cancel_button.clicked.connect(dialog.close)
+        dialog.ok_button = QtGui.QPushButton('Ok')
+        dialog.ok_button.setDefault(True)
+        dialog.ok_button.clicked.connect(lambda: custom_set_params(parent, dialog))
+        dialog.cancel_button = QtGui.QPushButton('Cancel')
+        dialog.cancel_button.clicked.connect(dialog.close)
 
-    # Set layout of options
-    dialog.widget = QtWidgets.QWidget(dialog)
-    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget)
-    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
-    dialog.horizontalLayout.setObjectName("horizontalLayout")
-    dialog.horizontalLayout.addWidget(dialog.n_clusters_label)
-    dialog.horizontalLayout.addWidget(dialog.n_clusters)
+        # Set layout of options
+        dialog.widget = QtWidgets.QWidget(dialog)
+        dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget)
+        dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+        dialog.horizontalLayout.setObjectName("horizontalLayout")
+        dialog.horizontalLayout.addWidget(dialog.n_clusters_label)
+        dialog.horizontalLayout.addWidget(dialog.n_clusters)
 
-    dialog.widget2 = QtWidgets.QWidget(dialog)
-    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget2)
-    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
-    dialog.horizontalLayout.setObjectName("horizontalLayout")
-    dialog.horizontalLayout.addWidget(dialog.n_neurons_label)
-    dialog.horizontalLayout.addWidget(dialog.n_neurons)
+        dialog.widget2 = QtWidgets.QWidget(dialog)
+        dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget2)
+        dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+        dialog.horizontalLayout.setObjectName("horizontalLayout")
+        dialog.horizontalLayout.addWidget(dialog.n_neurons_label)
+        dialog.horizontalLayout.addWidget(dialog.n_neurons)
 
-    dialog.widget3 = QtWidgets.QWidget(dialog)
-    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget3)
-    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
-    dialog.horizontalLayout.setObjectName("horizontalLayout")
-    dialog.horizontalLayout.addWidget(dialog.grid_upsample_label)
-    dialog.horizontalLayout.addWidget(dialog.grid_upsample)
+        dialog.widget3 = QtWidgets.QWidget(dialog)
+        dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget3)
+        dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+        dialog.horizontalLayout.setObjectName("horizontalLayout")
+        dialog.horizontalLayout.addWidget(dialog.grid_upsample_label)
+        dialog.horizontalLayout.addWidget(dialog.grid_upsample)
 
-    dialog.widget4 = QtWidgets.QWidget(dialog)
-    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget4)
-    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
-    dialog.horizontalLayout.setObjectName("horizontalLayout")
-    dialog.horizontalLayout.addWidget(dialog.n_splits_label)
-    dialog.horizontalLayout.addWidget(dialog.n_splits)
+        dialog.widget4 = QtWidgets.QWidget(dialog)
+        dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget4)
+        dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+        dialog.horizontalLayout.setObjectName("horizontalLayout")
+        dialog.horizontalLayout.addWidget(dialog.n_splits_label)
+        dialog.horizontalLayout.addWidget(dialog.n_splits)
 
-    dialog.widget5 = QtWidgets.QWidget(dialog)
-    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget5)
-    dialog.horizontalLayout.addWidget(dialog.cancel_button)
-    dialog.horizontalLayout.addWidget(dialog.ok_button)
+        dialog.widget5 = QtWidgets.QWidget(dialog)
+        dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget5)
+        dialog.horizontalLayout.addWidget(dialog.cancel_button)
+        dialog.horizontalLayout.addWidget(dialog.ok_button)
 
-    # Add options to dialog box
-    dialog.verticalLayout.addWidget(dialog.widget)
-    dialog.verticalLayout.addWidget(dialog.widget2)
-    dialog.verticalLayout.addWidget(dialog.widget3)
-    dialog.verticalLayout.addWidget(dialog.widget4)
-    dialog.verticalLayout.addWidget(dialog.widget5)
+        # Add options to dialog box
+        dialog.verticalLayout.addWidget(dialog.widget)
+        dialog.verticalLayout.addWidget(dialog.widget2)
+        dialog.verticalLayout.addWidget(dialog.widget3)
+        dialog.verticalLayout.addWidget(dialog.widget4)
+        dialog.verticalLayout.addWidget(dialog.widget5)
 
-    dialog.adjustSize()
-    dialog.exec_()
+        dialog.adjustSize()
+        dialog.exec_()
 
 def set_rastermap_params(parent):
-    parent.n_clusters = 50
-    parent.n_neurons = parent.sp.shape[0]
-    if parent.n_neurons > 1000:
-        parent.n_splits = min(4, parent.n_neurons//1000)
-    else:
-        parent.n_splits = 4
-    parent.grid_upsample = min(10, parent.n_neurons // (parent.n_splits * (parent.n_clusters+1)))
- 
+    if parent.default_param_radiobutton.isChecked():
+        print("Setting default params")
+        parent.n_clusters = 50
+        parent.n_neurons = parent.sp.shape[0]
+        if parent.n_neurons > 1000:
+            parent.n_splits = min(4, parent.n_neurons//1000)
+        else:
+            parent.n_splits = 4
+        parent.grid_upsample = min(10, parent.n_neurons // (parent.n_splits * (parent.n_clusters+1)))
+    
 def custom_set_params(parent, dialogBox):
     try:
         parent.n_clusters = int(dialogBox.n_clusters.text())
         parent.n_neurons = int(dialogBox.n_neurons.text())
         parent.grid_upsample = int(dialogBox.grid_upsample.text())
         parent.n_splits = int(dialogBox.n_splits.text())
+        print("Setting custom rastermap params")
     except Exception as e:
         QtGui.QMessageBox.about(parent, 'Error','Invalid input entered')
         print(e)
@@ -155,7 +158,7 @@ def load_behav_data(parent):
     parent.behav_loaded = False
     try:
         beh = np.load(name)
-        if beh.ndim == 2:
+        if beh.ndim == 2 and beh.shape[1] == parent.sp.shape[1]:
             parent.behav_loaded = True
             print("Behav file loaded")
     except (ValueError, KeyError, OSError,
@@ -185,9 +188,21 @@ def load_run_data(parent):
     if parent.run_loaded:
         parent.run_data = run
         parent.plot_run_data()
+        if parent.scatterplot_checkBox.isChecked():
+            parent.scatterplot_checkBox.setChecked(True)
     else:
         return
+"""
+def load_xpos(parent):
 
+
+def load_ypos(parent):
+
+"""
+
+def save_proc(parent):
+    return
+    
 def load_proc(parent, name=None):
     if name is None:
         name = QtGui.QFileDialog.getOpenFileName(
@@ -255,11 +270,13 @@ def load_proc(parent, name=None):
             parent.embedded=False
             parent.disable_embedded()
 
-        parent.enable_loaded()
-        #parent.usv = usv
         parent.U   = u #@ np.diag(usv[1])
         ineur = 0
-
+        parent.loaded = True
+        parent.embedded = True
+        parent.run_embedding_button.setEnabled(True)
+        parent.upload_behav_button.setEnabled(True)
+        parent.upload_run_button.setEnabled(True)
         parent.ROI_position()
         if parent.embedded:
             parent.plot_embedding()
@@ -268,7 +285,3 @@ def load_proc(parent, name=None):
                                         size=12)#brush=pg.mkBrush(color=(255,0,0,255)), size=14)
             parent.p0.addItem(parent.xp)
         parent.show()
-        parent.loaded = True
-        parent.run_embedding_button.setEnabled(True)
-        parent.upload_behav_button.setEnabled(True)
-        parent.upload_run_button.setEnabled(True)
