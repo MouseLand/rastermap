@@ -1,241 +1,11 @@
 import sys, time, os
-
 import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtCore
 from matplotlib import cm
-from scipy.stats import zscore
+from scipy.stats import zscore, pearsonr
 from .mapping import Rastermap
-
-# custom vertical label
-class VerticalLabel(QtGui.QWidget):
-    def __init__(self, text=None):
-        super(self.__class__, self).__init__()
-        self.text = text
-
-    def paintEvent(self, event):
-        painter = QtGui.QPainter(self)
-        painter.setPen(QtCore.Qt.white)
-        painter.translate(0, 0)
-        painter.rotate(90)
-        if self.text:
-            painter.drawText(0, 0, self.text)
-        painter.end()
-
-class RangeSlider(QtGui.QSlider):
-    """ A slider for ranges.
-
-        This class provides a dual-slider for ranges, where there is a defined
-        maximum and minimum, as is a normal slider, but instead of having a
-        single slider value, there are 2 slider values.
-
-        This class emits the same signals as the QSlider base class, with the
-        exception of valueChanged
-
-        Found this slider here: https://www.mail-archive.com/pyqt@riverbankcomputing.com/msg22889.html
-        and modified it
-    """
-    def __init__(self, parent=None, *args):
-        super(RangeSlider, self).__init__(*args)
-
-        self._low = self.minimum()
-        self._high = self.maximum()
-
-        self.pressed_control = QtGui.QStyle.SC_None
-        self.hover_control = QtGui.QStyle.SC_None
-        self.click_offset = 0
-
-        self.setOrientation(QtCore.Qt.Vertical)
-        self.setTickPosition(QtGui.QSlider.TicksRight)
-        self.setStyleSheet(\
-                "QSlider::handle:horizontal {\
-                background-color: white;\
-                border: 1px solid #5c5c5c;\
-                border-radius: 0px;\
-                border-color: black;\
-                height: 8px;\
-                width: 6px;\
-                margin: -8px 2; \
-                }")
-        # 0 for the low, 1 for the high, -1 for both
-        self.active_slider = 0
-        self.parent = parent
-
-    def level_change(self):
-        self.saturation = [self._low, self._high]
-
-    def low(self):
-        return self._low
-
-    def setLow(self, low):
-        self._low = low
-        self.update()
-
-    def high(self):
-        return self._high
-
-    def setHigh(self, high):
-        self._high = high
-        self.update()
-
-    def paintEvent(self, event):
-        # based on http://qt.gitorious.org/qt/qt/blobs/master/src/gui/widgets/qslider.cpp
-        painter = QtGui.QPainter(self)
-        style = QtGui.QApplication.style()
-        for i, value in enumerate([self._low, self._high]):
-            opt = QtGui.QStyleOptionSlider()
-            self.initStyleOption(opt)
-            # Only draw the groove for the first slider so it doesn't get drawn
-            # on top of the existing ones every time
-            if i == 0:
-                opt.subControls = QtGui.QStyle.SC_SliderHandle#QtGui.QStyle.SC_SliderGroove | QtGui.QStyle.SC_SliderHandle
-            else:
-                opt.subControls = QtGui.QStyle.SC_SliderHandle
-            if self.tickPosition() != self.NoTicks:
-                opt.subControls |= QtGui.QStyle.SC_SliderTickmarks
-            if self.pressed_control:
-                opt.activeSubControls = self.pressed_control
-                opt.state |= QtGui.QStyle.State_Sunken
-            else:
-                opt.activeSubControls = self.hover_control
-            opt.sliderPosition = value
-            opt.sliderValue = value
-            style.drawComplexControl(QtGui.QStyle.CC_Slider, opt, painter, self)
-
-    def mousePressEvent(self, event):
-        event.accept()
-        style = QtGui.QApplication.style()
-        button = event.button()
-        if button:
-            opt = QtGui.QStyleOptionSlider()
-            self.initStyleOption(opt)
-            self.active_slider = -1
-            for i, value in enumerate([self._low, self._high]):
-                opt.sliderPosition = value
-                hit = style.hitTestComplexControl(style.CC_Slider, opt, event.pos(), self)
-                if hit == style.SC_SliderHandle:
-                    self.active_slider = i
-                    self.pressed_control = hit
-                    self.triggerAction(self.SliderMove)
-                    self.setRepeatAction(self.SliderNoAction)
-                    self.setSliderDown(True)
-                    break
-            if self.active_slider < 0:
-                self.pressed_control = QtGui.QStyle.SC_SliderHandle
-                self.click_offset = self.__pixelPosToRangeValue(self.__pick(event.pos()))
-                self.triggerAction(self.SliderMove)
-                self.setRepeatAction(self.SliderNoAction)
-        else:
-            event.ignore()
-    def mouseMoveEvent(self, event):
-        if self.pressed_control != QtGui.QStyle.SC_SliderHandle:
-            event.ignore()
-            return
-        event.accept()
-        new_pos = self.__pixelPosToRangeValue(self.__pick(event.pos()))
-        opt = QtGui.QStyleOptionSlider()
-        self.initStyleOption(opt)
-        if self.active_slider < 0:
-            offset = new_pos - self.click_offset
-            self._high += offset
-            self._low += offset
-            if self._low < self.minimum():
-                diff = self.minimum() - self._low
-                self._low += diff
-                self._high += diff
-            if self._high > self.maximum():
-                diff = self.maximum() - self._high
-                self._low += diff
-                self._high += diff
-        elif self.active_slider == 0:
-            if new_pos >= self._high:
-                new_pos = self._high - 1
-            self._low = new_pos
-        else:
-            if new_pos <= self._low:
-                new_pos = self._low + 1
-            self._high = new_pos
-        self.click_offset = new_pos
-        self.update()
-    def mouseReleaseEvent(self, event):
-        self.level_change()
-    def __pick(self, pt):
-        if self.orientation() == QtCore.Qt.Horizontal:
-            return pt.x()
-        else:
-            return pt.y()
-    def __pixelPosToRangeValue(self, pos):
-        opt = QtGui.QStyleOptionSlider()
-        self.initStyleOption(opt)
-        style = QtGui.QApplication.style()
-
-        gr = style.subControlRect(style.CC_Slider, opt, style.SC_SliderGroove, self)
-        sr = style.subControlRect(style.CC_Slider, opt, style.SC_SliderHandle, self)
-
-        if self.orientation() == QtCore.Qt.Horizontal:
-            slider_length = sr.width()
-            slider_min = gr.x()
-            slider_max = gr.right() - slider_length + 1
-        else:
-            slider_length = sr.height()
-            slider_min = gr.y()
-            slider_max = gr.bottom() - slider_length + 1
-
-        return style.sliderValueFromPosition(self.minimum(), self.maximum(),
-                                             pos-slider_min, slider_max-slider_min,
-                                             opt.upsideDown)
-
-class SatSlider(RangeSlider):
-    def __init__(self, parent=None):
-        super(SatSlider, self).__init__(parent)
-        self.parent = parent
-        self.setMinimum(0)
-        self.setMaximum(100)
-        self.setLow(30)
-        self.setHigh(70)
-
-    def level_change(self):
-        self.parent.sat[0] = float(self._low)/100
-        self.parent.sat[1] = float(self._high)/100
-        self.parent.img.setLevels([self.parent.sat[0],self.parent.sat[1]])
-        self.parent.imgROI.setLevels([self.parent.sat[0],self.parent.sat[1]])
-        self.parent.win.show()
-
-class NeuronSlider(RangeSlider):
-    def __init__(self, parent=None):
-        super(SatSlider, self).__init__(parent)
-        self.parent = parent
-        self.setMinimum(0)
-        self.setMaximum(100)
-        self.setLow(30)
-        self.setHigh(70)
-
-    def level_change(self):
-        self.parent.sat[0] = float(self._low)/100
-        self.parent.sat[1] = float(self._high)/100
-        self.parent.img.setLevels([self.parent.sat[0],self.parent.sat[1]])
-        self.parent.imgROI.setLevels([self.parent.sat[0],self.parent.sat[1]])
-        self.parent.win.show()
-
-class Slider(QtGui.QSlider):
-    def __init__(self, bid, parent=None):
-        super(self.__class__, self).__init__()
-        self.bid = bid
-        self.setMinimum(0)
-        self.setMaximum(100)
-        self.setValue(parent.sat[bid]*100)
-        self.setTickPosition(QtGui.QSlider.TicksLeft)
-        self.setTickInterval(10)
-        self.valueChanged.connect(lambda: self.level_change(parent,bid))
-        self.setTracking(False)
-
-    def level_change(self, parent, bid):
-        parent.sat[bid] = float(self.value())/100
-        parent.img.setLevels([parent.sat[0],parent.sat[1]])
-        parent.imgROI.setLevels([parent.sat[0],parent.sat[1]])
-        parent.win.show()
-
-
+from . import menus, guiparts, io
 
 class MainW(QtGui.QMainWindow):
     def __init__(self):
@@ -266,43 +36,7 @@ class MainW(QtGui.QMainWindow):
                               "color:gray;}")
         self.loaded = False
 
-        # ------ MENU BAR -----------------
-        loadMat =  QtGui.QAction("&Load data matrix", self)
-        loadMat.setShortcut("Ctrl+L")
-        loadMat.triggered.connect(lambda: self.load_mat(name=None))
-        self.addAction(loadMat)
-        # run rastermap from scratch
-        self.runRMAP = QtGui.QAction("&Run embedding algorithm", self)
-        self.runRMAP.setShortcut("Ctrl+R")
-        self.runRMAP.triggered.connect(self.run_RMAP)
-        self.addAction(self.runRMAP)
-        self.runRMAP.setEnabled(False)
-        # load processed data
-        loadProc = QtGui.QAction("&Load processed data", self)
-        loadProc.setShortcut("Ctrl+P")
-        loadProc.triggered.connect(lambda: self.load_proc(name=None))
-        self.addAction(loadProc)
-        # load a behavioral trace
-        self.loadBeh = QtGui.QAction(
-            "Load behavior or stim trace (1D only)", self
-        )
-        self.loadBeh.triggered.connect(self.load_behavior)
-        self.loadBeh.setEnabled(False)
-        self.addAction(self.loadBeh)
-        # export figure
-        exportFig = QtGui.QAction("Export as image (svg)", self)
-        exportFig.triggered.connect(self.export_fig)
-        exportFig.setEnabled(True)
-        self.addAction(exportFig)
-
-        # make mainmenu!
-        main_menu = self.menuBar()
-        file_menu = main_menu.addMenu("&File")
-        file_menu.addAction(loadMat)
-        #file_menu.addAction(loadProc)
-        file_menu.addAction(self.runRMAP)
-        file_menu.addAction(self.loadBeh)
-        file_menu.addAction(exportFig)
+        menus.mainmenu(self)
 
         self.cwidget = QtGui.QWidget(self)
         self.setCentralWidget(self.cwidget)
@@ -332,8 +66,8 @@ class MainW(QtGui.QMainWindow):
         self.p1.addItem(self.img)
         self.p1.setXRange(0,nt)
         self.p1.setYRange(0,nn)
-        self.p1.setLabel('left', 'neurons')
-        self.p1.setLabel('bottom', 'time')
+        self.p1.setLabel('left', 'Neurons')
+        self.p1.setLabel('bottom', 'Time')
         # zoom in on a selected image region
         self.selected = np.arange(0,nn,1,int)
         self.p2 = self.win.addPlot(title='ZOOM IN',row=1,col=0,colspan=2)
@@ -341,10 +75,23 @@ class MainW(QtGui.QMainWindow):
         self.p2.addItem(self.imgROI)
         self.p2.setMouseEnabled(x=False,y=False)
         self.p2.hideAxis('bottom')
-        self.p3 = self.win.addPlot(title='',row=2,col=0,colspan=2)
+        self.p3 = self.win.addPlot(title='Avg. activity (zoomed in neurons)',row=2,col=0,
+                                    colspan=2, padding=0)
         self.p3.setMouseEnabled(x=False,y=False)
-        self.p3.setLabel('bottom', 'time')
-        # set colormap to viridis
+        self.p3.setLabel('bottom', 'Time')
+        self.p4 = self.win.addPlot(title='Heatmap',row=3,col=0,colspan=2)
+        self.p4.setMouseEnabled(x=False,y=False)
+        self.p4.setLabel('bottom', 'Time')
+        self.p5 = self.win.addPlot(title='Scatter plot',row=1,col=2)
+        self.p5.setMouseEnabled(x=False,y=False)
+        
+        self.scatter_plot = pg.ScatterPlotItem()
+        self.neuron_pos_scatter = pg.ScatterPlotItem()
+
+        self.win.removeItem(self.p4)
+        self.win.removeItem(self.p5)
+
+        # set colormap 
         colormap = cm.get_cmap("gray_r")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
@@ -355,28 +102,78 @@ class MainW(QtGui.QMainWindow):
         layout.setColumnStretchFactor(1,3)
         layout.setRowStretchFactor(1,3)
 
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Options ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # add bin size across neurons
-        ysm = QtGui.QLabel("<font color='white'>y-binning</font>")
-        ysm.setFixedWidth(60)
-        self.l0.addWidget(ysm, 0, 0, 1, 1)
+        ysm = QtGui.QLabel("<font color='gray'>Bin neurons:</font>")
         self.smooth = QtGui.QLineEdit(self)
         self.smooth.setValidator(QtGui.QIntValidator(0, 500))
         self.smooth.setText("10")
         self.smooth.setFixedWidth(45)
         self.smooth.setAlignment(QtCore.Qt.AlignRight)
         self.smooth.returnPressed.connect(self.plot_activity)
-        self.l0.addWidget(self.smooth, 0, 1, 1, 1)
+
+        params = QtGui.QLabel("<font color='gray'>Rastermap parameters</font>")
+        params.setAlignment(QtCore.Qt.AlignCenter)
+        self.run_embedding_button = QtGui.QPushButton('Run embedding')
+        self.run_embedding_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.run_embedding_button.clicked.connect(self.run_RMAP)
+        self.run_embedding_button.setEnabled(False)
+
+        self.RadioGroup = QtGui.QButtonGroup()
+        self.default_param_radiobutton = QtGui.QRadioButton("Default")
+        self.default_param_radiobutton.setStyleSheet("color: gray;")
+        self.default_param_radiobutton.setChecked(True)
+        self.default_param_radiobutton.toggled.connect(lambda: io.set_rastermap_params(self))
+        self.RadioGroup.addButton(self.default_param_radiobutton)
+        self.custom_param_radiobutton = QtGui.QRadioButton("Custom")
+        self.custom_param_radiobutton.setStyleSheet("color: gray;")
+        self.custom_param_radiobutton.toggled.connect(lambda: io.get_rastermap_params(self))
+        self.RadioGroup.addButton(self.custom_param_radiobutton)
+
+        self.heatmap_checkBox = QtGui.QCheckBox("Behaviour")
+        self.heatmap_checkBox.setStyleSheet("color: gray;")
+        self.heatmap_checkBox.stateChanged.connect(self.update_plot_p4)
+        self.upload_behav_button = QtGui.QPushButton('Upload behavior')
+        self.upload_behav_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.upload_behav_button.clicked.connect(lambda: io.load_behav_data(self))
+        self.upload_behav_button.setEnabled(False)
+        self.scatterplot_checkBox = QtGui.QCheckBox("Scatter plot")
+        self.scatterplot_checkBox.setStyleSheet("color: gray;")
+        self.scatterplot_checkBox.stateChanged.connect(self.update_plot_p5)
+        self.upload_run_button = QtGui.QPushButton('Upload run')
+        self.upload_run_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.upload_run_button.clicked.connect(lambda: io.load_run_data(self))
+        self.upload_run_button.setEnabled(False)
+        self.run_corr_checkBox = QtGui.QCheckBox("All neurons")
+        self.run_corr_checkBox.setStyleSheet("color: gray;")
+        self.run_corr_checkBox.hide()
 
         # add slider for levels
         self.sat = [0.3,0.7]
-        slider = SatSlider(self)
-        slider.setTickPosition(QtGui.QSlider.TicksBelow)
-        self.l0.addWidget(slider, 0,2,3,1)
-        qlabel = VerticalLabel(text='saturation')
-        qlabel.setStyleSheet('color: white;')
+        slider = QtGui.QSlider(QtCore.Qt.Horizontal)      
+        slider.setTickInterval(5)
+        slider.setTracking(False)#guiparts.SatSlider(self)
+        slider.setMaximum(100)
+        slider.setMinimum(0)
+        #slider.setTickPosition(QtGui.QSlider)
+        sat_label = QtGui.QLabel("Saturation")#guiparts.VerticalLabel(text='Saturation')
+        sat_label.setStyleSheet('color: white;')
         self.img.setLevels([self.sat[0], self.sat[1]])
         self.imgROI.setLevels([self.sat[0], self.sat[1]])
-        self.l0.addWidget(qlabel,3,1,3,2)
+
+        # Add drop down options for scatter plot
+        self.scatter_comboBox = QtGui.QComboBox(self)
+        self.scatter_comboBox.setFixedWidth(120)
+        scatter_comboBox_ops = ["-- Select --", "Run correlation", "Neuron position", "Neuron depth"]
+        self.scatter_comboBox.setEditable(True)
+        self.scatter_comboBox.addItems(scatter_comboBox_ops)
+        self.scatter_comboBox.setCurrentIndex(0)
+        line_edit = self.scatter_comboBox.lineEdit()
+        line_edit.setAlignment(QtCore.Qt.AlignCenter)  
+        line_edit.setReadOnly(True)
+        self.scatter_comboBox.setCurrentIndex(0)
+        self.scatter_comboBox.hide()
+        self.scatter_comboBox.currentIndexChanged.connect(self.scatter_comboBox_changed)
 
         # ROI on main plot
         redpen = pg.mkPen(pg.mkColor(255, 0, 0),
@@ -410,24 +207,145 @@ class MainW(QtGui.QMainWindow):
         self.p2.addItem(self.LINE)
         self.LINE.setZValue(10)  # make sure ROI is drawn above image
 
-
         greenpen = pg.mkPen(pg.mkColor(0, 255, 0),
                                 width=3,
                                 style=QtCore.Qt.SolidLine)
         
         self.tpos = -0.5
         self.tsize = 1
-        self.bloaded = False 
         self.loaded = False
+        self.run_loaded = False 
+        self.behav_loaded = False
+        self.embedded = False
+        self.run_corr_all = None
+        self.run_corr_selected = None
+        self.xpos_dat = None
+        self.ypos_dat = None
+        self.depth_dat = None
+
+        # Add features to window
+        ops_row_pos = 0
+        self.l0.addWidget(ysm, ops_row_pos, 0, 1, 1)
+        self.l0.addWidget(self.smooth, ops_row_pos, 1, 1, 1)
+        self.l0.addWidget(params, ops_row_pos+1, 0, 1, 2)
+        self.l0.addWidget(self.default_param_radiobutton, ops_row_pos+2, 0, 1, 1)
+        self.l0.addWidget(self.custom_param_radiobutton, ops_row_pos+2, 1, 1, 1)
+        self.l0.addWidget(self.run_embedding_button, ops_row_pos+3, 0, 1, 2)
+        self.l0.addWidget(self.upload_behav_button, ops_row_pos+4, 0, 1, 1)
+        self.l0.addWidget(self.upload_run_button, ops_row_pos+4, 1, 1, 1)
+        self.l0.addWidget(self.heatmap_checkBox, ops_row_pos+5, 0, 1, 1)
+        self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+5, 1, 1, 1)
+        self.l0.addWidget(slider, ops_row_pos,2,1,2)
+        self.l0.addWidget(sat_label,ops_row_pos,2,1,1)
+        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+12,12,1,1)
+        self.l0.addWidget(self.run_corr_checkBox,ops_row_pos+12,13,1,1)
 
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
         self.show()
 
-    def export_fig(self):
-        self.win.scene().contextMenuItem = self.p0
-        self.win.scene().showExportDialog()
+    def reset(self):
+        self.run_embedding_button.setEnabled(False)
+        self.heatmap_checkBox.setEnabled(False)
+        self.scatterplot_checkBox.setEnabled(False)
+        self.p1.clear()
+        self.p2.clear()
+        self.p3.clear()
+        self.p4.clear()
+        self.p5.clear()
+        self.loaded = False
+        self.run_loaded = False 
+        self.behav_loaded = False
+        self.embedded = False
+        self.run_corr_all = None
+        self.run_corr_selected = None
 
+    def scatter_comboBox_changed(self):
+        request = self.scatter_comboBox.currentIndex()
+        self.scatter_plot.clear()
+        if request == 1:
+            if self.run_loaded and self.embedded:
+                self.plot_run_corr()
+            else:
+                print("Please run embedding or upload run data")
+        elif request == 2:
+            if self.xpos_dat is None or self.ypos_dat is None:
+                io.get_neuron_pos_data(self)
+            self.plot_neuron_pos()
+        elif request == 3:
+            if self.depth_dat is None:
+                io.get_neuron_depth_data(self)
+            self.plot_neuron_depth()
+        else:
+            return
+
+    def get_run_corr(self):
+        if self.run_corr_checkBox.isChecked() and self.run_corr_all is None:
+            self.run_corr_all = np.zeros(self.sp_smoothed.shape[0])
+            for i in range(len(self.run_corr_all)):
+                self.run_corr_all[i], _ = pearsonr(self.sp_smoothed[i], self.run_data)
+            return self.run_corr_all
+        elif self.run_corr_checkBox.isChecked():
+            return self.run_corr_all
+        else:
+            self.run_corr_selected = np.zeros(len(self.selected))
+            for i, neuron in enumerate(self.selected):
+                self.run_corr_selected[i], _ = pearsonr(self.sp_smoothed[neuron], self.run_data)
+            return self.run_corr_selected
+
+    def plot_run_corr(self):
+        r = self.get_run_corr()
+        if self.run_corr_checkBox.isChecked(): # all neurons
+            embed = self.embedding[:,0].squeeze()
+        else:                                  # selected neurons
+            embed = self.embedding[self.selected].squeeze()
+        self.scatter_plot.setData(r, embed, symbol='o', brush=(1,1,1,1),
+                                    hoverable=True, hoverSize=15)
+        self.p5.addItem(self.scatter_plot)
+        self.p5.setLabel('left', "Embedding position")
+        self.p5.setLabel('bottom', "Pearson's correlation")
+
+    def plot_neuron_pos(self):
+        self.scatter_plot.setData(self.xpos_dat, -self.ypos_dat, symbol='o', c=self.embedding[:,0].squeeze(),
+                                 hoverable=True, hoverSize=15, cmap=cm.get_cmap("gist_ncar"))
+        self.p5.addItem(self.scatter_plot)
+        self.p5.setLabel('left', "y position")
+        self.p5.setLabel('bottom', "x position")
+
+    def plot_neuron_depth(self):
+        self.scatter_plot.setData(self.depth_dat, self.embedding[:,0].squeeze(), symbol='o', 
+                                brush=(1,1,1,1), hoverable=True, hoverSize=15)
+        self.p5.addItem(self.scatter_plot)
+        self.p5.setLabel('left', "Embedding position")
+        self.p5.setLabel('bottom', "Neuron depth")
+
+    def update_plot_p4(self):
+        if self.heatmap_checkBox.isChecked() and self.behav_loaded:
+            self.win.addItem(self.p4, row=3, col=0, colspan=2)
+        elif not self.heatmap_checkBox.isChecked() and self.behav_loaded:
+            try:
+                self.win.removeItem(self.p4)
+            except Exception as e:
+                return
+        else:
+            print("Please upload a behav file")
+            return
+        
+    def update_plot_p5(self):
+        if self.scatterplot_checkBox.isChecked():
+            self.win.addItem(self.p5, row=1, col=2)
+            self.win.removeItem(self.p1)
+            self.win.addItem(self.p1, row=0, col=1, colspan=2)
+            self.scatter_comboBox.show()
+            self.run_corr_checkBox.show()
+        else:
+            try:
+                self.win.removeItem(self.p5)
+                self.win.removeItem(self.p1)
+                self.win.addItem(self.p1, row=0, col=1)
+                self.scatter_comboBox.hide()
+            except Exception as e:
+                return
 
     def plot_clicked(self,event):
         items = self.win.scene().items(event.scenePos())
@@ -522,7 +440,6 @@ class MainW(QtGui.QMainWindow):
                     self.LINE.setPos([-1, yrange.min()])
                     self.LINE.setSize([self.xrange.size+1,  yrange.size])
 
-    
     def roi_range(self, roi):
         pos = roi.pos()
         posy = pos.y()
@@ -537,29 +454,35 @@ class MainW(QtGui.QMainWindow):
         return xrange,yrange
 
     def plot_traces(self):
-        avg = self.sp_smoothed[np.ix_(self.selected,self.xrange)].mean(axis=0)
-        avg -= avg.min()
-        avg /= avg.max()
-        self.p3.clear()
-        self.p3.plot(self.xrange,avg,pen=(255,0,0))
-        if self.bloaded:
-            self.p3.plot(self.parent.beh_time,self.parent.beh,pen='w')
-        self.p3.setXRange(self.xrange[0],self.xrange[-1])
-        self.p3.show()
+        if self.loaded:
+            avg = self.sp_smoothed[np.ix_(self.selected,self.xrange)].mean(axis=0)
+            avg -= avg.min()
+            avg /= avg.max()
+            self.p3.clear()
+            self.p3.plot(self.xrange,avg,pen=(255,0,0))
+            if self.run_loaded:
+                self.plot_run_trace()
+            self.p3.setXRange(self.xrange[0],self.xrange[-1])
+            self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
+            self.p3.show()
         
     def LINE_position(self):
         _,yrange = self.roi_range(self.LINE)
         self.selected = yrange.astype('int')
         self.plot_traces()
 
-
     def ROI_position(self):
         xrange,_ = self.roi_range(self.ROI)
         self.xrange = xrange
+        # Update zoom in plot
         self.imgROI.setImage(self.sp_smoothed[:, self.xrange])
         self.p2.setXRange(0,self.xrange.size)
-
+        # Update avg. activity and other data loaded (behaviour and running)
         self.plot_traces()
+        if self.run_loaded:
+            self.plot_run_trace()
+        if self.behav_loaded:
+            self.plot_behav_data()
 
         # reset ROIs
         self.LINE.maxBounds = QtCore.QRectF(-1,-1.,
@@ -571,7 +494,6 @@ class MainW(QtGui.QMainWindow):
         axx = self.p2.getAxis('bottom')
         #axy.setTicks([[(0.0,str(yrange[0])),(float(yrange.size),str(yrange[-1]))]])
         self.imgROI.setLevels([self.sat[0], self.sat[1]])
-
 
     def smooth_activity(self):
         N = int(self.smooth.text())
@@ -588,7 +510,6 @@ class MainW(QtGui.QMainWindow):
             self.smooth_activity()
             nn = self.sp_smoothed.shape[0]
             nt = self.sp_smoothed.shape[1]
-            print(nn, nt)
             self.img.setImage(self.sp_smoothed)
             self.img.setLevels([self.sat[0],self.sat[1]])
             self.p1.setXRange(-nt*0.01, nt*1.01, padding=0)
@@ -604,47 +525,27 @@ class MainW(QtGui.QMainWindow):
         self.show()
         self.win.show()
 
-    def load_mat(self, name=None):
-        if name is None:
-            name = QtGui.QFileDialog.getOpenFileName(
-                self, "Open *.npy", filter="*.npy"
-            )
-            self.fname = name[0]
-            self.filebase = name[0]
-        else:
-            self.fname = name
-            self.filebase = name
-        try:
-            X = np.load(self.fname)
-            print(X.shape)
-        except (ValueError, KeyError, OSError,
-                RuntimeError, TypeError, NameError):
-            print('ERROR: this is not a *.npy array :( ')
-            X = None
-        if X is not None and X.ndim > 1:
-            iscell, file_iscell = self.load_iscell()
-            self.file_iscell = None
-            if iscell is not None:
-                if iscell.size == X.shape[0]:
-                    X = X[iscell, :]
-                    self.file_iscell = file_iscell
-                    print('using iscell.npy in folder')
-            if len(X.shape) > 2:
-                X = X.mean(axis=-1)
-            self.p0.clear()
-            self.sp = zscore(X, axis=1)
-            del X
-            self.sp = np.maximum(-4, np.minimum(8, self.sp)) + 4
-            self.sp /= 12
-            self.embedding = np.arange(0, self.sp.shape[0]).astype(np.int64)[:,np.newaxis]
-            self.sorting = np.arange(0, self.sp.shape[0]).astype(np.int64)
-            
-            self.loaded = True
-            self.plot_activity()
-            self.show()
-            self.runRMAP.setEnabled(True)
-            self.loadBeh.setEnabled(True)
-            print('done loading')
+    def plot_run_trace(self):
+        avg = self.run_data
+        avg -= avg.min()
+        avg /= avg.max()
+        avg = avg[self.xrange]
+        self.p3.plot(self.xrange, avg, pen=(0,255,0))
+        self.p3.setXRange(self.xrange[0],self.xrange[-1])
+        self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
+        self.p3.show()
+
+    def plot_behav_data(self):
+        beh = zscore(self.behav_data, axis=1)[:,self.xrange]
+        heatmap = pg.ImageItem(beh)
+        colormap = cm.get_cmap("coolwarm")
+        colormap._init()
+        lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
+        lut = lut[0:-3,:]
+        # apply the colormap
+        heatmap.setLookupTable(lut)
+        self.p4.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
+        self.p4.addItem(heatmap)
 
     def load_iscell(self):
         basename,filename = os.path.split(self.filebase)
@@ -658,132 +559,19 @@ class MainW(QtGui.QMainWindow):
             file_iscell = None
         return iscell, file_iscell
 
-    def load_proc(self, name=None):
-        if name is None:
-            name = QtGui.QFileDialog.getOpenFileName(
-                self, "Open processed file", filter="*.npy"
-                )
-            self.fname = name[0]
-            name = self.fname
-            print(name)
-        else:
-            self.fname = name
-        try:
-            proc = np.load(name, allow_pickle=True)
-            proc = proc.item()
-            self.proc = proc
-            # do not load X, use reconstruction
-            #X    = np.load(self.proc['filename'])
-            self.filebase = self.proc['filename']
-            y    = self.proc['embedding']
-            print(y.shape)
-            u    = self.proc['uv'][0]
-            v    = self.proc['uv'][1]
-            ops  = self.proc['ops']
-            X    = u @ v.T
-        except (ValueError, KeyError, OSError,
-                RuntimeError, TypeError, NameError):
-            print('ERROR: this is not a *.npy file :( ')
-            X = None
-        if X is not None:
-            self.filebase = self.proc['filename']
-            iscell, file_iscell = self.load_iscell()
-
-            # check if training set used
-            if 'train_time' in self.proc:
-                if self.proc['train_time'].sum() < self.proc['train_time'].size:
-                    # not all training pts used
-                    X    = np.load(self.proc['filename'])
-                    # show only test timepoints
-                    X    = X[:,~self.proc['train_time']]
-                    if iscell is not None:
-                        if iscell.size == X.shape[0]:
-                            X = X[iscell, :]
-                            print('using iscell.npy in folder')
-                    if len(X.shape) > 2:
-                        X = X.mean(axis=-1)
-                    v = (u.T @ X).T
-                    v /= ((v**2).sum(axis=0))**0.5
-                    X = u @ v.T
-                    print(X.shape)
-            self.startROI = False
-            self.endROI = False
-            self.posROI = np.zeros((3,2))
-            self.prect = np.zeros((5,2))
-            self.ROIs = []
-            self.ROIorder = []
-            self.Rselected = []
-            self.Rcolors = []
-            self.p0.clear()
-            self.sp = X#zscore(X, axis=1)
-            del X
-            self.sp += 1
-            self.sp /= 9
-            self.embedding = y
-            if ops['n_components'] > 1:
-                self.embedded = True
-                self.enable_embedded()
-            else:
-                self.p0.clear()
-                self.embedded=False
-                self.disable_embedded()
-
-            self.enable_loaded()
-            #self.usv = usv
-            self.U   = u #@ np.diag(usv[1])
-            ineur = 0
-
-            self.ROI_position()
-            if self.embedded:
-                self.plot_embedding()
-                self.xp = pg.ScatterPlotItem(pos=self.embedding[ineur,:][np.newaxis,:],
-                                         symbol='x', pen=pg.mkPen(color=(255,0,0,255), width=3),
-                                         size=12)#brush=pg.mkBrush(color=(255,0,0,255)), size=14)
-                self.p0.addItem(self.xp)
-            self.show()
-            self.loaded = True
-
     def run_RMAP(self):
-        n_clusters = 50
-        n_neurons = self.sp.shape[0] 
-        n_splits = min(4, n_neurons//1000)
-        grid_upsample = min(10, n_neurons // (n_splits * (n_clusters+1)))
+        if self.default_param_radiobutton.isChecked():
+            io.set_rastermap_params(self)
         model = Rastermap(smoothness=1, 
-                                       n_clusters=n_clusters, 
+                                       n_clusters=self.n_clusters, 
                                        n_PCs=200, 
-                                       n_splits=n_splits,
-                                       grid_upsample=grid_upsample).fit(self.sp)
+                                       n_splits=self.n_splits,
+                                       grid_upsample=self.grid_upsample).fit(self.sp)
 
         self.embedding = model.embedding
+        self.embedded = True
         self.sorting = model.isort
         self.plot_activity()
-
-    def load_behavior(self):
-        name = QtGui.QFileDialog.getOpenFileName(
-            self, "Open *.npy", filter="*.npy"
-        )
-        name = name[0]
-        bloaded = False
-        try:
-            beh = np.load(name)
-            beh = beh.flatten()
-            if beh.size == self.sp.shape[1]:
-                self.bloaded = True
-        except (ValueError, KeyError, OSError,
-                RuntimeError, TypeError, NameError):
-            print("ERROR: this is not a 1D array with length of data")
-        if self.bloaded:
-            beh -= beh.min()
-            beh /= beh.max()
-            self.beh = beh
-            b = len(self.colors)
-            self.colorbtns.button(b).setEnabled(True)
-            self.colorbtns.button(b).setStyleSheet(self.styleUnpressed)
-            fig.beh_masks(self)
-            fig.plot_trace(self)
-            self.show()
-        else:
-            print("ERROR: this is not a 1D array with length of data")
 
 def run():
     # Always start by initializing Qt (only once per application)
