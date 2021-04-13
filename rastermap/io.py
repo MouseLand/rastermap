@@ -187,22 +187,109 @@ def load_run_data(parent):
         print("ERROR: this is not a 1D array with length of data")
     if parent.run_loaded:
         parent.run_data = run
-        parent.plot_run_data()
+        parent.plot_run_trace()
         if parent.scatterplot_checkBox.isChecked():
             parent.scatterplot_checkBox.setChecked(True)
     else:
         return
-"""
-def load_xpos(parent):
 
+def get_neuron_depth_data(parent):
+    dialog = QtWidgets.QDialog()
+    dialog.setWindowTitle("Upload file")
+    dialog.verticalLayout = QtWidgets.QVBoxLayout(dialog)
 
-def load_ypos(parent):
+    dialog.depth_label = QtWidgets.QLabel(dialog)
+    dialog.depth_label.setTextFormat(QtCore.Qt.RichText)
+    dialog.depth_label.setText("Depth (Ephys):")
+    dialog.depth_button = QtGui.QPushButton('Upload')
+    dialog.depth_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+    dialog.depth_button.clicked.connect(lambda: load_neuron_pos(parent,depth=True))
 
-"""
+    dialog.ok_button = QtGui.QPushButton('Done')
+    dialog.ok_button.setDefault(True)
+    dialog.ok_button.clicked.connect(dialog.close)
 
-def save_proc(parent):
-    return
+    dialog.widget = QtWidgets.QWidget(dialog)
+    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget)
+    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+    dialog.horizontalLayout.setObjectName("horizontalLayout")
+    dialog.horizontalLayout.addWidget(dialog.depth_label)
+    dialog.horizontalLayout.addWidget(dialog.depth_button)
+
+    dialog.verticalLayout.addWidget(dialog.widget)
+    dialog.verticalLayout.addWidget(dialog.ok_button)
+    dialog.adjustSize()
+    dialog.exec_()
+
+def get_neuron_pos_data(parent):
+    dialog = QtWidgets.QDialog()
+    dialog.setWindowTitle("Upload files")
+    dialog.verticalLayout = QtWidgets.QVBoxLayout(dialog)
+
+    # Param options
+    dialog.xpos_label = QtWidgets.QLabel(dialog)
+    dialog.xpos_label.setTextFormat(QtCore.Qt.RichText)
+    dialog.xpos_label.setText("x position:")
+    dialog.xpos_button = QtGui.QPushButton('Upload')
+    dialog.xpos_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+    dialog.xpos_button.clicked.connect(lambda: load_neuron_pos(parent,xpos=True))
+
+    dialog.ypos_label = QtWidgets.QLabel(dialog)
+    dialog.ypos_label.setTextFormat(QtCore.Qt.RichText)
+    dialog.ypos_label.setText("y position:")
+    dialog.ypos_button = QtGui.QPushButton('Upload')
+    dialog.ypos_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+    dialog.ypos_button.clicked.connect(lambda: load_neuron_pos(parent,ypos=True))
+
+    dialog.ok_button = QtGui.QPushButton('Done')
+    dialog.ok_button.setDefault(True)
+    dialog.ok_button.clicked.connect(dialog.close)
     
+    dialog.widget = QtWidgets.QWidget(dialog)
+    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget)
+    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+    dialog.horizontalLayout.setObjectName("horizontalLayout")
+    dialog.horizontalLayout.addWidget(dialog.xpos_label)
+    dialog.horizontalLayout.addWidget(dialog.xpos_button)
+
+    dialog.widget2 = QtWidgets.QWidget(dialog)
+    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget2)
+    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+    dialog.horizontalLayout.setObjectName("horizontalLayout")
+    dialog.horizontalLayout.addWidget(dialog.ypos_label)
+    dialog.horizontalLayout.addWidget(dialog.ypos_button)
+
+    # Add options to dialog box
+    dialog.verticalLayout.addWidget(dialog.widget)
+    dialog.verticalLayout.addWidget(dialog.widget2)
+    dialog.verticalLayout.addWidget(dialog.ok_button)
+
+    dialog.adjustSize()
+    dialog.exec_()
+
+def load_neuron_pos(parent, xpos=False, ypos=False, depth=False):
+    try:
+        file_name = QtGui.QFileDialog.getOpenFileName(
+                    parent, "Open *.npy", filter="*.npy")
+        data = np.load(file_name[0])
+        if xpos and data.size == parent.sp.shape[0]:
+            parent.xpos_dat = data
+            print("xpos data loaded")
+        elif ypos and data.size == parent.sp.shape[0]: 
+            parent.ypos_dat = data
+            print("ypos data loaded")
+        elif depth and data.size == parent.sp.shape[0]:
+            parent.depth_dat = data
+            print("depth data loaded")
+        else:
+            print("incorrect data uploaded")
+            return
+    except Exception as e:
+        print('ERROR: this is not a *.npy array :( ')
+"""
+    def save_proc(parent): # Save images and embedding data
+        return
+"""
 def load_proc(parent, name=None):
     if name is None:
         name = QtGui.QFileDialog.getOpenFileName(

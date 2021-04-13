@@ -85,7 +85,7 @@ class MainW(QtGui.QMainWindow):
         self.p5 = self.win.addPlot(title='Scatter plot',row=1,col=2)
         self.p5.setMouseEnabled(x=False,y=False)
         
-        self.run_corr_scatter = pg.ScatterPlotItem()
+        self.scatter_plot = pg.ScatterPlotItem()
         self.neuron_pos_scatter = pg.ScatterPlotItem()
 
         self.win.removeItem(self.p4)
@@ -146,7 +146,7 @@ class MainW(QtGui.QMainWindow):
         self.upload_run_button.setEnabled(False)
         self.run_corr_checkBox = QtGui.QCheckBox("All neurons")
         self.run_corr_checkBox.setStyleSheet("color: gray;")
-        self.run_corr_checkBox.stateChanged.connect(self.update_run_corr_plot)
+        self.run_corr_checkBox.hide()
 
         # add slider for levels
         self.sat = [0.3,0.7]
@@ -164,7 +164,7 @@ class MainW(QtGui.QMainWindow):
         # Add drop down options for scatter plot
         self.scatter_comboBox = QtGui.QComboBox(self)
         self.scatter_comboBox.setFixedWidth(120)
-        scatter_comboBox_ops = ["-- Select --", "Run correlation", "Neuron position"]
+        scatter_comboBox_ops = ["-- Select --", "Run correlation", "Neuron position", "Neuron depth"]
         self.scatter_comboBox.setEditable(True)
         self.scatter_comboBox.addItems(scatter_comboBox_ops)
         self.scatter_comboBox.setCurrentIndex(0)
@@ -214,9 +214,14 @@ class MainW(QtGui.QMainWindow):
         self.tpos = -0.5
         self.tsize = 1
         self.loaded = False
-        self.behav_loaded = False
         self.run_loaded = False 
+        self.behav_loaded = False
         self.embedded = False
+        self.run_corr_all = None
+        self.run_corr_selected = None
+        self.xpos_dat = None
+        self.ypos_dat = None
+        self.depth_dat = None
 
         # Add features to window
         ops_row_pos = 0
@@ -232,8 +237,8 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+5, 1, 1, 1)
         self.l0.addWidget(slider, ops_row_pos,2,1,2)
         self.l0.addWidget(sat_label,ops_row_pos,2,1,1)
-        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+12,11,1,1)
-        self.l0.addWidget(self.run_corr_checkBox,ops_row_pos+12,12,1,1)
+        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+12,12,1,1)
+        self.l0.addWidget(self.run_corr_checkBox,ops_row_pos+12,13,1,1)
 
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
@@ -251,36 +256,68 @@ class MainW(QtGui.QMainWindow):
         self.loaded = False
         self.run_loaded = False 
         self.behav_loaded = False
+        self.embedded = False
+        self.run_corr_all = None
+        self.run_corr_selected = None
 
     def scatter_comboBox_changed(self):
         request = self.scatter_comboBox.currentIndex()
-        if request == 1 and self.run_loaded and self.embedded:
-            self.run_corr = self.get_run_corr()
-            self.run_corr_scatter.setData(self.run_corr, self.embedding[self.selected].squeeze(), symbol='o', 
-                                            brush=(1,1,1,1),hoverable=True, hoverSize=15)
-            self.p5.addItem(self.run_corr_scatter)
-            self.p5.setLabel('bottom', "Pearson's correlation")
-            self.p5.setLabel('left', "Embedding position")
+        self.scatter_plot.clear()
+        if request == 1:
+            if self.run_loaded and self.embedded:
+                self.plot_run_corr()
+            else:
+                print("Please run embedding or upload run data")
         elif request == 2:
-            self.p5.removeItem(self.run_corr_scatter)
-            print("get xpos ypos dat")
+            if self.xpos_dat is None or self.ypos_dat is None:
+                io.get_neuron_pos_data(self)
+            self.plot_neuron_pos()
+        elif request == 3:
+            if self.depth_dat is None:
+                io.get_neuron_depth_data(self)
+            self.plot_neuron_depth()
         else:
             return
 
-    def get_run_corr(self, all_neurons=False):
-        if all_neurons:
-            r = np.zeros(self.sp.shape[0])
-            for i in range(len((r)):
-                r[i], _ = pearsonr(self.sp_smoothed[i], self.run_data)
+    def get_run_corr(self):
+        if self.run_corr_checkBox.isChecked() and self.run_corr_all is None:
+            self.run_corr_all = np.zeros(self.sp_smoothed.shape[0])
+            for i in range(len(self.run_corr_all)):
+                self.run_corr_all[i], _ = pearsonr(self.sp_smoothed[i], self.run_data)
+            return self.run_corr_all
+        elif self.run_corr_checkBox.isChecked():
+            return self.run_corr_all
         else:
-            r = np.zeros(len(self.selected))
+            self.run_corr_selected = np.zeros(len(self.selected))
             for i, neuron in enumerate(self.selected):
-                r[i], _ = pearsonr(self.sp_smoothed[neuron], self.run_data)
-        return r, r_all
+                self.run_corr_selected[i], _ = pearsonr(self.sp_smoothed[neuron], self.run_data)
+            return self.run_corr_selected
 
-    def update_run_corr_plot(self):
-        if self.run_corr_checkBox.isChecked():
-            self.get_run_corr
+    def plot_run_corr(self):
+        r = self.get_run_corr()
+        if self.run_corr_checkBox.isChecked(): # all neurons
+            embed = self.embedding[:,0].squeeze()
+        else:                                  # selected neurons
+            embed = self.embedding[self.selected].squeeze()
+        self.scatter_plot.setData(r, embed, symbol='o', brush=(1,1,1,1),
+                                    hoverable=True, hoverSize=15)
+        self.p5.addItem(self.scatter_plot)
+        self.p5.setLabel('left', "Embedding position")
+        self.p5.setLabel('bottom', "Pearson's correlation")
+
+    def plot_neuron_pos(self):
+        self.scatter_plot.setData(self.xpos_dat, -self.ypos_dat, symbol='o', c=self.embedding[:,0].squeeze(),
+                                 hoverable=True, hoverSize=15, cmap=cm.get_cmap("gist_ncar"))
+        self.p5.addItem(self.scatter_plot)
+        self.p5.setLabel('left', "y position")
+        self.p5.setLabel('bottom', "x position")
+
+    def plot_neuron_depth(self):
+        self.scatter_plot.setData(self.depth_dat, self.embedding[:,0].squeeze(), symbol='o', 
+                                brush=(1,1,1,1), hoverable=True, hoverSize=15)
+        self.p5.addItem(self.scatter_plot)
+        self.p5.setLabel('left', "Embedding position")
+        self.p5.setLabel('bottom', "Neuron depth")
 
     def update_plot_p4(self):
         if self.heatmap_checkBox.isChecked() and self.behav_loaded:
@@ -295,12 +332,13 @@ class MainW(QtGui.QMainWindow):
             return
         
     def update_plot_p5(self):
-        if self.scatterplot_checkBox.isChecked() and self.run_loaded:
+        if self.scatterplot_checkBox.isChecked():
             self.win.addItem(self.p5, row=1, col=2)
             self.win.removeItem(self.p1)
             self.win.addItem(self.p1, row=0, col=1, colspan=2)
             self.scatter_comboBox.show()
-        elif not self.scatterplot_checkBox.isChecked() and self.run_loaded:
+            self.run_corr_checkBox.show()
+        else:
             try:
                 self.win.removeItem(self.p5)
                 self.win.removeItem(self.p1)
@@ -308,9 +346,6 @@ class MainW(QtGui.QMainWindow):
                 self.scatter_comboBox.hide()
             except Exception as e:
                 return
-        else:
-            print("Please upload a run data file")
-            return
 
     def plot_clicked(self,event):
         items = self.win.scene().items(event.scenePos())
@@ -426,7 +461,7 @@ class MainW(QtGui.QMainWindow):
             self.p3.clear()
             self.p3.plot(self.xrange,avg,pen=(255,0,0))
             if self.run_loaded:
-                self.plot_run_data()
+                self.plot_run_trace()
             self.p3.setXRange(self.xrange[0],self.xrange[-1])
             self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
             self.p3.show()
@@ -445,7 +480,7 @@ class MainW(QtGui.QMainWindow):
         # Update avg. activity and other data loaded (behaviour and running)
         self.plot_traces()
         if self.run_loaded:
-            self.plot_run_data()
+            self.plot_run_trace()
         if self.behav_loaded:
             self.plot_behav_data()
 
@@ -490,7 +525,7 @@ class MainW(QtGui.QMainWindow):
         self.show()
         self.win.show()
 
-    def plot_run_data(self):
+    def plot_run_trace(self):
         avg = self.run_data
         avg -= avg.min()
         avg /= avg.max()
