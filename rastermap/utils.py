@@ -1,11 +1,17 @@
 import numpy as np
 
-def bin1d(X, tbin):
-    """ bin over first axis of data with bin tbin """
-    size = list(X.shape)
-    X = X[:size[0]//tbin*tbin].reshape((size[0]//tbin, tbin, -1)).mean(axis=1)
-    size[0] = X.shape[0]
-    return X.reshape(size)
+def bin1d(X, bin_size, axis=0):
+    """ bin over axis of data with bin bin_size """
+    if bin_size > 0:
+        size = list(X.shape)
+        Xb = X.swapaxes(0, axis)
+        Xb = Xb[:size[axis]//bin_size*bin_size].reshape((size[axis]//bin_size, bin_size, -1)).mean(axis=1)
+        Xb = Xb.swapaxes(axis, 0)
+        size[axis] = Xb.shape[axis]
+        Xb = Xb.reshape(size)
+        return Xb
+    else:
+        return X
 
 def split_testtrain(n_t, frac=0.25):
     ''' this returns indices of testing data and training data '''

@@ -25,14 +25,16 @@ def run_TSNE(U, perplexities=[30]):
             random_state=1,
             #verbose=True
         )
-        fitter = TSNEEmbedding(
-            U[:,:1]*0.0001,
-            affinities,
-            n_jobs=16,
-            random_state=1,
-            #verbose=True
-        )
-        embeddingOPENTSNE = fitter.optimize(n_iter=250)
+        embedding = TSNEEmbedding(
+                       U[:,:1]*0.0001,
+                        affinities,
+                        negative_gradient_method="fft",
+                        random_state=0,
+                        n_jobs=16,
+                    )
+        embedding1 = embedding.optimize(n_iter=250, exaggeration=12, momentum=0.5)
+        embeddingOPENTSNE = embedding1.optimize(n_iter=500, exaggeration=1, momentum=0.8)
+        #embeddingOPENTSNE = fitter.optimize(n_iter=250)
     else:
         tsne = TSNE(
             perplexity=perplexities[0],
@@ -47,8 +49,9 @@ def run_TSNE(U, perplexities=[30]):
         
     return embeddingOPENTSNE
 
-def run_UMAP(U, n_neighbors=15):
-    embeddingUMAP = UMAP(n_components=1, n_neighbors=n_neighbors).fit_transform(U)
+def run_UMAP(U, n_neighbors=15, min_dist=0.01):
+    embeddingUMAP = UMAP(n_components=1, n_neighbors=n_neighbors, 
+                         min_dist=min_dist, init=U[:,:1], metric='cosine').fit_transform(U)
     return embeddingUMAP
 
 def benchmark_embeddings(S, bin_size=0):
@@ -62,9 +65,10 @@ def benchmark_embeddings(S, bin_size=0):
     itest, itrain = split_testtrain(Sb.shape[1])
     
     model = Rastermap(smoothness=1, 
-                        n_clusters=50, 
-                        n_PCs=200, 
-                        grid_upsample=10).fit(Sb, itrain=itrain)
+                        n_clusters=150,
+                        n_splits=0, 
+                        n_PCs=400, 
+                        grid_upsample=10).fit(Sb, itrain=itrain, compute_X_embedding=False)
 
     timings, embeddings = [], []
     embeddings.append(model.embedding)
@@ -75,8 +79,12 @@ def benchmark_embeddings(S, bin_size=0):
     timings.append(time.time()-tic)
 
     tic=time.time()
+    #embeddings.append(np.arange(0,Sb.shape[0])[:,np.newaxis])
     embeddings.append(run_UMAP(model.U))
     timings.append(time.time()-tic)
+
+    embeddings.append(model.U[:,:1])
+    timings.append(model.pc_time)
 
     neighbor_scores = np.zeros((len(embeddings), 3))
     global_scores = np.zeros(len(embeddings))

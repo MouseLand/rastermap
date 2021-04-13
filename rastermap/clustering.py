@@ -5,16 +5,38 @@ import itertools, time
 from sklearn.cluster import KMeans
 from scipy.stats import zscore
 
-def kmeans(X, n_clusters=100):
-    model = KMeans(n_init=1, init='random', 
+def scaled_kmeans(X, n_clusters=100, n_iter = 50, random_state=0):
+    n_samples, n_features = X.shape
+    np.random.seed(random_state)
+    X_nodes = (np.random.randn(n_clusters, n_features) / 
+                                (1 + np.arange(n_features))**0.5)
+    X_nodes = X_nodes / (1e-4 + (X_nodes**2).sum(axis=1)[:,np.newaxis])**.5
+    for j in range(n_iter):
+        cc = X @ X_nodes.T 
+        imax = np.argmax(cc, 1)
+        cc = cc * (cc > np.max(cc, 1)[:,np.newaxis]-1e-6)
+        X_nodes = cc.T @ X 
+        X_nodes = X_nodes / (1e-10 + (X_nodes**2).sum(axis=1)[:,np.newaxis])**.5  
+    X_nodes_norm = (X_nodes**2).sum(axis=1)**0.5
+    X_nodes = X_nodes[X_nodes_norm > 0]
+    X_nodes = X_nodes[X_nodes[:,0].argsort()]
+    cc = X @ X_nodes.T 
+    imax = cc.argmax(axis=1)
+    return X_nodes, imax
+
+def kmeans(X, n_clusters=100, random_state=0):
+    np.random.seed(random_state)
+    #X_nodes = (np.random.randn(n_clusters, n_features) / 
+    #                            (1 + np.arange(n_features))**0.5)
+    #X_nodes = X_nodes / (1e-4 + (X_nodes**2).sum(axis=1)[:,np.newaxis])**.5
+    model = KMeans(n_init=1, init='k-means++', 
                    n_clusters=n_clusters, random_state=0).fit(X)
     X_nodes = model.cluster_centers_ 
     X_nodes = X_nodes / (1e-10 + ((X_nodes**2).sum(axis=1))[:,np.newaxis])**.5  
     imax = model.labels_
-
-    #cc = X @ X_nodes.T 
-    #imax = cc.argmax(axis=1)
-
+    X_nodes = X_nodes[X_nodes[:,0].argsort()]
+    cc = X @ X_nodes.T 
+    imax = cc.argmax(axis=1)
     return X_nodes, imax
 
 def create_ND_basis(dims, nclust, K, flag=True):
@@ -124,7 +146,7 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
     inds = np.arange(0, n_nodes).astype(np.int32)
     iinds = np.arange(0, n_nodes).astype(np.int32)
     seg_len = np.ones(n_iter)
-    n_len = 3
+    n_len = 2
     n_test = n_nodes//n_skip
     test_lengths = np.arange(0, ((n_nodes)//n_len)*n_len).reshape(-1,n_len) + 1
     corr_orig = 0
@@ -172,100 +194,8 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
                 seg_len[k] = i1 - i0
     return cc, inds, seg_len
 
-@njit('float32[:] (float32[:,:], float32[:,:], int64, int64, int64, int64, float32[:,:], float32[:,:])', nogil=True)
-def new_correlation_tdelay(cc, cc_tdelay, i0, i1, inode, n_nodes, BBt, BBt_triu):
-    """ compute correlation change of moving segment i0:i1 to position inode
-    """
-    ishift = shift_inds(i0, i1, inode, n_nodes)
-    cc_new = cc.copy()[ishift][:,ishift]
-    cc_new_tdelay = cc_tdelay.copy()[ishift][:,ishift]
-    ilength = i1 - i0
-    
-    corr_new = (elementwise_mult_sum(cc_new, BBt) + 
-                    2*elementwise_mult_sum(cc_new_tdelay, BBt_triu))
-    ordering = 0
 
-    if ilength > 1:
-        ishift[inode:inode+ilength] = ishift[inode:inode+ilength][::-1].copy()
-        cc_new = cc.copy()[ishift][:,ishift]
-        cc_new_tdelay = cc_tdelay.copy()[ishift][:,ishift]
-        corr_new0 = (elementwise_mult_sum(cc_new, BBt) + 
-                        2*elementwise_mult_sum(cc_new_tdelay, BBt_triu))
-        if corr_new0 > corr_new:
-            corr_new = corr_new0 
-            ordering = 1
-
-    corr_out = np.zeros(2, np.float32)
-    corr_out[0] = corr_new
-    corr_out[1] = ordering
-
-    return corr_out
-
-@njit('(float32[:,:], float32[:,:], int64, int64, int64, float32[:,:], float32[:,:], boolean)', nogil=True, parallel=True)
-def tsp_tdelay(cc, cc_tdelay, n_iter, n_nodes, n_skip, BBt, BBt_triu, verbose):
-    inds = np.arange(0, n_nodes).astype(np.int32)
-    iinds = np.arange(0, n_nodes).astype(np.int32)
-    seg_len = np.ones(n_iter)
-    n_len = 2
-    n_test = n_nodes//n_skip
-    test_lengths = np.arange(0, ((n_nodes)//n_len)*n_len).reshape(-1,n_len) + 1
-    corr_orig = 0
-
-    corr_change_seg = -np.inf * np.ones(n_len * n_nodes * n_test, np.float32)
-    ordering_seg = -np.inf * np.ones(n_len *  n_nodes * n_test, np.float32)
-    for k in range(n_iter):
-        improved = False
-        if corr_orig==0:
-            corr_orig = (elementwise_mult_sum(cc, BBt) + 
-                            2*elementwise_mult_sum(cc_tdelay, BBt_triu))
-        for tl in range(len(test_lengths)):
-            corr_change_seg[:] = -np.inf
-            for ix in prange(0, n_len*n_nodes*n_test):
-                ilength = (ix // n_test // n_nodes) + test_lengths[tl,0]
-                i0 = ((ix // n_test) % n_nodes)
-                inode = (ix % n_test)*n_skip + k%n_skip
-                i1 = (i0 + ilength)
-                if i1 <= n_nodes and inode + ilength <= n_nodes:
-                    new_corr = new_correlation_tdelay(cc, cc_tdelay, 
-                                                        i0, i1, inode, n_nodes, 
-                                                        BBt, BBt_triu)
-                    corr_change = new_corr[0] - corr_orig
-                    corr_change_seg[ix] = corr_change
-                    ordering_seg[ix] = new_corr[1]
-            ix = corr_change_seg.argmax()
-            corr_change = corr_change_seg[ix]
-            if corr_change > 1e-3:
-                improved = True
-                break
-
-        if not improved:
-            break
-        else:
-            ordering = ordering_seg[ix]
-            ilength = (ix // n_test // n_nodes) + test_lengths[tl,0]
-            i0 = ((ix // n_test) % n_nodes)
-            inode = (ix % n_test)*n_skip + k%n_skip
-            i1 = (i0 + ilength)
-            if corr_change > 1e-3:
-                # move segment
-                ishift = shift_inds(i0, i1, inode, n_nodes)
-                if ordering==1:
-                    ishift[inode:inode+ilength] = ishift[inode:inode+ilength][::-1].copy()
-                cc_new = cc[ishift][:,ishift]
-                cc_new_tdelay = cc_tdelay[ishift][:,ishift]
-                inds = inds[ishift]
-                corr_new = (elementwise_mult_sum(cc_new, BBt) + 
-                                2*elementwise_mult_sum(cc_new_tdelay, BBt_triu))
-                if verbose:
-                    print(k, i0, i1, inode, ordering, corr_change, (corr_new - corr_orig), corr_new)
-                cc = cc_new 
-                cc_tdelay = cc_new_tdelay
-                corr_orig = corr_new
-                seg_len[k] = i1 - i0
-    return cc, cc_tdelay, inds, seg_len
-
-
-def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, verbose=False):
+def travelling_salesman(cc, n_iter=400, ts=0.0, n_skip=None, verbose=False):
     """ matches correlation matrix cc to B@B.T basis functions """
     n_nodes = (cc.shape[0])
     if n_skip is None:
@@ -274,24 +204,9 @@ def travelling_salesman(cc, n_iter=400, alpha=1.0, n_skip=None, verbose=False):
 
     n_components = 1
 
-    if alpha > 0:
-        basis = .5
-        B, plaw = create_ND_basis(n_components, n_nodes, int(n_nodes*basis), flag=False)
-        B = B[1:]
-        plaw = plaw[1:]
-        n_basis, n_nodes = B.shape
-        B /= plaw[:,np.newaxis] ** (alpha/2)
-        B_norm = (B**2).sum(axis=0)**0.5
-        B = B / B_norm
-        BBt = B.T @ B #/ (B**2).sum(axis=1)
-
-        x = np.arange(0, 1.0, 1.0/n_nodes)[:n_nodes]
-        BBt = compute_BBt(x, x)
-        #TS = np.tril(np.triu(BBt, -1), 1)
-        #BBt += TS
-        BBt = BBt.astype(np.float32)
-
-    else:
+    x = np.arange(0, 1.0, 1.0/n_nodes)[:n_nodes]
+    BBt = compute_BBt(x, x, ts=ts)
+    if np.isinf(ts):
         BBt = np.ones((n_nodes, n_nodes))
         BBt = np.tril(np.triu(BBt, -1), 1)
 
@@ -424,17 +339,60 @@ def matrix_matching(cc, BBt, cc_add, BBt_add, n_iter=400, n_skip=None, verbose=F
 
     return cc, inds, seg_len
 
-def compute_BBt(xi, yi, alpha=1e3):
-    BBt = - np.log(1e-10 + ((xi[:,np.newaxis] - yi)**2)**0.5)
-    #BBt = 1 / (1 + alpha * (xi[:,np.newaxis] - yi)**2)**0.5
+def compute_BBt_mask(xi, yi):
+    sigma = 0.5 * (xi[1] - xi[0])
+    gaussian = np.exp(- (xi[:,np.newaxis] - yi)**2 / (2 * sigma**2))
+    gaussian[(xi[:,np.newaxis] - yi)==0] = 0
+    return gaussian 
+
+def compute_BBt(xi, yi, ts=0):
+    if ts > 0:
+        BBt0 = compute_BBt(xi, xi, ts=0)
+        BBt_norm = BBt0.sum()
+        BBt_mask_norm = compute_BBt_mask(xi, xi).sum()
+    eps = 1e-10
+    ds = np.abs(xi[:,np.newaxis] - yi)
+    ds[ds==0] = 1 - eps
+    BBt = - np.log(eps + ds) 
+    if ts > 0:
+        BBt_mask = compute_BBt_mask(xi, yi)
+        # need to make BBt and BBt_mask on same scale
+        BBt /= BBt_norm
+        BBt_mask /= BBt_mask_norm
+        BBt = BBt * (1-ts) + BBt_mask * ts
+        BBt *= BBt_norm
     return BBt
 
-def cluster_split_and_sort(U, n_clusters=50, nc=25, 
-                            n_splits=4, alpha=1.0, 
+def compute_cc_tdelay(U, V, U_nodes, time_lag_window=4):
+    Vnorm = (V**2).sum(axis=1)**0.5
+    X_nodes = U_nodes @ (V / Vnorm[:,np.newaxis])
+    X_nodes = zscore(X_nodes, axis=1)
+    tshift = 20
+    n_nodes, nt = X_nodes.shape
+
+    tshifts = np.arange(-20,20)
+    cc_tdelay = np.zeros((n_nodes, n_nodes, len(tshifts)), np.float32)
+    for i,tshift in enumerate(tshifts):
+        if tshift < 0:
+            cc_tdelay[:,:,i] = (X_nodes[:, :nt+tshift] @ X_nodes[:, -tshift:].T) / (nt-tshift)        
+        else:
+            cc_tdelay[:,:,i] = (X_nodes[:, tshift:] @ X_nodes[:, :nt-tshift].T) / (nt-tshift)
+    sigma = time_lag_window
+    weights = np.exp(- tshifts**2 / (2*sigma**2))
+    weights /= weights.sum()
+    cc_weighted = (cc_tdelay * weights).sum(axis=-1)
+    return cc_weighted
+
+def cluster_split_and_sort(U, V=None, n_clusters=100, nc=25, 
+                            n_splits=0, time_lag_window=0, ts=0.0, 
                             sticky=True, verbose=False):
-    U_nodes, imax = kmeans(U, n_clusters=n_clusters)
-    cc = U_nodes @ U_nodes.T
-    cc,inds,seg_len = travelling_salesman(cc, verbose=verbose, alpha=alpha)
+    U_nodes, imax = scaled_kmeans(U, n_clusters=n_clusters)
+    if time_lag_window > 0 and V is not None:
+        cc = compute_cc_tdelay(U, V, U_nodes, time_lag_window)
+    else:
+        cc = U_nodes @ U_nodes.T
+
+    cc,inds,seg_len = travelling_salesman(cc, verbose=verbose, ts=ts)
     U_nodes = U_nodes[inds]
     
     n_PCs = U_nodes.shape[1]
@@ -455,10 +413,10 @@ def cluster_split_and_sort(U, n_clusters=50, nc=25,
             ifrac = node_set.mean()
             x = np.linspace(i*nc/n_nodes, (i+1)*nc/n_nodes, 2*nc+1)[:-1]
             y = np.linspace(0, 1, n_nodes+1)[:-1][~node_set]
-            BBt = compute_BBt(x, x)
+            BBt = compute_BBt(x, x, ts=ts)
             BBt -= np.diag(np.diag(BBt))
 
-            BBt_add = compute_BBt(x, y)
+            BBt_add = compute_BBt(x, y, ts=ts)
 
             cc_out,inds,seg_len = matrix_matching(cc, BBt, 
                                                     cc_add, BBt_add, 
