@@ -21,6 +21,7 @@ def load_mat(parent, name=None):
                 print('ERROR: this is not a *.npy array :( ')
                 X = None
     if X is not None and X.ndim > 1:
+        parent.reset()
         iscell, file_iscell = parent.load_iscell()
         parent.file_iscell = None
         if iscell is not None:
@@ -203,7 +204,7 @@ def get_neuron_depth_data(parent):
     dialog.depth_label.setText("Depth (Ephys):")
     dialog.depth_button = QtGui.QPushButton('Upload')
     dialog.depth_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
-    dialog.depth_button.clicked.connect(lambda: load_neuron_pos(parent,depth=True))
+    dialog.depth_button.clicked.connect(lambda: load_neuron_pos(parent, dialog.depth_button, depth=True))
 
     dialog.ok_button = QtGui.QPushButton('Done')
     dialog.ok_button.setDefault(True)
@@ -232,19 +233,19 @@ def get_neuron_pos_data(parent):
     dialog.xpos_label.setText("x position:")
     dialog.xpos_button = QtGui.QPushButton('Upload')
     dialog.xpos_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
-    dialog.xpos_button.clicked.connect(lambda: load_neuron_pos(parent,xpos=True))
+    dialog.xpos_button.clicked.connect(lambda: load_neuron_pos(parent, dialog.xpos_button, xpos=True))
 
     dialog.ypos_label = QtWidgets.QLabel(dialog)
     dialog.ypos_label.setTextFormat(QtCore.Qt.RichText)
     dialog.ypos_label.setText("y position:")
     dialog.ypos_button = QtGui.QPushButton('Upload')
     dialog.ypos_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
-    dialog.ypos_button.clicked.connect(lambda: load_neuron_pos(parent,ypos=True))
+    dialog.ypos_button.clicked.connect(lambda: load_neuron_pos(parent, dialog.ypos_button, ypos=True))
 
     dialog.ok_button = QtGui.QPushButton('Done')
     dialog.ok_button.setDefault(True)
     dialog.ok_button.clicked.connect(dialog.close)
-    
+
     dialog.widget = QtWidgets.QWidget(dialog)
     dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget)
     dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
@@ -267,29 +268,52 @@ def get_neuron_pos_data(parent):
     dialog.adjustSize()
     dialog.exec_()
 
-def load_neuron_pos(parent, xpos=False, ypos=False, depth=False):
+def load_neuron_pos(parent, button, xpos=False, ypos=False, depth=False):
     try:
         file_name = QtGui.QFileDialog.getOpenFileName(
                     parent, "Open *.npy", filter="*.npy")
         data = np.load(file_name[0])
         if xpos and data.size == parent.sp.shape[0]:
             parent.xpos_dat = data
+            button.setText("Uploaded!")
             print("xpos data loaded")
         elif ypos and data.size == parent.sp.shape[0]: 
             parent.ypos_dat = data
+            button.setText("Uploaded!")
             print("ypos data loaded")
         elif depth and data.size == parent.sp.shape[0]:
             parent.depth_dat = data
+            button.setText("Uploaded!")
             print("depth data loaded")
         else:
             print("incorrect data uploaded")
             return
     except Exception as e:
         print('ERROR: this is not a *.npy array :( ')
-"""
-    def save_proc(parent): # Save images and embedding data
+
+def save_proc(parent): # Save embedding output
+    try:
+        if parent.embedded:
+            proc = {'filenames': parent.filename, 'save_path': savepath,
+                    'isort' : parent.sorting, 'embedding' : parent.embedding}
+        else:
+            raise Exception("Please run embedding to save output")
+        if parent.save_path is None:
+            folderName = QtGui.QFileDialog.getExistingDirectory(parent,
+                                "Choose save folder")
+            parent.save_path = folderName
+        if parent.save_path:
+            filename = parent.fname.split("/")[-1]
+            filename, ext = os.path.splitext(filename)
+            savename = os.path.join(parent.save_path, ("%s_rastermap_proc.npy"%filename))
+            np.save(savename, proc)
+            print("File saved:", savename)
+        else:
+            raise Exception("Incorrect folder. Please select a folder")
+    except Exception as e:
+        print(e)
         return
-"""
+
 def load_proc(parent, name=None):
     if name is None:
         name = QtGui.QFileDialog.getOpenFileName(
@@ -316,6 +340,7 @@ def load_proc(parent, name=None):
         print('ERROR: this is not a *.npy file :( ')
         X = None
     if X is not None:
+        parent.reset()
         parent.filebase = parent.proc['filename']
         iscell, file_iscell = parent.load_iscell()
 

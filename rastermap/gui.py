@@ -41,11 +41,10 @@ class MainW(QtGui.QMainWindow):
         self.cwidget = QtGui.QWidget(self)
         self.setCentralWidget(self.cwidget)
         self.l0 = QtGui.QGridLayout()
-        #layout = QtGui.QFormLayout()
         self.cwidget.setLayout(self.l0)
-        #self.p0 = pg.ViewBox(lockAspect=False,name='plot1',border=[100,100,100],invertY=True)
         self.win = pg.GraphicsLayoutWidget()
         
+        # Neural activity/spike dataset set as self.sps
         sp = np.zeros((100,100), np.float32)
         self.sp = sp
         nt = sp.shape[1]
@@ -57,9 +56,12 @@ class MainW(QtGui.QMainWindow):
         self.win.resize(1000,500)
         self.l0.addWidget(self.win,0,0,14,14)
         layout = self.win.ci.layout
+        
         # A plot area (ViewBox + axes) for displaying the image
         self.p0 = self.win.addViewBox(row=0,col=0)
         self.p0.setMenuEnabled(False)
+
+        # Plot entire neural activity dataset
         self.p1 = self.win.addPlot(title="FULL VIEW",row=0,col=1)
         self.p1.setMouseEnabled(x=False,y=False)
         self.img = pg.ImageItem(autoDownsample=True)
@@ -68,30 +70,37 @@ class MainW(QtGui.QMainWindow):
         self.p1.setYRange(0,nn)
         self.p1.setLabel('left', 'Neurons')
         self.p1.setLabel('bottom', 'Time')
-        # zoom in on a selected image region
+
+        # Plot a zoomed in region from full view (changes across time axis
         self.selected = np.arange(0,nn,1,int)
         self.p2 = self.win.addPlot(title='ZOOM IN',row=1,col=0,colspan=2)
         self.imgROI = pg.ImageItem(autoDownsample=True)
         self.p2.addItem(self.imgROI)
         self.p2.setMouseEnabled(x=False,y=False)
         self.p2.hideAxis('bottom')
+
+        # Plot avg. activity of neurons selected in ROI of zoomed in view
         self.p3 = self.win.addPlot(title='Avg. activity (zoomed in neurons)',row=2,col=0,
                                     colspan=2, padding=0)
         self.p3.setMouseEnabled(x=False,y=False)
         self.p3.setLabel('bottom', 'Time')
+
+        # Plot behavioral dataset as heatmap
         self.p4 = self.win.addPlot(title='Heatmap',row=3,col=0,colspan=2)
         self.p4.setMouseEnabled(x=False,y=False)
         self.p4.setLabel('bottom', 'Time')
+
+        # Scatter plot for run correlation, neuron position, and depth (ephys) information
         self.p5 = self.win.addPlot(title='Scatter plot',row=1,col=2)
         self.p5.setMouseEnabled(x=False,y=False)
-        
         self.scatter_plot = pg.ScatterPlotItem()
         self.neuron_pos_scatter = pg.ScatterPlotItem()
-
+        
+        # Optional plots toggled w/ checkboxes
         self.win.removeItem(self.p4)
         self.win.removeItem(self.p5)
 
-        # set colormap 
+        # Set colormap to deafult of gray_r. ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Future: add option to change cmap ~~~~~~~~~~~~~~
         colormap = cm.get_cmap("gray_r")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
@@ -102,7 +111,7 @@ class MainW(QtGui.QMainWindow):
         layout.setColumnStretchFactor(1,3)
         layout.setRowStretchFactor(1,3)
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Options ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Options on top left of GUI ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # add bin size across neurons
         ysm = QtGui.QLabel("<font color='gray'>Bin neurons:</font>")
         self.smooth = QtGui.QLineEdit(self)
@@ -148,7 +157,7 @@ class MainW(QtGui.QMainWindow):
         self.run_corr_checkBox.setStyleSheet("color: gray;")
         self.run_corr_checkBox.hide()
 
-        # add slider for levels
+        # add slider for levels  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Adjust slider!! ~~~~~~~~~~~~~~
         self.sat = [0.3,0.7]
         slider = QtGui.QSlider(QtCore.Qt.Horizontal)      
         slider.setTickInterval(5)
@@ -211,6 +220,7 @@ class MainW(QtGui.QMainWindow):
                                 width=3,
                                 style=QtCore.Qt.SolidLine)
         
+        # Default variables
         self.tpos = -0.5
         self.tsize = 1
         self.loaded = False
@@ -222,6 +232,8 @@ class MainW(QtGui.QMainWindow):
         self.xpos_dat = None
         self.ypos_dat = None
         self.depth_dat = None
+        self.save_path = None  # Set default to current folder
+        self.embedding = None
 
         # Add features to window
         ops_row_pos = 0
@@ -262,7 +274,10 @@ class MainW(QtGui.QMainWindow):
 
     def scatter_comboBox_changed(self):
         request = self.scatter_comboBox.currentIndex()
-        self.scatter_plot.clear()
+        self.p5.clear()
+        self.p5.removeItem(self.scatter_plot)
+        self.p5.setLabel('left', "")
+        self.p5.setLabel('bottom', "")
         if request == 1:
             if self.run_loaded and self.embedded:
                 self.plot_run_corr()
@@ -306,18 +321,25 @@ class MainW(QtGui.QMainWindow):
         self.p5.setLabel('bottom', "Pearson's correlation")
 
     def plot_neuron_pos(self):
-        self.scatter_plot.setData(self.xpos_dat, -self.ypos_dat, symbol='o', c=self.embedding[:,0].squeeze(),
+        if self.embedded:
+            self.scatter_plot.setData(self.xpos_dat, -self.ypos_dat, symbol='o', c=self.embedding[:,0].squeeze(),
                                  hoverable=True, hoverSize=15, cmap=cm.get_cmap("gist_ncar"))
+        else:
+            self.scatter_plot.setData(self.xpos_dat, -self.ypos_dat, symbol='o',
+                        hoverable=True, hoverSize=15)
         self.p5.addItem(self.scatter_plot)
         self.p5.setLabel('left', "y position")
         self.p5.setLabel('bottom', "x position")
 
     def plot_neuron_depth(self):
-        self.scatter_plot.setData(self.depth_dat, self.embedding[:,0].squeeze(), symbol='o', 
-                                brush=(1,1,1,1), hoverable=True, hoverSize=15)
-        self.p5.addItem(self.scatter_plot)
-        self.p5.setLabel('left', "Embedding position")
-        self.p5.setLabel('bottom', "Neuron depth")
+        if self.embedded:
+            self.scatter_plot.setData(self.depth_dat, self.embedding[:,0].squeeze(), symbol='o', 
+                                    brush=(1,1,1,1), hoverable=True, hoverSize=15)
+            self.p5.addItem(self.scatter_plot)
+            self.p5.setLabel('left', "Embedding position")
+            self.p5.setLabel('bottom', "Neuron depth")
+        else:
+            print("Please run embedding")
 
     def update_plot_p4(self):
         if self.heatmap_checkBox.isChecked() and self.behav_loaded:
@@ -344,6 +366,7 @@ class MainW(QtGui.QMainWindow):
                 self.win.removeItem(self.p1)
                 self.win.addItem(self.p1, row=0, col=1)
                 self.scatter_comboBox.hide()
+                self.run_corr_checkBox.hide()
             except Exception as e:
                 return
 
@@ -492,7 +515,6 @@ class MainW(QtGui.QMainWindow):
 
         axy = self.p2.getAxis('left')
         axx = self.p2.getAxis('bottom')
-        #axy.setTicks([[(0.0,str(yrange[0])),(float(yrange.size),str(yrange[-1]))]])
         self.imgROI.setLevels([self.sat[0], self.sat[1]])
 
     def smooth_activity(self):
