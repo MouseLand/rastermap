@@ -21,7 +21,6 @@ def load_mat(parent, name=None):
                 print('ERROR: this is not a *.npy array :( ')
                 X = None
     if X is not None and X.ndim > 1:
-        parent.reset()
         iscell, file_iscell = parent.load_iscell()
         parent.file_iscell = None
         if iscell is not None:
@@ -129,7 +128,7 @@ def get_rastermap_params(parent):
 
 def set_rastermap_params(parent):
     if parent.default_param_radiobutton.isChecked():
-        print("Setting default params")
+        print("Using default params")
         parent.n_clusters = 50
         parent.n_neurons = parent.sp.shape[0]
         if parent.n_neurons > 1000:
@@ -144,7 +143,7 @@ def custom_set_params(parent, dialogBox):
         parent.n_neurons = int(dialogBox.n_neurons.text())
         parent.grid_upsample = int(dialogBox.grid_upsample.text())
         parent.n_splits = int(dialogBox.n_splits.text())
-        print("Setting custom rastermap params")
+        print("Using custom rastermap params")
     except Exception as e:
         QtGui.QMessageBox.about(parent, 'Error','Invalid input entered')
         print(e)
@@ -294,22 +293,25 @@ def load_neuron_pos(parent, button, xpos=False, ypos=False, depth=False):
 def save_proc(parent): # Save embedding output
     try:
         if parent.embedded:
-            proc = {'filenames': parent.filename, 'save_path': savepath,
-                    'isort' : parent.sorting, 'embedding' : parent.embedding}
+            if parent.save_path is None:
+                folderName = QtGui.QFileDialog.getExistingDirectory(parent,
+                                    "Choose save folder")
+                parent.save_path = folderName
+                    
+            else:
+                raise Exception("Incorrect folder. Please select a folder")
+            if parent.save_path:
+                filename = parent.fname.split("/")[-1]
+                filename, ext = os.path.splitext(filename)
+                savename = os.path.join(parent.save_path, ("%s_rastermap_proc.npy"%filename))
+
+                proc = {'filenames': parent.fname, 'save_path': savepath,
+                        'isort' : parent.sorting, 'embedding' : parent.embedding}
+                
+                np.save(savename, proc)
+                print("File saved:", savename)
         else:
             raise Exception("Please run embedding to save output")
-        if parent.save_path is None:
-            folderName = QtGui.QFileDialog.getExistingDirectory(parent,
-                                "Choose save folder")
-            parent.save_path = folderName
-        if parent.save_path:
-            filename = parent.fname.split("/")[-1]
-            filename, ext = os.path.splitext(filename)
-            savename = os.path.join(parent.save_path, ("%s_rastermap_proc.npy"%filename))
-            np.save(savename, proc)
-            print("File saved:", savename)
-        else:
-            raise Exception("Incorrect folder. Please select a folder")
     except Exception as e:
         print(e)
         return
@@ -340,7 +342,6 @@ def load_proc(parent, name=None):
         print('ERROR: this is not a *.npy file :( ')
         X = None
     if X is not None:
-        parent.reset()
         parent.filebase = parent.proc['filename']
         iscell, file_iscell = parent.load_iscell()
 

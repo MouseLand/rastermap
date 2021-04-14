@@ -124,6 +124,7 @@ class RangeSlider(QtGui.QSlider):
                 self.setRepeatAction(self.SliderNoAction)
         else:
             event.ignore()
+    
     def mouseMoveEvent(self, event):
         if self.pressed_control != QtGui.QStyle.SC_SliderHandle:
             event.ignore()
@@ -154,13 +155,16 @@ class RangeSlider(QtGui.QSlider):
             self._high = new_pos
         self.click_offset = new_pos
         self.update()
+    
     def mouseReleaseEvent(self, event):
         self.level_change()
+    
     def __pick(self, pt):
         if self.orientation() == QtCore.Qt.Horizontal:
             return pt.x()
         else:
             return pt.y()
+    
     def __pixelPosToRangeValue(self, pos):
         opt = QtGui.QStyleOptionSlider()
         self.initStyleOption(opt)
@@ -185,11 +189,16 @@ class RangeSlider(QtGui.QSlider):
 class SatSlider(RangeSlider):
     def __init__(self, parent=None):
         super(SatSlider, self).__init__(parent)
+        #super(self.__class__, self).__init__()
         self.parent = parent
         self.setMinimum(0)
         self.setMaximum(100)
-        self.setLow(30)
-        self.setHigh(70)
+        self.setOrientation(QtCore.Qt.Horizontal)
+        #self.setLow(30)
+        #self.setHigh(70)
+        self.setTickInterval(10)
+        self.valueChanged.connect(lambda: self.level_change(parent))
+        self.setTracking(False)
 
     def level_change(self):
         self.parent.sat[0] = float(self._low)/100
@@ -224,7 +233,7 @@ class Slider(QtGui.QSlider):
         self.setTickPosition(QtGui.QSlider)
         self.setTickInterval(10)
         self.valueChanged.connect(lambda: self.level_change(parent,bid))
-        self.setTracking(True)
+        self.setTracking(False)
 
     def level_change(self, parent, bid):
         parent.sat[bid] = float(self.value())/100

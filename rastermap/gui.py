@@ -153,17 +153,14 @@ class MainW(QtGui.QMainWindow):
         self.upload_run_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
         self.upload_run_button.clicked.connect(lambda: io.load_run_data(self))
         self.upload_run_button.setEnabled(False)
-        self.run_corr_checkBox = QtGui.QCheckBox("All neurons")
-        self.run_corr_checkBox.setStyleSheet("color: gray;")
-        self.run_corr_checkBox.hide()
 
-        # add slider for levels  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Adjust slider!! ~~~~~~~~~~~~~~
+        # add slider for levels  
         self.sat = [0.3,0.7]
-        slider = QtGui.QSlider(QtCore.Qt.Horizontal)      
-        slider.setTickInterval(5)
-        slider.setTracking(False)#guiparts.SatSlider(self)
-        slider.setMaximum(100)
-        slider.setMinimum(0)
+        slider = guiparts.SatSlider(self)#QtGui.QSlider(QtCore.Qt.Horizontal)      
+        #slider.setTickInterval(5)
+        #slider.setTracking(False)#guiparts.SatSlider(self)
+        #slider.setMaximum(100)
+        #slider.setMinimum(0)
         #slider.setTickPosition(QtGui.QSlider)
         sat_label = QtGui.QLabel("Saturation")#guiparts.VerticalLabel(text='Saturation')
         sat_label.setStyleSheet('color: white;')
@@ -182,7 +179,13 @@ class MainW(QtGui.QMainWindow):
         line_edit.setReadOnly(True)
         self.scatter_comboBox.setCurrentIndex(0)
         self.scatter_comboBox.hide()
-        self.scatter_comboBox.currentIndexChanged.connect(self.scatter_comboBox_changed)
+        self.all_neurons_checkBox = QtGui.QCheckBox("All neurons")
+        self.all_neurons_checkBox.setStyleSheet("color: gray;")
+        self.all_neurons_checkBox.hide()
+        self.scatterplot_button = QtGui.QPushButton('Plot')
+        self.scatterplot_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.scatterplot_button.clicked.connect(self.plot_scatter_pressed)
+        self.scatterplot_button.hide()
 
         # ROI on main plot
         redpen = pg.mkPen(pg.mkColor(255, 0, 0),
@@ -247,10 +250,11 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(self.upload_run_button, ops_row_pos+4, 1, 1, 1)
         self.l0.addWidget(self.heatmap_checkBox, ops_row_pos+5, 0, 1, 1)
         self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+5, 1, 1, 1)
-        self.l0.addWidget(slider, ops_row_pos,2,1,2)
         self.l0.addWidget(sat_label,ops_row_pos,2,1,1)
-        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+12,12,1,1)
-        self.l0.addWidget(self.run_corr_checkBox,ops_row_pos+12,13,1,1)
+        self.l0.addWidget(slider, ops_row_pos,3,1,2)
+        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+11,12,1,1)
+        self.l0.addWidget(self.all_neurons_checkBox,ops_row_pos+11,13,1,1)
+        self.l0.addWidget(self.scatterplot_button,ops_row_pos+12,12,1,1)
 
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
@@ -272,7 +276,7 @@ class MainW(QtGui.QMainWindow):
         self.run_corr_all = None
         self.run_corr_selected = None
 
-    def scatter_comboBox_changed(self):
+    def plot_scatter_pressed(self):
         request = self.scatter_comboBox.currentIndex()
         self.p5.clear()
         self.p5.removeItem(self.scatter_plot)
@@ -295,12 +299,12 @@ class MainW(QtGui.QMainWindow):
             return
 
     def get_run_corr(self):
-        if self.run_corr_checkBox.isChecked() and self.run_corr_all is None:
+        if self.all_neurons_checkBox.isChecked() and self.run_corr_all is None:
             self.run_corr_all = np.zeros(self.sp_smoothed.shape[0])
             for i in range(len(self.run_corr_all)):
                 self.run_corr_all[i], _ = pearsonr(self.sp_smoothed[i], self.run_data)
             return self.run_corr_all
-        elif self.run_corr_checkBox.isChecked():
+        elif self.all_neurons_checkBox.isChecked():
             return self.run_corr_all
         else:
             self.run_corr_selected = np.zeros(len(self.selected))
@@ -310,7 +314,7 @@ class MainW(QtGui.QMainWindow):
 
     def plot_run_corr(self):
         r = self.get_run_corr()
-        if self.run_corr_checkBox.isChecked(): # all neurons
+        if self.all_neurons_checkBox.isChecked(): # all neurons
             embed = self.embedding[:,0].squeeze()
         else:                                  # selected neurons
             embed = self.embedding[self.selected].squeeze()
@@ -322,18 +326,29 @@ class MainW(QtGui.QMainWindow):
 
     def plot_neuron_pos(self):
         if self.embedded:
-            self.scatter_plot.setData(self.xpos_dat, -self.ypos_dat, symbol='o', c=self.embedding[:,0].squeeze(),
+            if self.all_neurons_checkBox.isChecked():
+                embed = self.embedding[:,0].squeeze()
+                xpos, ypos = self.xpos_dat, -self.ypos_dat
+            else:
+                embed = self.embedding[self.selected].squeeze()
+                xpos, ypos = self.xpos_dat[self.selected], -self.ypos_dat[self.selected]
+            self.scatter_plot.setData(xpos, ypos, symbol='o', c=embed,
                                  hoverable=True, hoverSize=15, cmap=cm.get_cmap("gist_ncar"))
+            self.p5.addItem(self.scatter_plot)
+            self.p5.setLabel('left', "y position")
+            self.p5.setLabel('bottom', "x position")
         else:
-            self.scatter_plot.setData(self.xpos_dat, -self.ypos_dat, symbol='o',
-                        hoverable=True, hoverSize=15)
-        self.p5.addItem(self.scatter_plot)
-        self.p5.setLabel('left', "y position")
-        self.p5.setLabel('bottom', "x position")
+            print("Please run embedding")
 
     def plot_neuron_depth(self):
         if self.embedded:
-            self.scatter_plot.setData(self.depth_dat, self.embedding[:,0].squeeze(), symbol='o', 
+            if self.all_neurons_checkBox.isChecked():
+                embed = self.embedding[:,0].squeeze()
+                depth = self.depth_dat
+            else:
+                embed = self.embedding[self.selected].squeeze()
+                depth = self.depth_dat[self.selected]
+            self.scatter_plot.setData(depth, embed, symbol='o', 
                                     brush=(1,1,1,1), hoverable=True, hoverSize=15)
             self.p5.addItem(self.scatter_plot)
             self.p5.setLabel('left', "Embedding position")
@@ -359,14 +374,16 @@ class MainW(QtGui.QMainWindow):
             self.win.removeItem(self.p1)
             self.win.addItem(self.p1, row=0, col=1, colspan=2)
             self.scatter_comboBox.show()
-            self.run_corr_checkBox.show()
+            self.all_neurons_checkBox.show()
+            self.scatterplot_button.show()
         else:
             try:
                 self.win.removeItem(self.p5)
                 self.win.removeItem(self.p1)
                 self.win.addItem(self.p1, row=0, col=1)
                 self.scatter_comboBox.hide()
-                self.run_corr_checkBox.hide()
+                self.all_neurons_checkBox.hide()
+                self.scatterplot_button.hide()
             except Exception as e:
                 return
 
