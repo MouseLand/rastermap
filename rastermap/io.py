@@ -164,22 +164,153 @@ def custom_set_params(parent, dialogBox):
         pass
     dialogBox.close()
 
-def load_behav_data(parent):
+def get_behav_data(parent):
+    dialog = QtWidgets.QDialog()
+    dialog.setWindowTitle("Upload behaviour files")
+    dialog.verticalLayout = QtWidgets.QVBoxLayout(dialog)
+
+    # Param options
+    dialog.behav_data_label = QtWidgets.QLabel(dialog)
+    dialog.behav_data_label.setTextFormat(QtCore.Qt.RichText)
+    dialog.behav_data_label.setText("Behavior matrix (*.npy):")
+    dialog.behav_data_button = QtGui.QPushButton('Upload')
+    dialog.behav_data_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+    dialog.behav_data_button.clicked.connect(lambda: load_behav_file(parent, dialog.behav_data_button))
+
+    dialog.behav_comps_label = QtWidgets.QLabel(dialog)
+    dialog.behav_comps_label.setTextFormat(QtCore.Qt.RichText)
+    dialog.behav_comps_label.setText("Behavior labels file (*.npy):")
+    dialog.behav_comps_button = QtGui.QPushButton('Upload')
+    dialog.behav_comps_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+    dialog.behav_comps_button.clicked.connect(lambda: load_behav_comps_file(parent, dialog.behav_comps_button))
+
+    dialog.ok_button = QtGui.QPushButton('Done')
+    dialog.ok_button.setDefault(True)
+    dialog.ok_button.clicked.connect(dialog.close)
+
+    # Add option to upload excel file containing behav data and comps/labels
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    # Set layout of options
+    dialog.widget = QtWidgets.QWidget(dialog)
+    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget)
+    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+    dialog.horizontalLayout.setObjectName("horizontalLayout")
+    dialog.horizontalLayout.addWidget(dialog.behav_data_label)
+    dialog.horizontalLayout.addWidget(dialog.behav_data_button)
+
+    dialog.widget1 = QtWidgets.QWidget(dialog)
+    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget1)
+    dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+    dialog.horizontalLayout.setObjectName("horizontalLayout")
+    dialog.horizontalLayout.addWidget(dialog.behav_comps_label)
+    dialog.horizontalLayout.addWidget(dialog.behav_comps_button)
+
+    dialog.widget2 = QtWidgets.QWidget(dialog)
+    dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget2)
+    dialog.horizontalLayout.addWidget(dialog.ok_button)
+
+    # Add options to dialog box
+    dialog.verticalLayout.addWidget(dialog.widget)
+    dialog.verticalLayout.addWidget(dialog.widget1)
+    dialog.verticalLayout.addWidget(dialog.widget2)
+
+    dialog.adjustSize()
+    dialog.exec_()
+
+def load_behav_comps_file(parent, button):
+    name = QtGui.QFileDialog.getOpenFileName(
+        parent, "Open *.npy", filter="*.npy"
+    )
+    name = name[0]
+    parent.behav_labels_loaded = False
+    try:
+        if parent.behav_loaded:
+            beh = np.load(name, allow_pickle=True) # Load file (behav_comps x time)
+            if beh.ndim == 1 and beh.shape[0] == parent.behav_data.shape[0]:
+                parent.behav_labels_loaded = True
+                parent.behav_labels = beh
+                print("Behav labels file loaded")
+                button.setText("Uploaded!")
+            else:
+                raise Exception("File contains incorrect dataset. Dimensions mismatch",
+                            beh.shape, "not same as", parent.behav_data.shape[0])
+        else:
+            raise Exception("Please upload behav data (matrix) first")
+    except Exception as e:
+        print(e)
+    # Add checkboxes for behav comps to display on heatmap and/or avg trace
+    if parent.behav_labels_loaded:
+        parent.behav_labels_selected = np.arange(0, len(parent.behav_labels)+1)
+        if len(parent.behav_labels) > 5:
+            prompt_behav_comps_ind(parent)
+        for i, comp_ind in enumerate(parent.behav_labels_selected):
+            parent.heatmap_chkbxs.append(QtGui.QCheckBox(parent.behav_labels[comp_ind]))
+            parent.heatmap_chkbxs[i].setStyleSheet("color: gray;")
+            parent.l0.addWidget(parent.heatmap_chkbxs[-1], 15+i, 12, 1, 2)
+        parent.show_heatmap_ops()
+        parent.scatterplot_checkBox.setChecked(True)
+    else:
+        return
+
+def prompt_behav_comps_ind(parent):
+    dialog = QtWidgets.QDialog()
+    dialog.setWindowTitle("Select max 5")
+    dialog.verticalLayout = QtWidgets.QVBoxLayout(dialog)
+
+    dialog.chkbxs = [] 
+    for k in range(len(parent.behav_labels)):
+        dialog.chkbxs.append(QtGui.QCheckBox(parent.behav_labels[k]))
+        dialog.chkbxs[k].setStyleSheet("color: black;")
+        dialog.chkbxs[k].toggled.connect(lambda: restrict_behav_comps_selection(dialog, parent))
+
+    dialog.ok_button = QtGui.QPushButton('Done')
+    dialog.ok_button.setDefault(True)
+    dialog.ok_button.clicked.connect(lambda: get_behav_comps_ind(dialog, parent))
+
+    # Add options to dialog box
+    for k in range(len(dialog.chkbxs)):
+        dialog.verticalLayout.addWidget(dialog.chkbxs[k])
+    dialog.verticalLayout.addWidget(dialog.ok_button)
+    
+    dialog.adjustSize()
+    dialog.exec_()
+
+def get_behav_comps_ind(dialog, parent):
+    parent.behav_labels_selected = []
+    for k in range(len(parent.behav_labels)):
+        if dialog.chkbxs[k].isChecked():
+            parent.behav_labels_selected.append(k)
+    dialog.close()
+
+def restrict_behav_comps_selection(dialog, parent):
+    chkbxs_count = 0
+    for k in range(len(dialog.chkbxs)):
+        if dialog.chkbxs[k].isChecked():
+            chkbxs_count += 1
+    if chkbxs_count > 5:
+        for k in range(len(dialog.chkbxs)):
+            dialog.chkbxs[k].setChecked(False)
+
+def load_behav_file(parent, button):
     name = QtGui.QFileDialog.getOpenFileName(
         parent, "Open *.npy", filter="*.npy"
     )
     name = name[0]
     parent.behav_loaded = False
     try:
-        beh = np.load(name)
+        beh = np.load(name) # Load file (behav_comps x time)
         if beh.ndim == 2 and beh.shape[1] == parent.sp.shape[1]:
             parent.behav_loaded = True
             print("Behav file loaded")
-    except (ValueError, KeyError, OSError,
-            RuntimeError, TypeError, NameError):
-        print("ERROR: this is not a 2D array with length of data")
+            button.setText("Uploaded!")
+        else:
+            raise Exception("File contains incorrect dataset. Dimensions mismatch",
+                         beh.shape[1], "not same as", parent.sp.shape[1])
+    except Exception as e:
+        print(e)
     if parent.behav_loaded:
-        parent.behav_data = beh
+        parent.behav_data = zscore(beh, axis=1)
         parent.plot_behav_data()
         parent.heatmap_checkBox.setChecked(True)
     else:

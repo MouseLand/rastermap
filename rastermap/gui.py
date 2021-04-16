@@ -43,6 +43,10 @@ class MainW(QtGui.QMainWindow):
         self.l0 = QtGui.QGridLayout()
         self.cwidget.setLayout(self.l0)
         self.win = pg.GraphicsLayoutWidget()
+        self.win.move(600,0)
+        self.win.resize(1000,500)
+        self.l0.addWidget(self.win,0,0,21,14)
+        layout = self.win.ci.layout
         
         # Neural activity/spike dataset set as self.sps
         sp = np.zeros((100,100), np.float32)
@@ -50,15 +54,9 @@ class MainW(QtGui.QMainWindow):
         nt = sp.shape[1]
         nn = sp.shape[0]
 
-        # --- cells image
-        self.win = pg.GraphicsLayoutWidget()
-        self.win.move(600,0)
-        self.win.resize(1000,500)
-        self.l0.addWidget(self.win,0,0,14,14)
-        layout = self.win.ci.layout
-        
+        # --- cells image        
         # A plot area (ViewBox + axes) for displaying the image
-        self.p0 = self.win.addViewBox(row=0,col=0)
+        self.p0 = self.win.addViewBox(lockAspect=True, row=0,col=0)
         self.p0.setMenuEnabled(False)
 
         # Plot entire neural activity dataset
@@ -80,10 +78,11 @@ class MainW(QtGui.QMainWindow):
         self.p2.hideAxis('bottom')
 
         # Plot avg. activity of neurons selected in ROI of zoomed in view
-        self.p3 = self.win.addPlot(title='Avg. activity (zoomed in neurons)',row=2,col=0,
+        self.p3 = self.win.addPlot(title='Zoom in ROI neural activity trace',row=2,col=0,
                                     colspan=2, padding=0)
         self.p3.setMouseEnabled(x=False,y=False)
         self.p3.setLabel('bottom', 'Time')
+        self.p3.setLabel('left', 'Avg. activity')
 
         # Plot behavioral dataset as heatmap
         self.p4 = self.win.addPlot(title='Heatmap',row=3,col=0,colspan=2)
@@ -144,7 +143,7 @@ class MainW(QtGui.QMainWindow):
         self.heatmap_checkBox.stateChanged.connect(self.update_plot_p4)
         self.upload_behav_button = QtGui.QPushButton('Upload behavior')
         self.upload_behav_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
-        self.upload_behav_button.clicked.connect(lambda: io.load_behav_data(self))
+        self.upload_behav_button.clicked.connect(lambda: io.get_behav_data(self))
         self.upload_behav_button.setEnabled(False)
         self.scatterplot_checkBox = QtGui.QCheckBox("Scatter plot")
         self.scatterplot_checkBox.setStyleSheet("color: gray;")
@@ -226,18 +225,8 @@ class MainW(QtGui.QMainWindow):
         # Default variables
         self.tpos = -0.5
         self.tsize = 1
-        self.loaded = False
-        self.run_loaded = False 
-        self.behav_loaded = False
-        self.embedded = False
-        self.run_corr_all = None
-        self.run_corr_selected = None
-        self.xpos_dat = None
-        self.ypos_dat = None
-        self.depth_dat = None
-        self.save_path = None  # Set default to current folder
-        self.embedding = None
-
+        self.reset_variables()
+        
         # Add features to window
         ops_row_pos = 0
         self.l0.addWidget(ysm, ops_row_pos, 0, 1, 1)
@@ -252,15 +241,15 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+5, 1, 1, 1)
         self.l0.addWidget(sat_label,ops_row_pos,2,1,1)
         self.l0.addWidget(slider, ops_row_pos,3,1,2)
-        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+11,12,1,1)
-        self.l0.addWidget(self.all_neurons_checkBox,ops_row_pos+11,13,1,1)
-        self.l0.addWidget(self.scatterplot_button,ops_row_pos+12,12,1,1)
+        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+16,12,1,1)
+        self.l0.addWidget(self.all_neurons_checkBox,ops_row_pos+16,13,1,1)
+        self.l0.addWidget(self.scatterplot_button,ops_row_pos+17,12,1,1)
 
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
         self.show()
 
-    def reset(self):
+    def reset(self): 
         self.run_embedding_button.setEnabled(False)
         self.heatmap_checkBox.setEnabled(False)
         self.scatterplot_checkBox.setEnabled(False)
@@ -269,12 +258,23 @@ class MainW(QtGui.QMainWindow):
         self.p3.clear()
         self.p4.clear()
         self.p5.clear()
+    
+    def reset_variables(self):
         self.loaded = False
         self.run_loaded = False 
-        self.behav_loaded = False
         self.embedded = False
+        self.behav_data = None
+        self.behav_labels = None
+        self.behav_loaded = False
+        self.behav_labels_loaded = False
         self.run_corr_all = None
         self.run_corr_selected = None
+        self.xpos_dat = None
+        self.ypos_dat = None
+        self.depth_dat = None
+        self.save_path = None  # Set default to current folder
+        self.embedding = None
+        self.heatmap_chkbxs = []
 
     def plot_scatter_pressed(self):
         request = self.scatter_comboBox.currentIndex()
@@ -357,11 +357,15 @@ class MainW(QtGui.QMainWindow):
             print("Please run embedding")
 
     def update_plot_p4(self):
+        self.update_scatter_ops_pos()
         if self.heatmap_checkBox.isChecked() and self.behav_loaded:
             self.win.addItem(self.p4, row=3, col=0, colspan=2)
+            if self.scatterplot_checkBox.isChecked():
+                self.show_heatmap_ops()
         elif not self.heatmap_checkBox.isChecked() and self.behav_loaded:
             try:
                 self.win.removeItem(self.p4)
+                self.hide_heatmap_ops()
             except Exception as e:
                 return
         else:
@@ -369,6 +373,7 @@ class MainW(QtGui.QMainWindow):
             return
         
     def update_plot_p5(self):
+        self.update_scatter_ops_pos()
         if self.scatterplot_checkBox.isChecked():
             self.win.addItem(self.p5, row=1, col=2)
             self.win.removeItem(self.p1)
@@ -384,17 +389,40 @@ class MainW(QtGui.QMainWindow):
                 self.scatter_comboBox.hide()
                 self.all_neurons_checkBox.hide()
                 self.scatterplot_button.hide()
+                self.hide_heatmap_ops.hide()
             except Exception as e:
                 return
 
     def plot_clicked(self,event):
         items = self.win.scene().items(event.scenePos())
         for x in items:
-            if x==self.p1:
-                if event.button()==1:
-                    if event.double():
-                        self.ROI.setPos([-1,-1])
-                        self.ROI.setSize([self.sp.shape[1]+1, self.sp.shape[0]+1])
+            if x==self.p1 and event.button()==1 and event.double():
+                self.ROI.setPos([-1,-1])
+                self.ROI.setSize([self.sp.shape[1]+1, self.sp.shape[0]+1])
+
+    def update_scatter_ops_pos(self):
+        if self.heatmap_checkBox.isChecked() and self.behav_loaded:
+            self.l0.removeWidget(self.scatter_comboBox)
+            self.l0.removeWidget(self.all_neurons_checkBox)
+            self.l0.removeWidget(self.scatterplot_button)
+            self.l0.addWidget(self.scatterplot_button,12,12,1,2)
+            self.l0.addWidget(self.scatter_comboBox,13,12,1,1)
+            self.l0.addWidget(self.all_neurons_checkBox,13,13,1,1)
+        else:
+            self.l0.removeWidget(self.scatter_comboBox)
+            self.l0.removeWidget(self.all_neurons_checkBox)
+            self.l0.removeWidget(self.scatterplot_button)
+            self.l0.addWidget(self.scatter_comboBox,16,12,1,1)
+            self.l0.addWidget(self.all_neurons_checkBox,16,13,1,1)
+            self.l0.addWidget(self.scatterplot_button,17,12,1,2)
+
+    def show_heatmap_ops(self):
+        for k in range(len(self.heatmap_chkbxs)):
+            self.heatmap_chkbxs[k].show()
+    
+    def hide_heatmap_ops(self):
+        for k in range(len(self.heatmap_chkbxs)):
+            self.heatmap_chkbxs[k].hide()
 
     def keyPressEvent(self, event):
         bid = -1
@@ -516,7 +544,7 @@ class MainW(QtGui.QMainWindow):
         self.xrange = xrange
         # Update zoom in plot
         self.imgROI.setImage(self.sp_smoothed[:, self.xrange])
-        self.p2.setXRange(0,self.xrange.size)
+        self.p2.setXRange(0,self.xrange.size,padding=0)
         # Update avg. activity and other data loaded (behaviour and running)
         self.plot_traces()
         if self.run_loaded:
@@ -575,8 +603,8 @@ class MainW(QtGui.QMainWindow):
         self.p3.show()
 
     def plot_behav_data(self):
-        beh = zscore(self.behav_data, axis=1)[:,self.xrange]
-        heatmap = pg.ImageItem(beh)
+        beh = self.behav_data[:,self.xrange]
+        heatmap = pg.ImageItem(beh, autoDownsample=True, levels=(-.5,.5))
         colormap = cm.get_cmap("coolwarm")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
