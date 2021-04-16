@@ -332,7 +332,7 @@ class MainW(QtGui.QMainWindow):
             else:
                 embed = self.embedding[self.selected].squeeze()
                 xpos, ypos = self.xpos_dat[self.selected], -self.ypos_dat[self.selected]
-            self.scatter_plot.setData(xpos, ypos, symbol='o', c=embed,
+            self.scatter_plot.setData(xpos, ypos, symbol='o', c=embed, s=0.1,
                                  hoverable=True, hoverSize=15, cmap=cm.get_cmap("gist_ncar"))
             self.p5.addItem(self.scatter_plot)
             self.p5.setLabel('left', "y position")
@@ -601,15 +601,19 @@ class MainW(QtGui.QMainWindow):
     def run_RMAP(self):
         if self.default_param_radiobutton.isChecked():
             io.set_rastermap_params(self)
+            print("Using default params")
+        else:
+            print("Using custom rastermap params")
         model = Rastermap(smoothness=1, 
-                                       n_clusters=self.n_clusters, 
-                                       n_PCs=200, 
-                                       n_splits=self.n_splits,
-                                       grid_upsample=self.grid_upsample).fit(self.sp)
+                        n_clusters=self.n_clusters, 
+                        n_PCs=200, 
+                        n_splits=self.n_splits,
+                        grid_upsample=self.grid_upsample).fit(self.sp)
 
         self.embedding = model.embedding
         self.embedded = True
         self.sorting = model.isort
+        self.U = model.U
         self.plot_activity()
 
 def run():

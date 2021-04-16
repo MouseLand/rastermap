@@ -58,6 +58,12 @@ def get_rastermap_params(parent):
         dialog.n_clusters = QtGui.QLineEdit()
         dialog.n_clusters.setText(str(50))
 
+        dialog.n_components_label = QtWidgets.QLabel(dialog)
+        dialog.n_components_label.setTextFormat(QtCore.Qt.RichText)
+        dialog.n_components_label.setText("n_components:")
+        dialog.n_components = QtWidgets.QLabel(dialog)
+        dialog.n_components.setText(str(1))
+
         dialog.n_neurons_label = QtWidgets.QLabel(dialog)
         dialog.n_neurons_label.setTextFormat(QtCore.Qt.RichText)
         dialog.n_neurons_label.setText("n_neurons:")
@@ -90,6 +96,13 @@ def get_rastermap_params(parent):
         dialog.horizontalLayout.addWidget(dialog.n_clusters_label)
         dialog.horizontalLayout.addWidget(dialog.n_clusters)
 
+        dialog.widget1 = QtWidgets.QWidget(dialog)
+        dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget1)
+        dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
+        dialog.horizontalLayout.setObjectName("horizontalLayout")
+        dialog.horizontalLayout.addWidget(dialog.n_components_label)
+        dialog.horizontalLayout.addWidget(dialog.n_components)
+
         dialog.widget2 = QtWidgets.QWidget(dialog)
         dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget2)
         dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
@@ -117,6 +130,7 @@ def get_rastermap_params(parent):
         dialog.horizontalLayout.addWidget(dialog.ok_button)
 
         # Add options to dialog box
+        dialog.verticalLayout.addWidget(dialog.widget1)
         dialog.verticalLayout.addWidget(dialog.widget)
         dialog.verticalLayout.addWidget(dialog.widget2)
         dialog.verticalLayout.addWidget(dialog.widget3)
@@ -128,13 +142,13 @@ def get_rastermap_params(parent):
 
 def set_rastermap_params(parent):
     if parent.default_param_radiobutton.isChecked():
-        print("Using default params")
         parent.n_clusters = 50
         parent.n_neurons = parent.sp.shape[0]
         if parent.n_neurons > 1000:
             parent.n_splits = min(4, parent.n_neurons//1000)
         else:
             parent.n_splits = 4
+        parent.n_components = 1
         parent.grid_upsample = min(10, parent.n_neurons // (parent.n_splits * (parent.n_clusters+1)))
     
 def custom_set_params(parent, dialogBox):
@@ -143,7 +157,7 @@ def custom_set_params(parent, dialogBox):
         parent.n_neurons = int(dialogBox.n_neurons.text())
         parent.grid_upsample = int(dialogBox.grid_upsample.text())
         parent.n_splits = int(dialogBox.n_splits.text())
-        print("Using custom rastermap params")
+        parent.n_components = 1        # for rastermap1d, future: int(dialogBox.n_components.text())
     except Exception as e:
         QtGui.QMessageBox.about(parent, 'Error','Invalid input entered')
         print(e)
@@ -304,11 +318,17 @@ def save_proc(parent): # Save embedding output
                 filename = parent.fname.split("/")[-1]
                 filename, ext = os.path.splitext(filename)
                 savename = os.path.join(parent.save_path, ("%s_rastermap_proc.npy"%filename))
-
-                proc = {'filenames': parent.fname, 'save_path': savepath,
-                        'isort' : parent.sorting, 'embedding' : parent.embedding}
+                # Rastermap embedding parameters
+                ops = {'n_components'   : parent.n_components, 
+                        'n_clusters'    : parent.n_clusters,
+                        'n_neurons'     : parent.n_neurons, 
+                        'grid_upsample' : parent.grid_upsample,
+                        'n_splits'      : parent.n_splits}
+                proc = {'filename': parent.fname, 'save_path': parent.save_path,
+                        'isort' : parent.sorting, 'embedding' : parent.embedding,
+                        'U' : parent.U, 'ops' : ops}
                 
-                np.save(savename, proc)
+                np.save(savename, proc, allow_pickle=True)
                 print("File saved:", savename)
         else:
             raise Exception("Please run embedding to save output")
@@ -326,17 +346,18 @@ def load_proc(parent, name=None):
     else:
         parent.fname = name
     try:
-        proc = np.load(name, allow_pickle=True)
-        proc = proc.item()
+        proc = np.load(name, allow_pickle=True).item()
         parent.proc = proc
-        # do not load X, use reconstruction
-        #X    = np.load(parent.proc['filename'])
+        X    = np.load(parent.proc['filename'])
         parent.filebase = parent.proc['filename']
-        y    = parent.proc['embedding']
-        u    = parent.proc['uv'][0]
-        v    = parent.proc['uv'][1]
-        ops  = parent.proc['ops']
-        X    = u @ v.T
+        isort = parent.proc['isort']
+        y     = parent.proc['embedding']
+        u     = parent.proc['U'] 
+        ops   = parent.proc['ops']
+        # do not load X, use reconstruction
+        #u     = parent.proc['uv'][0]
+        #v     = parent.proc['uv'][1]
+        #X     = u @ v.T
     except (ValueError, KeyError, OSError,
             RuntimeError, TypeError, NameError):
         print('ERROR: this is not a *.npy file :( ')
@@ -345,6 +366,7 @@ def load_proc(parent, name=None):
         parent.filebase = parent.proc['filename']
         iscell, file_iscell = parent.load_iscell()
 
+        """
         # check if training set used
         if 'train_time' in parent.proc:
             if parent.proc['train_time'].sum() < parent.proc['train_time'].size:
@@ -361,6 +383,7 @@ def load_proc(parent, name=None):
                 v = (u.T @ X).T
                 v /= ((v**2).sum(axis=0))**0.5
                 X = u @ v.T
+        """
         parent.startROI = False
         parent.endROI = False
         parent.posROI = np.zeros((3,2))
@@ -370,31 +393,35 @@ def load_proc(parent, name=None):
         parent.Rselected = []
         parent.Rcolors = []
         parent.p0.clear()
-        parent.sp = X#zscore(X, axis=1)
+
+        parent.sp = zscore(X, axis=1)
         del X
-        parent.sp += 1
-        parent.sp /= 9
+        parent.sp = np.maximum(-4, np.minimum(8, parent.sp)) + 4
+        parent.sp /= 12
+
         parent.embedding = y
+        parent.sorting = isort
+        parent.U = u #@ np.diag(usv[1])
         if ops['n_components'] > 1:
             parent.embedded = True
-            parent.enable_embedded()
         else:
             parent.p0.clear()
             parent.embedded=False
-            parent.disable_embedded()
 
-        parent.U   = u #@ np.diag(usv[1])
         ineur = 0
         parent.loaded = True
         parent.embedded = True
-        parent.run_embedding_button.setEnabled(True)
-        parent.upload_behav_button.setEnabled(True)
-        parent.upload_run_button.setEnabled(True)
-        parent.ROI_position()
+        """
         if parent.embedded:
-            parent.plot_embedding()
             parent.xp = pg.ScatterPlotItem(pos=parent.embedding[ineur,:][np.newaxis,:],
                                         symbol='x', pen=pg.mkPen(color=(255,0,0,255), width=3),
                                         size=12)#brush=pg.mkBrush(color=(255,0,0,255)), size=14)
             parent.p0.addItem(parent.xp)
+        """
+        parent.plot_activity()
+        parent.ROI_position()
+        parent.run_embedding_button.setEnabled(True)
+        parent.upload_behav_button.setEnabled(True)
+        parent.upload_run_button.setEnabled(True)
+        print("Loaded:", parent.proc['filename'])
         parent.show()
