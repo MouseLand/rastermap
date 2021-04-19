@@ -256,6 +256,7 @@ def add_behav_checkboxes(parent):
             parent.heatmap_chkbxs.append(QtGui.QCheckBox(parent.behav_labels[comp_ind]))
             parent.heatmap_chkbxs[-1].setStyleSheet("color: gray;")
             parent.heatmap_chkbxs[-1].toggled.connect(parent.behav_chkbx_toggled)
+            parent.heatmap_chkbxs[-1].setEnabled(False)
             parent.l0.addWidget(parent.heatmap_chkbxs[-1], 17+i, 12, 1, 2)
         parent.show_heatmap_ops()
         parent.update_scatter_ops_pos()

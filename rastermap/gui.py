@@ -76,6 +76,7 @@ class MainW(QtGui.QMainWindow):
         self.p2.addItem(self.imgROI)
         self.p2.setMouseEnabled(x=False,y=False)
         self.p2.hideAxis('bottom')
+        self.p2.invertY(True)
 
         # Plot avg. activity of neurons selected in ROI of zoomed in view
         self.p3 = self.win.addPlot(title='Zoom in ROI neural activity trace',row=2,col=0,
@@ -269,6 +270,7 @@ class MainW(QtGui.QMainWindow):
         self.depth_dat = None
         self.save_path = None  # Set default to current folder
         self.embedding = None
+        self.heatmap = None
         self.heatmap_chkbxs = []
 
     def plot_scatter_pressed(self):
@@ -421,7 +423,19 @@ class MainW(QtGui.QMainWindow):
             self.l0.addWidget(self.all_neurons_checkBox,19,13,1,1)
 
     def behav_chkbx_toggled(self):
-        print("Add functions")
+        if self.heatmap_chkbxs[0].isChecked():
+            self.plot_behav_data()
+            for k in np.arange(1, len(self.heatmap_chkbxs)):
+                self.heatmap_chkbxs[k].setEnabled(False)
+        else:
+            for k in np.arange(1, len(self.heatmap_chkbxs)):
+                self.heatmap_chkbxs[k].setEnabled(True)
+            disp_ind = []
+            for k in np.arange(1, len(self.heatmap_chkbxs)):
+                if self.heatmap_chkbxs[k].isChecked():
+                    disp_ind.append(np.where(self.heatmap_chkbxs[k].text() == self.behav_labels)[0][0])
+            if len(disp_ind) > 0:
+                self.plot_behav_data(np.array(disp_ind))
 
     def show_heatmap_ops(self):
         for k in range(len(self.heatmap_chkbxs)):
@@ -545,6 +559,8 @@ class MainW(QtGui.QMainWindow):
         _,yrange = self.roi_range(self.LINE)
         self.selected = yrange.astype('int')
         self.plot_traces()
+        if self.behav_loaded:
+            self.behav_ROI_update()
 
     def ROI_position(self):
         xrange,_ = self.roi_range(self.ROI)
@@ -557,7 +573,7 @@ class MainW(QtGui.QMainWindow):
         if self.run_loaded:
             self.plot_run_trace()
         if self.behav_loaded:
-            self.plot_behav_data()
+            self.behav_ROI_update()
 
         # reset ROIs
         self.LINE.maxBounds = QtCore.QRectF(-1,-1.,
@@ -609,19 +625,27 @@ class MainW(QtGui.QMainWindow):
         self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
         self.p3.show()
 
-    def plot_behav_data(self):
-        beh = self.behav_data#[:,self.xrange]
+    def plot_behav_data(self, selected=None):
+        if self.heatmap is not None:
+            self.p4.removeItem(self.heatmap)
+        if selected is None:
+            beh = self.behav_data
+        else:
+            beh = self.behav_data[selected]
         vmin, vmax = -np.percentile(self.behav_data, 95), np.percentile(self.behav_data, 95)
-        heatmap = pg.ImageItem(beh, autoDownsample=True, levels=(vmin,vmax))
+        self.heatmap = pg.ImageItem(beh, autoDownsample=True, levels=(vmin,vmax))
         colormap = cm.get_cmap("coolwarm")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
         lut = lut[0:-3,:]
         # apply the colormap
-        heatmap.setLookupTable(lut)
+        self.heatmap.setLookupTable(lut)        
+        self.p4.addItem(self.heatmap)
+        self.behav_ROI_update()
+
+    def behav_ROI_update(self):
         self.p4.setXRange(self.xrange[0],self.xrange[-1])
         self.p4.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
-        self.p4.addItem(heatmap)
 
     def load_iscell(self):
         basename,filename = os.path.split(self.filebase)
