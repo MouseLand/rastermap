@@ -331,13 +331,27 @@ class MainW(QtGui.QMainWindow):
             else:
                 embed = self.embedding[self.selected].squeeze()
                 xpos, ypos = self.xpos_dat[self.selected], -self.ypos_dat[self.selected]
-            self.scatter_plot.setData(xpos, ypos, symbol='o', c=embed, s=0.1,
-                                 hoverable=True, hoverSize=15, cmap=cm.get_cmap("gist_ncar"))
+            brushes = self.get_colors(embed)
+            self.scatter_plot.setData(xpos, ypos, symbol='o', brush=brushes,
+                                 hoverable=True, hoverSize=15)
             self.p5.addItem(self.scatter_plot)
             self.p5.setLabel('left', "y position")
             self.p5.setLabel('bottom', "x position")
         else:
             print("Please run embedding")
+
+    def get_colors(self, data):
+        num_classes = len(np.unique(data))+1
+        colors = cm.get_cmap('gist_ncar')(np.linspace(0, 1., num_classes))
+        colors *= 255
+        colors = colors.astype(int)
+        colors[:,-1] = 127
+        brushes = [pg.mkBrush(color=c) for c in colors]
+        ind = np.asarray([np.unique(data).tolist().index(i) for i in data]).astype(int)
+        cmap = []
+        for i in ind:
+            cmap.append(brushes[i])
+        return cmap
 
     def plot_neuron_depth(self):
         if self.embedded:
