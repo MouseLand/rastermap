@@ -3,6 +3,7 @@ import numpy as np
 from PyQt5 import QtGui, QtCore, QtWidgets
 import pyqtgraph as pg
 from scipy.stats import zscore
+import scipy.io as sio
 
 def load_mat(parent, name=None):
     try:
@@ -172,14 +173,14 @@ def get_behav_data(parent):
     # Param options
     dialog.behav_data_label = QtWidgets.QLabel(dialog)
     dialog.behav_data_label.setTextFormat(QtCore.Qt.RichText)
-    dialog.behav_data_label.setText("Behavior matrix (*.npy):")
+    dialog.behav_data_label.setText("Behavior matrix (*.npy, *.mat):")
     dialog.behav_data_button = QtGui.QPushButton('Upload')
     dialog.behav_data_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
     dialog.behav_data_button.clicked.connect(lambda: load_behav_file(parent, dialog.behav_data_button))
 
     dialog.behav_comps_label = QtWidgets.QLabel(dialog)
     dialog.behav_comps_label.setTextFormat(QtCore.Qt.RichText)
-    dialog.behav_comps_label.setText("Behavior labels file (*.npy):")
+    dialog.behav_comps_label.setText("(Optional) Behavior labels file (*.npy):")
     dialog.behav_comps_button = QtGui.QPushButton('Upload')
     dialog.behav_comps_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
     dialog.behav_comps_button.clicked.connect(lambda: load_behav_comps_file(parent, dialog.behav_comps_button))
@@ -187,9 +188,6 @@ def get_behav_data(parent):
     dialog.ok_button = QtGui.QPushButton('Done')
     dialog.ok_button.setDefault(True)
     dialog.ok_button.clicked.connect(dialog.close)
-
-    # Add option to upload excel file containing behav data and comps/labels
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     # Set layout of options
     dialog.widget = QtWidgets.QWidget(dialog)
@@ -232,6 +230,7 @@ def load_behav_comps_file(parent, button):
                 parent.behav_labels = beh
                 print("Behav labels file loaded")
                 button.setText("Uploaded!")
+                parent.heatmap_checkBox.setEnabled(True)
             else:
                 raise Exception("File contains incorrect dataset. Dimensions mismatch",
                             beh.shape, "not same as", parent.behav_data.shape[0])
@@ -239,19 +238,35 @@ def load_behav_comps_file(parent, button):
             raise Exception("Please upload behav data (matrix) first")
     except Exception as e:
         print(e)
+    add_behav_checkboxes(parent)
+
+def add_behav_checkboxes(parent):
     # Add checkboxes for behav comps to display on heatmap and/or avg trace
     if parent.behav_labels_loaded:
         parent.behav_labels_selected = np.arange(0, len(parent.behav_labels)+1)
         if len(parent.behav_labels) > 5:
             prompt_behav_comps_ind(parent)
+        clear_old_behav_checkboxes(parent)
+        parent.heatmap_chkbxs.append(QtGui.QCheckBox("All"))
+        parent.heatmap_chkbxs[0].setStyleSheet("color: gray;")
+        parent.heatmap_chkbxs[0].setChecked(True)
+        parent.heatmap_chkbxs[0].toggled.connect(parent.behav_chkbx_toggled)
+        parent.l0.addWidget(parent.heatmap_chkbxs[-1], 16, 12, 1, 2)
         for i, comp_ind in enumerate(parent.behav_labels_selected):
             parent.heatmap_chkbxs.append(QtGui.QCheckBox(parent.behav_labels[comp_ind]))
-            parent.heatmap_chkbxs[i].setStyleSheet("color: gray;")
-            parent.l0.addWidget(parent.heatmap_chkbxs[-1], 15+i, 12, 1, 2)
+            parent.heatmap_chkbxs[-1].setStyleSheet("color: gray;")
+            parent.heatmap_chkbxs[-1].toggled.connect(parent.behav_chkbx_toggled)
+            parent.l0.addWidget(parent.heatmap_chkbxs[-1], 17+i, 12, 1, 2)
         parent.show_heatmap_ops()
+        parent.update_scatter_ops_pos()
         parent.scatterplot_checkBox.setChecked(True)
     else:
         return
+
+def clear_old_behav_checkboxes(parent):
+    for k in range(len(parent.heatmap_chkbxs)):
+        parent.l0.removeWidget(parent.heatmap_chkbxs[k])
+    parent.heatmap_chkbxs = []
 
 def prompt_behav_comps_ind(parent):
     dialog = QtWidgets.QDialog()
@@ -294,27 +309,58 @@ def restrict_behav_comps_selection(dialog, parent):
 
 def load_behav_file(parent, button):
     name = QtGui.QFileDialog.getOpenFileName(
-        parent, "Open *.npy", filter="*.npy"
+        parent, "Load behaviour data", filter="*.npy *.mat"
     )
     name = name[0]
     parent.behav_loaded = False
-    try:
-        beh = np.load(name) # Load file (behav_comps x time)
-        if beh.ndim == 2 and beh.shape[1] == parent.sp.shape[1]:
-            parent.behav_loaded = True
-            print("Behav file loaded")
-            button.setText("Uploaded!")
-        else:
-            raise Exception("File contains incorrect dataset. Dimensions mismatch",
-                         beh.shape[1], "not same as", parent.sp.shape[1])
+    try:  # Load file (behav_comps x time)
+        ext = name.split(".")[-1]
+        if ext == "mat":
+            beh = sio.loadmat(name)
+            load_behav_dict(parent, beh)
+            del beh
+        elif ext == "npy":
+            beh = np.load(name, allow_pickle=True) 
+            dict_item = False
+            if beh.size == 1:
+                beh = beh.item()
+                dict_item = True
+            if dict_item:
+                load_behav_dict(parent, beh)
+            else:  # load matrix w/o labels and set default labels
+                if beh.ndim == 2 and beh.shape[1] == parent.sp.shape[1]:
+                    parent.behav_data = beh
+                    clear_old_behav_checkboxes(parent)
+                    parent.behav_loaded = True
+                else:
+                    raise Exception("File contains incorrect dataset. Dimensions mismatch",
+                                beh.shape[1], "not same as", parent.sp.shape[1])
+            del beh
     except Exception as e:
         print(e)
     if parent.behav_loaded:
-        parent.behav_data = zscore(beh, axis=1)
+        button.setText("Uploaded!")
+        parent.behav_data = zscore(parent.behav_data, axis=1)
         parent.plot_behav_data()
+        parent.heatmap_checkBox.setEnabled(True)
         parent.heatmap_checkBox.setChecked(True)
     else:
         return
+
+def load_behav_dict(parent, beh):
+    parent.behav_labels = []
+    for i, key in enumerate(beh.keys()):
+        if key not in ['__header__', '__version__', '__globals__']:
+            if np.array(beh[key]).size == parent.sp.shape[1]:
+                parent.behav_labels.append(key)
+    parent.behav_data = np.zeros((len(parent.behav_labels), parent.sp.shape[1]))
+    for j, key in enumerate(parent.behav_labels):
+        parent.behav_data[j] = beh[key]
+    parent.behav_data = np.array(parent.behav_data)
+    parent.behav_labels = np.array(parent.behav_labels)
+    parent.behav_loaded = True
+    parent.behav_labels_loaded = True
+    add_behav_checkboxes(parent)
 
 def load_run_data(parent):
     name = QtGui.QFileDialog.getOpenFileName(
@@ -497,24 +543,6 @@ def load_proc(parent, name=None):
         parent.filebase = parent.proc['filename']
         iscell, file_iscell = parent.load_iscell()
 
-        """
-        # check if training set used
-        if 'train_time' in parent.proc:
-            if parent.proc['train_time'].sum() < parent.proc['train_time'].size:
-                # not all training pts used
-                X    = np.load(parent.proc['filename'])
-                # show only test timepoints
-                X    = X[:,~parent.proc['train_time']]
-                if iscell is not None:
-                    if iscell.size == X.shape[0]:
-                        X = X[iscell, :]
-                        print('using iscell.npy in folder')
-                if len(X.shape) > 2:
-                    X = X.mean(axis=-1)
-                v = (u.T @ X).T
-                v /= ((v**2).sum(axis=0))**0.5
-                X = u @ v.T
-        """
         parent.startROI = False
         parent.endROI = False
         parent.posROI = np.zeros((3,2))
@@ -542,13 +570,6 @@ def load_proc(parent, name=None):
         ineur = 0
         parent.loaded = True
         parent.embedded = True
-        """
-        if parent.embedded:
-            parent.xp = pg.ScatterPlotItem(pos=parent.embedding[ineur,:][np.newaxis,:],
-                                        symbol='x', pen=pg.mkPen(color=(255,0,0,255), width=3),
-                                        size=12)#brush=pg.mkBrush(color=(255,0,0,255)), size=14)
-            parent.p0.addItem(parent.xp)
-        """
         parent.plot_activity()
         parent.ROI_position()
         parent.run_embedding_button.setEnabled(True)

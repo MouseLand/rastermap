@@ -45,7 +45,7 @@ class MainW(QtGui.QMainWindow):
         self.win = pg.GraphicsLayoutWidget()
         self.win.move(600,0)
         self.win.resize(1000,500)
-        self.l0.addWidget(self.win,0,0,21,14)
+        self.l0.addWidget(self.win,0,0,22,14)
         layout = self.win.ci.layout
         
         # Neural activity/spike dataset set as self.sps
@@ -141,6 +141,7 @@ class MainW(QtGui.QMainWindow):
         self.heatmap_checkBox = QtGui.QCheckBox("Behaviour")
         self.heatmap_checkBox.setStyleSheet("color: gray;")
         self.heatmap_checkBox.stateChanged.connect(self.update_plot_p4)
+        self.heatmap_checkBox.setEnabled(False)
         self.upload_behav_button = QtGui.QPushButton('Upload behavior')
         self.upload_behav_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
         self.upload_behav_button.clicked.connect(lambda: io.get_behav_data(self))
@@ -153,15 +154,10 @@ class MainW(QtGui.QMainWindow):
         self.upload_run_button.clicked.connect(lambda: io.load_run_data(self))
         self.upload_run_button.setEnabled(False)
 
-        # add slider for levels  
+        # Add slider for levels  
         self.sat = [0.3,0.7]
-        slider = guiparts.SatSlider(self)#QtGui.QSlider(QtCore.Qt.Horizontal)      
-        #slider.setTickInterval(5)
-        #slider.setTracking(False)#guiparts.SatSlider(self)
-        #slider.setMaximum(100)
-        #slider.setMinimum(0)
-        #slider.setTickPosition(QtGui.QSlider)
-        sat_label = QtGui.QLabel("Saturation")#guiparts.VerticalLabel(text='Saturation')
+        slider = guiparts.SatSlider(self)
+        sat_label = QtGui.QLabel("Saturation")
         sat_label.setStyleSheet('color: white;')
         self.img.setLevels([self.sat[0], self.sat[1]])
         self.imgROI.setLevels([self.sat[0], self.sat[1]])
@@ -242,8 +238,8 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(sat_label,ops_row_pos,2,1,1)
         self.l0.addWidget(slider, ops_row_pos,3,1,2)
         self.l0.addWidget(self.scatter_comboBox,ops_row_pos+16,12,1,1)
-        self.l0.addWidget(self.all_neurons_checkBox,ops_row_pos+16,13,1,1)
-        self.l0.addWidget(self.scatterplot_button,ops_row_pos+17,12,1,1)
+        self.l0.addWidget(self.all_neurons_checkBox,ops_row_pos+18,13,1,1)
+        self.l0.addWidget(self.scatterplot_button,ops_row_pos+19,12,1,1)
 
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
@@ -252,7 +248,6 @@ class MainW(QtGui.QMainWindow):
     def reset(self): 
         self.run_embedding_button.setEnabled(False)
         self.heatmap_checkBox.setEnabled(False)
-        self.scatterplot_checkBox.setEnabled(False)
         self.p1.clear()
         self.p2.clear()
         self.p3.clear()
@@ -282,6 +277,7 @@ class MainW(QtGui.QMainWindow):
         self.p5.removeItem(self.scatter_plot)
         self.p5.setLabel('left', "")
         self.p5.setLabel('bottom', "")
+        self.p5.invertY(False)
         if request == 1:
             if self.run_loaded and self.embedded:
                 self.plot_run_corr()
@@ -300,9 +296,9 @@ class MainW(QtGui.QMainWindow):
 
     def get_run_corr(self):
         if self.all_neurons_checkBox.isChecked() and self.run_corr_all is None:
-            self.run_corr_all = np.zeros(self.sp_smoothed.shape[0])
+            self.run_corr_all = np.zeros(self.sp.shape[0])
             for i in range(len(self.run_corr_all)):
-                self.run_corr_all[i], _ = pearsonr(self.sp_smoothed[i], self.run_data)
+                self.run_corr_all[i], _ = pearsonr(self.sp[i], self.run_data)
             return self.run_corr_all
         elif self.all_neurons_checkBox.isChecked():
             return self.run_corr_all
@@ -316,11 +312,12 @@ class MainW(QtGui.QMainWindow):
         r = self.get_run_corr()
         if self.all_neurons_checkBox.isChecked(): # all neurons
             embed = self.embedding[:,0].squeeze()
-        else:                                  # selected neurons
-            embed = self.embedding[self.selected].squeeze()
+        else:                                  # super neuron positions
+            embed = self.selected#self.embedding[self.selected].squeeze()
         self.scatter_plot.setData(r, embed, symbol='o', brush=(1,1,1,1),
                                     hoverable=True, hoverSize=15)
         self.p5.addItem(self.scatter_plot)
+        self.p5.invertY(True)
         self.p5.setLabel('left', "Embedding position")
         self.p5.setLabel('bottom', "Pearson's correlation")
 
@@ -381,6 +378,8 @@ class MainW(QtGui.QMainWindow):
             self.scatter_comboBox.show()
             self.all_neurons_checkBox.show()
             self.scatterplot_button.show()
+            if self.heatmap_checkBox.isChecked():
+                self.show_heatmap_ops()
         else:
             try:
                 self.win.removeItem(self.p5)
@@ -389,7 +388,7 @@ class MainW(QtGui.QMainWindow):
                 self.scatter_comboBox.hide()
                 self.all_neurons_checkBox.hide()
                 self.scatterplot_button.hide()
-                self.hide_heatmap_ops.hide()
+                self.hide_heatmap_ops()
             except Exception as e:
                 return
 
@@ -405,16 +404,24 @@ class MainW(QtGui.QMainWindow):
             self.l0.removeWidget(self.scatter_comboBox)
             self.l0.removeWidget(self.all_neurons_checkBox)
             self.l0.removeWidget(self.scatterplot_button)
-            self.l0.addWidget(self.scatterplot_button,12,12,1,2)
-            self.l0.addWidget(self.scatter_comboBox,13,12,1,1)
-            self.l0.addWidget(self.all_neurons_checkBox,13,13,1,1)
+            if self.behav_labels_loaded:
+                self.l0.addWidget(self.scatterplot_button,14,12,1,2)
+                self.l0.addWidget(self.scatter_comboBox,15,12,1,1)
+                self.l0.addWidget(self.all_neurons_checkBox,15,13,1,1)
+            else:
+                self.l0.addWidget(self.scatterplot_button,15,12,1,2)
+                self.l0.addWidget(self.scatter_comboBox,16,12,1,1)
+                self.l0.addWidget(self.all_neurons_checkBox,16,13,1,1)
         else:
             self.l0.removeWidget(self.scatter_comboBox)
             self.l0.removeWidget(self.all_neurons_checkBox)
             self.l0.removeWidget(self.scatterplot_button)
-            self.l0.addWidget(self.scatter_comboBox,16,12,1,1)
-            self.l0.addWidget(self.all_neurons_checkBox,16,13,1,1)
-            self.l0.addWidget(self.scatterplot_button,17,12,1,2)
+            self.l0.addWidget(self.scatterplot_button,18,12,1,2)
+            self.l0.addWidget(self.scatter_comboBox,19,12,1,1)
+            self.l0.addWidget(self.all_neurons_checkBox,19,13,1,1)
+
+    def behav_chkbx_toggled(self):
+        print("Add functions")
 
     def show_heatmap_ops(self):
         for k in range(len(self.heatmap_chkbxs)):
@@ -603,14 +610,16 @@ class MainW(QtGui.QMainWindow):
         self.p3.show()
 
     def plot_behav_data(self):
-        beh = self.behav_data[:,self.xrange]
-        heatmap = pg.ImageItem(beh, autoDownsample=True, levels=(-.5,.5))
+        beh = self.behav_data#[:,self.xrange]
+        vmin, vmax = -np.percentile(self.behav_data, 95), np.percentile(self.behav_data, 95)
+        heatmap = pg.ImageItem(beh, autoDownsample=True, levels=(vmin,vmax))
         colormap = cm.get_cmap("coolwarm")
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
         lut = lut[0:-3,:]
         # apply the colormap
         heatmap.setLookupTable(lut)
+        self.p4.setXRange(self.xrange[0],self.xrange[-1])
         self.p4.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
         self.p4.addItem(heatmap)
 
