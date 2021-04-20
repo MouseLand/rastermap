@@ -87,7 +87,7 @@ class Rastermap:
         self.fit(X, u)
         return self.embedding
 
-    def fit(self, data=None, u=None, itrain=None, time_bin=0, 
+    def fit(self, data=None, u=None, itrain=None, time_bin=0, normalize=True,
             compute_X_embedding=True, compute_metrics=False):
         """Fit X into an embedded space.
         Inputs
@@ -108,8 +108,11 @@ class Rastermap:
             ### compute svd and keep iPC's of data
             
             # normalize X
-            X = zscore(data, axis=1) 
-            X -= X.mean(axis=0)
+            if normalize:
+                X = zscore(data, axis=1) 
+                X -= X.mean(axis=0)
+            else:
+                X = data
 
             nmin = np.min(X.shape) - 1 
             nmin = min(nmin, self.n_PCs)
@@ -135,8 +138,11 @@ class Rastermap:
             pc_time = 0
             if data is not None:
                 # normalize X
-                X = zscore(data, axis=1) 
-                X -= X.mean(axis=0)
+                if normalize:
+                    X = zscore(data, axis=1) 
+                    X -= X.mean(axis=0)
+                else:
+                    X = data
                 if itrain is not None:
                     self.X_test = self.U @ (self.U.T @ X[:,~itrain])
 
