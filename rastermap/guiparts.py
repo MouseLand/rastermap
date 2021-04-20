@@ -3,6 +3,7 @@ import pyqtgraph as pg
 from pyqtgraph import functions as fn
 from pyqtgraph import Point
 import numpy as np
+from pyqtgraph import ItemSample
 
 # custom vertical label
 class VerticalLabel(QtGui.QWidget):

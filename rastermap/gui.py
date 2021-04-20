@@ -241,7 +241,7 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(self.scatter_comboBox,ops_row_pos+16,12,1,1)
         self.l0.addWidget(self.all_neurons_checkBox,ops_row_pos+18,13,1,1)
         self.l0.addWidget(self.scatterplot_button,ops_row_pos+19,12,1,1)
-
+        
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
         self.show()
@@ -260,9 +260,13 @@ class MainW(QtGui.QMainWindow):
         self.run_loaded = False 
         self.embedded = False
         self.behav_data = None
-        self.behav_labels = None
+        self.behav_binary_data = None
+        self.behav_bin_plot_list = []
+        self.behav_labels = []
         self.behav_loaded = False
         self.behav_labels_loaded = False
+        self.behav_binary_labels = []
+        self.behav_binary_labels_loaded = False
         self.run_corr_all = None
         self.run_corr_selected = None
         self.xpos_dat = None
@@ -272,6 +276,10 @@ class MainW(QtGui.QMainWindow):
         self.embedding = None
         self.heatmap = None
         self.heatmap_chkbxs = []
+        self.run_trace_plot = pg.PlotDataItem()
+        self.run_trace_plot_added = False
+        self.run_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30)
+        self.symbol_list = ['star', 'd', 'x', 'o', 't', 't1', 't2', 'p', '+', 's', 't3', 'h']
 
     def plot_scatter_pressed(self):
         request = self.scatter_comboBox.currentIndex()
@@ -347,10 +355,7 @@ class MainW(QtGui.QMainWindow):
         colors = colors.astype(int)
         colors[:,-1] = 127
         brushes = [pg.mkBrush(color=c) for c in colors]
-        ind = np.asarray([np.unique(data).tolist().index(i) for i in data]).astype(int)
-        cmap = []
-        for i in ind:
-            cmap.append(brushes[i])
+        cmap = np.asarray([brushes[np.unique(data).tolist().index(i)] for i in data])
         return cmap
 
     def plot_neuron_depth(self):
@@ -416,22 +421,25 @@ class MainW(QtGui.QMainWindow):
                 self.ROI.setSize([self.sp.shape[1]+1, self.sp.shape[0]+1])
 
     def update_scatter_ops_pos(self):
+        self.l0.removeWidget(self.scatter_comboBox)
+        self.l0.removeWidget(self.all_neurons_checkBox)
+        self.l0.removeWidget(self.scatterplot_button)
         if self.heatmap_checkBox.isChecked() and self.behav_loaded:
-            self.l0.removeWidget(self.scatter_comboBox)
-            self.l0.removeWidget(self.all_neurons_checkBox)
-            self.l0.removeWidget(self.scatterplot_button)
-            if self.behav_labels_loaded:
-                self.l0.addWidget(self.scatterplot_button,14,12,1,2)
-                self.l0.addWidget(self.scatter_comboBox,15,12,1,1)
-                self.l0.addWidget(self.all_neurons_checkBox,15,13,1,1)
+            if len(self.heatmap_chkbxs) <= 3:
+                k = 1
+            elif len(self.heatmap_chkbxs) >= 5:
+                k = -1
             else:
-                self.l0.addWidget(self.scatterplot_button,15,12,1,2)
-                self.l0.addWidget(self.scatter_comboBox,16,12,1,1)
-                self.l0.addWidget(self.all_neurons_checkBox,16,13,1,1)
+                k = 0
+            if self.behav_labels_loaded:
+                self.l0.addWidget(self.scatterplot_button,13+k,12,1,2)
+                self.l0.addWidget(self.scatter_comboBox,14+k,12,1,1)
+                self.l0.addWidget(self.all_neurons_checkBox,14+k,13,1,1)
+            else:
+                self.l0.addWidget(self.scatterplot_button,16,12,1,2)
+                self.l0.addWidget(self.scatter_comboBox,17,12,1,1)
+                self.l0.addWidget(self.all_neurons_checkBox,17,13,1,1)
         else:
-            self.l0.removeWidget(self.scatter_comboBox)
-            self.l0.removeWidget(self.all_neurons_checkBox)
-            self.l0.removeWidget(self.scatterplot_button)
             self.l0.addWidget(self.scatterplot_button,18,12,1,2)
             self.l0.addWidget(self.scatter_comboBox,19,12,1,1)
             self.l0.addWidget(self.all_neurons_checkBox,19,13,1,1)
@@ -556,15 +564,13 @@ class MainW(QtGui.QMainWindow):
         yrange = yrange[yrange<self.sp.shape[0]]
         return xrange,yrange
 
-    def plot_traces(self):
+    def plot_avg_activity_trace(self):
         if self.loaded:
             avg = self.sp_smoothed[np.ix_(self.selected,self.xrange)].mean(axis=0)
             avg -= avg.min()
             avg /= avg.max()
             self.p3.clear()
             self.p3.plot(self.xrange,avg,pen=(255,0,0))
-            if self.run_loaded:
-                self.plot_run_trace()
             self.p3.setXRange(self.xrange[0],self.xrange[-1])
             self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
             self.p3.show()
@@ -572,9 +578,13 @@ class MainW(QtGui.QMainWindow):
     def LINE_position(self):
         _,yrange = self.roi_range(self.LINE)
         self.selected = yrange.astype('int')
-        self.plot_traces()
+        self.plot_avg_activity_trace()
+        if self.run_loaded: 
+            self.plot_run_trace()
         if self.behav_loaded:
             self.behav_ROI_update()
+        if self.behav_binary_data is not None:
+            self.plot_behav_binary_data()
 
     def ROI_position(self):
         xrange,_ = self.roi_range(self.ROI)
@@ -583,11 +593,13 @@ class MainW(QtGui.QMainWindow):
         self.imgROI.setImage(self.sp_smoothed[:, self.xrange])
         self.p2.setXRange(0,self.xrange.size,padding=0)
         # Update avg. activity and other data loaded (behaviour and running)
-        self.plot_traces()
-        if self.run_loaded:
-            self.plot_run_trace()
+        self.plot_avg_activity_trace()
+        if self.run_loaded: 
+            self.plot_run_trace()    
         if self.behav_loaded:
             self.behav_ROI_update()
+        if self.behav_binary_data is not None:
+            self.plot_behav_binary_data()
 
         # reset ROIs
         self.LINE.maxBounds = QtCore.QRectF(-1,-1.,
@@ -634,10 +646,33 @@ class MainW(QtGui.QMainWindow):
         avg -= avg.min()
         avg /= avg.max()
         avg = avg[self.xrange]
-        self.p3.plot(self.xrange, avg, pen=(0,255,0))
+        self.run_trace_plot.setData(self.xrange, avg, pen=(0,255,0))
+        if self.run_trace_plot_added:
+            self.p3.removeItem(self.run_trace_plot)
+        else:
+            self.run_legend.addItem(self.run_trace_plot, name='Run')
+            self.run_legend.setPos(self.run_trace_plot.x()+70, self.run_trace_plot.y())
+            self.run_legend.setParentItem(self.p3)
+        self.p3.addItem(self.run_trace_plot, pen=(0,255,0))
+        self.run_trace_plot_added = True
         self.p3.setXRange(self.xrange[0],self.xrange[-1])
         self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
-        self.p3.show()
+        try:
+            self.run_legend.sigClicked.connect(self.mouseClickEvent)
+        except Exception as e:
+            return
+
+    def plot_behav_binary_data(self):
+        for i in range(len(self.behav_bin_plot_list)):
+            self.p3.removeItem(self.behav_bin_plot_list[i])
+            dat = self.behav_binary_data[i][self.xrange]
+            xdat, ydat = self.xrange[dat>0], dat[dat>0]
+            self.behav_bin_plot_list[i].setData(xdat, ydat, pen=None, symbol=self.symbol_list[i], symbolSize=12)
+            self.p3.addItem(self.behav_bin_plot_list[i])
+            try:
+                self.behav_bin_legend.sigClicked.connect(self.mouseClickEvent)
+            except Exception as e:
+                return
 
     def plot_behav_data(self, selected=None):
         if self.heatmap is not None:

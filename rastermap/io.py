@@ -251,13 +251,13 @@ def add_behav_checkboxes(parent):
         parent.heatmap_chkbxs[0].setStyleSheet("color: gray;")
         parent.heatmap_chkbxs[0].setChecked(True)
         parent.heatmap_chkbxs[0].toggled.connect(parent.behav_chkbx_toggled)
-        parent.l0.addWidget(parent.heatmap_chkbxs[-1], 16, 12, 1, 2)
+        parent.l0.addWidget(parent.heatmap_chkbxs[-1], 15, 12, 1, 2)
         for i, comp_ind in enumerate(parent.behav_labels_selected):
             parent.heatmap_chkbxs.append(QtGui.QCheckBox(parent.behav_labels[comp_ind]))
             parent.heatmap_chkbxs[-1].setStyleSheet("color: gray;")
             parent.heatmap_chkbxs[-1].toggled.connect(parent.behav_chkbx_toggled)
             parent.heatmap_chkbxs[-1].setEnabled(False)
-            parent.l0.addWidget(parent.heatmap_chkbxs[-1], 17+i, 12, 1, 2)
+            parent.l0.addWidget(parent.heatmap_chkbxs[-1], 16+i, 12, 1, 2)
         parent.show_heatmap_ops()
         parent.update_scatter_ops_pos()
         parent.scatterplot_checkBox.setChecked(True)
@@ -349,19 +349,36 @@ def load_behav_file(parent, button):
         return
 
 def load_behav_dict(parent, beh):
-    parent.behav_labels = []
     for i, key in enumerate(beh.keys()):
         if key not in ['__header__', '__version__', '__globals__']:
             if np.array(beh[key]).size == parent.sp.shape[1]:
                 parent.behav_labels.append(key)
-    parent.behav_data = np.zeros((len(parent.behav_labels), parent.sp.shape[1]))
-    for j, key in enumerate(parent.behav_labels):
-        parent.behav_data[j] = beh[key]
-    parent.behav_data = np.array(parent.behav_data)
-    parent.behav_labels = np.array(parent.behav_labels)
-    parent.behav_loaded = True
-    parent.behav_labels_loaded = True
-    add_behav_checkboxes(parent)
+                parent.behav_labels_loaded = True
+            else:
+                parent.behav_binary_labels.append(key)
+                parent.behav_binary_labels_loaded = True
+    if parent.behav_labels_loaded:
+        parent.behav_data = np.zeros((len(parent.behav_labels), parent.sp.shape[1]))
+        for j, key in enumerate(parent.behav_labels):
+            parent.behav_data[j] = beh[key]
+        parent.behav_data = np.array(parent.behav_data)
+        parent.behav_labels = np.array(parent.behav_labels)
+        parent.behav_loaded = True
+        add_behav_checkboxes(parent)
+    if parent.behav_binary_labels_loaded:
+        parent.behav_binary_data = np.zeros((len(parent.behav_binary_labels), parent.sp.shape[1]))
+        parent.behav_bin_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30, colCount=len(parent.behav_binary_labels))
+        for i, key in enumerate(parent.behav_binary_labels):
+            dat = np.zeros(parent.sp.shape[1]) 
+            dat[beh[key]] = 1                   # Convert to binary for stim/lick time
+            parent.behav_binary_data[i] = dat
+            parent.behav_bin_plot_list.append(pg.PlotDataItem(symbol=parent.symbol_list[i]))
+            parent.behav_bin_legend.addItem(parent.behav_bin_plot_list[i], name=parent.behav_binary_labels[i])
+            parent.behav_bin_legend.setPos(parent.run_trace_plot.x()+(20*i), parent.run_trace_plot.y())
+            parent.behav_bin_legend.setParentItem(parent.p3)
+            parent.p3.addItem(parent.behav_bin_plot_list[-1])
+    if parent.behav_binary_data is not None:
+        parent.plot_behav_binary_data()
 
 def load_run_data(parent):
     name = QtGui.QFileDialog.getOpenFileName(
