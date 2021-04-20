@@ -9,32 +9,27 @@ from rastermap.metrics import embedding_score
 
 def run_TSNE(U, perplexities=[30]):
     if len(perplexities) > 1:
-        affinities = affinity.Multiscale(
-            U,
-            perplexities=perplexities,
-            metric="cosine",
-            n_jobs=16,
-            random_state=1,
-            #verbose=True
-        )
-        affinities = affinity.PerplexityBasedNN(
-            U,
-            perplexity=perplexities[0],
-            metric="cosine",
-            n_jobs=16,
-            random_state=1,
-            #verbose=True
+        affinities_annealing = affinity.PerplexityBasedNN(
+                                U,
+                                perplexity=perplexities[1],
+                                metric="cosine",
+                                n_jobs=16,
+                                random_state=1,
+                                verbose=True
         )
         embedding = TSNEEmbedding(
-                       U[:,:1]*0.0001,
-                        affinities,
-                        negative_gradient_method="fft",
-                        random_state=0,
-                        n_jobs=16,
-                    )
+                                U[:,:1]*0.0001,
+                                affinities_annealing,
+                                negative_gradient_method="fft",
+                                random_state=0,
+                                n_jobs=16,
+                                verbose=True
+                            )
         embedding1 = embedding.optimize(n_iter=250, exaggeration=12, momentum=0.5)
-        embeddingOPENTSNE = embedding1.optimize(n_iter=500, exaggeration=1, momentum=0.8)
-        #embeddingOPENTSNE = fitter.optimize(n_iter=250)
+        embedding2 = embedding1.optimize(n_iter=750, exaggeration=1, momentum=0.8)
+
+        affinities_annealing.set_perplexity(perplexities[0])
+        embeddingOPENTSNE = embedding2.optimize(n_iter=500, momentum=0.8)
     else:
         tsne = TSNE(
             perplexity=perplexities[0],
