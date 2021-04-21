@@ -280,6 +280,7 @@ class MainW(QtGui.QMainWindow):
         self.run_trace_plot_added = False
         self.run_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30)
         self.symbol_list = ['star', 'd', 'x', 'o', 't', 't1', 't2', 'p', '+', 's', 't3', 'h']
+        self.embed_time_range = -1
 
     def plot_scatter_pressed(self):
         request = self.scatter_comboBox.currentIndex()
@@ -711,15 +712,22 @@ class MainW(QtGui.QMainWindow):
     def run_RMAP(self):
         if self.default_param_radiobutton.isChecked():
             io.set_rastermap_params(self)
-            print("Using default params")
+            print("Using default parameters for rastermap")
         else:
-            print("Using custom rastermap params")
+            print("Using custom parameters for rastermap")
+        if self.embed_time_range is not -1:
+            dat = self.sp[:,self.embed_time_range[0]:self.embed_time_range[-1]]
+            self.xrange = self.embed_time_range
+            self.ROI.setPos(self.xrange)
+            print("Running embedding on selected time range", self.embed_time_range, dat.shape)
+        else:
+            dat = self.sp
         model = Rastermap(smoothness=1, 
                         n_clusters=self.n_clusters, 
                         n_PCs=200, 
                         n_splits=self.n_splits,
-                        grid_upsample=self.grid_upsample).fit(self.sp)
-
+                        grid_upsample=self.grid_upsample).fit(dat)
+        del dat
         self.embedding = model.embedding
         self.embedded = True
         self.sorting = model.isort
