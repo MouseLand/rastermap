@@ -6,23 +6,33 @@ from scipy.stats import zscore
 import scipy.io as sio
 from . import guiparts
 
-def load_mat(parent, name=None):
+def load_mat(parent, name=None): # Load data matrix (neurons x time)
     try:
         if name is None:
             name = QtGui.QFileDialog.getOpenFileName(
-                parent, "Open *.npy", filter="*.npy")
+                parent, "Open *.npy", filter="*.npy *.mat")
             parent.fname = name[0]
             parent.filebase = name[0]
+            ext = parent.fname.split(".")[-1]
         else:
             parent.fname = name
             parent.filebase = name
         print("Loading", parent.fname)
-        X = np.load(parent.fname)
-        print("Data loaded:", X.shape)
+        if ext == "mat":        #Note: can only load mat files containing one key assigned to data matrix
+            X = sio.loadmat(parent.fname)
+            for i, key in enumerate(X.keys()):
+                if key not in ['__header__', '__version__', '__globals__']:
+                    X = X[key]
+        elif ext == "npy":
+            X = np.load(parent.fname, allow_pickle=True)
+        else:
+            raise Exception("Invalid file type")
     except Exception as e:
                 print('ERROR: this is not a *.npy array :( ')
+                print(e)
                 X = None
     if X is not None and X.ndim > 1:
+        print("Data loaded:", X.shape)
         iscell, file_iscell = parent.load_iscell()
         parent.file_iscell = None
         if iscell is not None:
@@ -95,6 +105,10 @@ def get_rastermap_params(parent):
         dialog.time_label.setTextFormat(QtCore.Qt.RichText)
         dialog.time_label.setText("Time range:")
         dialog.slider = guiparts.TimeRangeSlider(parent)
+        dialog.slider.setEnabled(False)
+        dialog.time_checkbox = QtGui.QCheckBox("Set time range")
+        dialog.time_checkbox.setChecked(False)
+        dialog.time_checkbox.toggled.connect(lambda: enable_time_range(dialog))
 
         dialog.ok_button = QtGui.QPushButton('Ok')
         dialog.ok_button.setDefault(True)
@@ -125,6 +139,7 @@ def get_rastermap_params(parent):
         dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget3)
         dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
         dialog.horizontalLayout.setObjectName("horizontalLayout")
+        dialog.horizontalLayout.addWidget(dialog.time_checkbox)
         dialog.horizontalLayout.addWidget(dialog.grid_upsample_label)
         dialog.horizontalLayout.addWidget(dialog.grid_upsample)
 
@@ -150,6 +165,12 @@ def get_rastermap_params(parent):
         dialog.adjustSize()
         dialog.exec_()
 
+def enable_time_range(dialog):
+    if dialog.time_checkbox.isChecked():
+        dialog.slider.setEnabled(True)
+    else:
+        dialog.slider.setEnabled(False)
+
 def set_rastermap_params(parent):
     if parent.default_param_radiobutton.isChecked():
         parent.n_clusters = 50
@@ -168,8 +189,12 @@ def custom_set_params(parent, dialogBox):
         parent.n_neurons = int(dialogBox.n_neurons.text())
         parent.grid_upsample = int(dialogBox.grid_upsample.text())
         parent.n_splits = int(dialogBox.n_splits.text())
-        parent.n_components = int(dialogBox.n_components.text())      
-        parent.embed_time_range = (dialogBox.slider.get_slider_values())
+        parent.n_components = int(dialogBox.n_components.text())     
+        if dialogBox.time_checkbox.isChecked():
+            parent.embed_time_range = (dialogBox.slider.get_slider_values())
+        else:
+            parent.embed_time_range = -1
+        parent.params_set = True
     except Exception as e:
         QtGui.QMessageBox.about(parent, 'Error','Invalid input entered')
         print(e)

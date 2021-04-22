@@ -101,7 +101,7 @@ class MainW(QtGui.QMainWindow):
         self.win.removeItem(self.p5)
 
         # Set colormap to deafult of gray_r. ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Future: add option to change cmap ~~~~~~~~~~~~~~
-        colormap = cm.get_cmap("gray_r")
+        colormap = cm.get_cmap("gray_r") #bwr, coolwarm
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
         lut = lut[0:-3,:]
@@ -136,7 +136,7 @@ class MainW(QtGui.QMainWindow):
         self.RadioGroup.addButton(self.default_param_radiobutton)
         self.custom_param_radiobutton = QtGui.QRadioButton("Custom")
         self.custom_param_radiobutton.setStyleSheet("color: gray;")
-        self.custom_param_radiobutton.toggled.connect(lambda: io.get_rastermap_params(self))
+        #self.custom_param_radiobutton.toggled.connect(lambda: io.get_rastermap_params(self))
         self.RadioGroup.addButton(self.custom_param_radiobutton)
 
         self.heatmap_checkBox = QtGui.QCheckBox("Behaviour")
@@ -281,6 +281,7 @@ class MainW(QtGui.QMainWindow):
         self.run_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30)
         self.symbol_list = ['star', 'd', 'x', 'o', 't', 't1', 't2', 'p', '+', 's', 't3', 'h']
         self.embed_time_range = -1
+        self.params_set = False
 
     def plot_scatter_pressed(self):
         request = self.scatter_comboBox.currentIndex()
@@ -710,29 +711,33 @@ class MainW(QtGui.QMainWindow):
         return iscell, file_iscell
 
     def run_RMAP(self):
+        self.params_set = False
         if self.default_param_radiobutton.isChecked():
             io.set_rastermap_params(self)
+            self.params_set = True
             print("Using default parameters for rastermap")
         else:
-            print("Using custom parameters for rastermap")
-        if self.embed_time_range is not -1:
-            dat = self.sp[:,self.embed_time_range[0]:self.embed_time_range[-1]]
-            self.xrange = self.embed_time_range
-            self.ROI.setPos(self.xrange)
-            print("Running embedding on selected time range", self.embed_time_range, dat.shape)
-        else:
-            dat = self.sp
-        model = Rastermap(smoothness=1, 
-                        n_clusters=self.n_clusters, 
-                        n_PCs=200, 
-                        n_splits=self.n_splits,
-                        grid_upsample=self.grid_upsample).fit(dat)
-        del dat
-        self.embedding = model.embedding
-        self.embedded = True
-        self.sorting = model.isort
-        self.U = model.U
-        self.plot_activity()
+            io.get_rastermap_params(self)
+            print("Set custom parameters for rastermap")
+        if self.params_set:
+            if self.embed_time_range != -1:
+                dat = self.sp[:,self.embed_time_range[0]:self.embed_time_range[-1]]
+                self.xrange = self.embed_time_range
+                self.ROI.setPos(self.xrange)
+                print("Running embedding on selected time range", self.embed_time_range, dat.shape)
+            else:
+                dat = self.sp
+            model = Rastermap(smoothness=1, 
+                            n_clusters=self.n_clusters, 
+                            n_PCs=200, 
+                            n_splits=self.n_splits,
+                            grid_upsample=self.grid_upsample).fit(dat)
+            del dat
+            self.embedding = model.embedding
+            self.embedded = True
+            self.sorting = model.isort
+            self.U = model.U
+            self.plot_activity()
 
 def run():
     # Always start by initializing Qt (only once per application)
