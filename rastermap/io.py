@@ -17,29 +17,29 @@ def load_mat(parent, name=None): # Load data matrix (neurons x time)
         else:
             parent.fname = name
             parent.filebase = name
-        print("Loading", parent.fname)
+        parent.update_status_bar("Loading "+ parent.fname)
         if ext == "mat":        #Note: can only load mat files containing one key assigned to data matrix
             X = sio.loadmat(parent.fname)
             for i, key in enumerate(X.keys()):
                 if key not in ['__header__', '__version__', '__globals__']:
                     X = X[key]
         elif ext == "npy":
-            X = np.load(parent.fname, allow_pickle=True)
+            X = np.load(parent.fname) # allow_pickle=True
         else:
             raise Exception("Invalid file type")
     except Exception as e:
-                print('ERROR: this is not a *.npy array :( ')
-                print(e)
-                X = None
+            parent.update_status_bar('ERROR: this is not a *.npy array :( ')
+            #parent.update_status_bar(e)
+            X = None
     if X is not None and X.ndim > 1:
-        print("Data loaded:", X.shape)
+        parent.update_status_bar("Data loaded: "+ str(X.shape))
         iscell, file_iscell = parent.load_iscell()
         parent.file_iscell = None
         if iscell is not None:
             if iscell.size == X.shape[0]:
                 X = X[iscell, :]
                 parent.file_iscell = file_iscell
-                print('using iscell.npy in folder')
+                parent.update_status_bar('using iscell.npy in folder')
         if len(X.shape) > 2:
             X = X.mean(axis=-1)
         parent.p0.clear()
@@ -197,7 +197,7 @@ def custom_set_params(parent, dialogBox):
         parent.params_set = True
     except Exception as e:
         QtGui.QMessageBox.about(parent, 'Error','Invalid input entered')
-        print(e)
+        #parent.update_status_bar(e)
         pass
     dialogBox.close()
 
@@ -264,7 +264,7 @@ def load_behav_comps_file(parent, button):
             if beh.ndim == 1 and beh.shape[0] == parent.behav_data.shape[0]:
                 parent.behav_labels_loaded = True
                 parent.behav_labels = beh
-                print("Behav labels file loaded")
+                parent.update_status_bar("Behav labels file loaded")
                 button.setText("Uploaded!")
                 parent.heatmap_checkBox.setEnabled(True)
             else:
@@ -433,7 +433,7 @@ def load_run_data(parent):
             parent.run_loaded = True
     except (ValueError, KeyError, OSError,
             RuntimeError, TypeError, NameError):
-        print("ERROR: this is not a 1D array with length of data")
+        parent.update_status_bar("ERROR: this is not a 1D array with length of data")
     if parent.run_loaded:
         parent.run_data = run
         parent.plot_run_trace()
@@ -524,20 +524,20 @@ def load_neuron_pos(parent, button, xpos=False, ypos=False, depth=False):
         if xpos and data.size == parent.sp.shape[0]:
             parent.xpos_dat = data
             button.setText("Uploaded!")
-            print("xpos data loaded")
+            parent.update_status_bar("xpos data loaded")
         elif ypos and data.size == parent.sp.shape[0]: 
             parent.ypos_dat = data
             button.setText("Uploaded!")
-            print("ypos data loaded")
+            parent.update_status_bar("ypos data loaded")
         elif depth and data.size == parent.sp.shape[0]:
             parent.depth_dat = data
             button.setText("Uploaded!")
-            print("depth data loaded")
+            parent.update_status_bar("depth data loaded")
         else:
-            print("incorrect data uploaded")
+            parent.update_status_bar("incorrect data uploaded")
             return
     except Exception as e:
-        print('ERROR: this is not a *.npy array :( ')
+        parent.update_status_bar('ERROR: this is not a *.npy array :( ')
 
 def save_proc(parent): # Save embedding output
     try:
@@ -565,11 +565,11 @@ def save_proc(parent): # Save embedding output
                         'U' : parent.U, 'ops' : ops}
                 
                 np.save(savename, proc, allow_pickle=True)
-                print("File saved:", savename)
+                parent.update_status_bar("File saved: "+ savename)
         else:
             raise Exception("Please run embedding to save output")
     except Exception as e:
-        print(e)
+        #parent.update_status_bar(e)
         return
 
 def load_proc(parent, name=None):
@@ -592,7 +592,7 @@ def load_proc(parent, name=None):
         ops   = parent.proc['ops']
     except (ValueError, KeyError, OSError,
             RuntimeError, TypeError, NameError):
-        print('ERROR: this is not a *.npy file :( ')
+        parent.update_status_bar('ERROR: this is not a *.npy file :( ')
         X = None
     if X is not None:
         parent.filebase = parent.proc['filename']
@@ -631,5 +631,5 @@ def load_proc(parent, name=None):
         parent.run_embedding_button.setEnabled(True)
         parent.upload_behav_button.setEnabled(True)
         parent.upload_run_button.setEnabled(True)
-        print("Loaded:", parent.proc['filename'])
+        parent.update_status_bar("Loaded: "+ parent.proc['filename'])
         parent.show()

@@ -219,6 +219,15 @@ class MainW(QtGui.QMainWindow):
                                 width=3,
                                 style=QtCore.Qt.SolidLine)
         
+        # Status bar
+        self.statusBar = QtGui.QStatusBar()
+        self.setStatusBar(self.statusBar)
+        self.progressBar = QtGui.QProgressBar()
+        self.statusBar.addPermanentWidget(self.progressBar)
+        self.progressBar.setGeometry(0, 0, 300, 25)
+        self.progressBar.setMaximum(100)
+        self.progressBar.hide()
+
         # Default variables
         self.tpos = -0.5
         self.tsize = 1
@@ -283,6 +292,18 @@ class MainW(QtGui.QMainWindow):
         self.embed_time_range = -1
         self.params_set = False
 
+    def update_status_bar(self, message, update_progress=False):
+        if update_progress:
+            self.progressBar.show()
+            progressBar_value = [int(s) for s in message.split("%")[0].split() if s.isdigit()]
+            self.progressBar.setValue(progressBar_value[0])
+            frames_processed = np.floor((progressBar_value[0]/100)*float(self.totalFrameNumber.text()))
+            self.setFrame.setText(str(frames_processed))
+            self.statusBar.showMessage(message.split("|")[0])
+        else: 
+            self.progressBar.hide()
+            self.statusBar.showMessage(message)
+
     def plot_scatter_pressed(self):
         request = self.scatter_comboBox.currentIndex()
         self.p5.clear()
@@ -294,7 +315,7 @@ class MainW(QtGui.QMainWindow):
             if self.run_loaded and self.embedded:
                 self.plot_run_corr()
             else:
-                print("Please run embedding or upload run data")
+                self.update_status_bar("Please run embedding or upload run data")
         elif request == 2:
             if self.xpos_dat is None or self.ypos_dat is None:
                 io.get_neuron_pos_data(self)
@@ -348,7 +369,7 @@ class MainW(QtGui.QMainWindow):
             self.p5.setLabel('left', "y position")
             self.p5.setLabel('bottom', "x position")
         else:
-            print("Please run embedding")
+            self.update_status_bar("Please run embedding")
 
     def get_colors(self, data):
         num_classes = len(np.unique(data))+1
@@ -374,7 +395,7 @@ class MainW(QtGui.QMainWindow):
             self.p5.setLabel('left', "Embedding position")
             self.p5.setLabel('bottom', "Neuron depth")
         else:
-            print("Please run embedding")
+            self.update_status_bar("Please run embedding")
 
     def update_plot_p4(self):
         self.update_scatter_ops_pos()
@@ -389,7 +410,7 @@ class MainW(QtGui.QMainWindow):
             except Exception as e:
                 return
         else:
-            print("Please upload a behav file")
+            self.update_status_bar("Please upload a behav file")
             return
         
     def update_plot_p5(self):
@@ -715,16 +736,16 @@ class MainW(QtGui.QMainWindow):
         if self.default_param_radiobutton.isChecked():
             io.set_rastermap_params(self)
             self.params_set = True
-            print("Using default parameters for rastermap")
+            self.update_status_bar("Using default parameters for rastermap")
         else:
             io.get_rastermap_params(self)
-            print("Set custom parameters for rastermap")
+            self.update_status_bar("Set custom parameters for rastermap")
         if self.params_set:
             if self.embed_time_range != -1:
                 dat = self.sp[:,self.embed_time_range[0]:self.embed_time_range[-1]]
                 self.xrange = self.embed_time_range
                 self.ROI.setPos(self.xrange)
-                print("Running embedding on selected time range", self.embed_time_range, dat.shape)
+                self.update_status_bar("Running embedding on selected time range", self.embed_time_range, dat.shape)
             else:
                 dat = self.sp
             model = Rastermap(smoothness=1, 
@@ -738,6 +759,7 @@ class MainW(QtGui.QMainWindow):
             self.sorting = model.isort
             self.U = model.U
             self.plot_activity()
+            self.update_status_bar("Rastermap embedding completed. Processed output can be saved from file menu")
 
 def run():
     # Always start by initializing Qt (only once per application)
