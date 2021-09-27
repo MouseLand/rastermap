@@ -7,12 +7,12 @@ from rastermap.utils import bin1d, split_testtrain
 from rastermap.mapping import Rastermap
 from rastermap.metrics import embedding_score
 
-def run_TSNE(U, perplexities=[30]):
+def run_TSNE(U, perplexities=[30], metric='cosine'):
     if len(perplexities) > 1:
         affinities_annealing = affinity.PerplexityBasedNN(
                                 U,
                                 perplexity=perplexities[1],
-                                metric="cosine",
+                                metric=metric,
                                 n_jobs=16,
                                 random_state=1,
                                 verbose=True
@@ -33,7 +33,7 @@ def run_TSNE(U, perplexities=[30]):
     else:
         tsne = TSNE(
             perplexity=perplexities[0],
-            metric="cosine",
+            metric=metric,
             n_jobs=8,
             random_state=42,
             verbose = True,

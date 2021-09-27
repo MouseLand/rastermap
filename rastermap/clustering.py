@@ -112,7 +112,7 @@ def scaled_kmeans(X, n_clusters=100, n_iter=50,
     # initialize with kmeans++
     if init=='kmeans++':
         np.random.seed(random_state)
-        X_nodes = kmeans_init(X, n_clusters=n_clusters)
+        X_nodes = kmeans_init(X, n_clusters=n_clusters, n_local_trials=100)
     else:
         np.random.seed(random_state)
         X_nodes = np.random.randn(n_clusters, n_features) * (X**2).sum(axis=0)**0.5
@@ -156,32 +156,40 @@ def kmeans(X, n_clusters=100, random_state=0):
     return X_nodes, imax
 
 
-def compute_cc_tdelay(U, V, U_nodes, time_lag_window=4):
+def compute_cc_tdelay(U, V, U_nodes, time_lag_window=5, symmetric=False):
+    """ compute correlation matrix of clusters at time offsets and take max """
     Vnorm = (V**2).sum(axis=1)**0.5
     X_nodes = U_nodes @ (V / Vnorm[:,np.newaxis])
     X_nodes = zscore(X_nodes, axis=1)
-    tshift = 20
     n_nodes, nt = X_nodes.shape
 
-    tshifts = np.arange(-20,20)
+    tshifts = np.arange(-time_lag_window*symmetric, time_lag_window + 1)
     cc_tdelay = np.zeros((n_nodes, n_nodes, len(tshifts)), np.float32)
     for i,tshift in enumerate(tshifts):
         if tshift < 0:
             cc_tdelay[:,:,i] = (X_nodes[:, :nt+tshift] @ X_nodes[:, -tshift:].T) / (nt-tshift)        
         else:
             cc_tdelay[:,:,i] = (X_nodes[:, tshift:] @ X_nodes[:, :nt-tshift].T) / (nt-tshift)
-    sigma = time_lag_window
-    weights = np.exp(- tshifts**2 / (2*sigma**2))
-    weights /= weights.sum()
-    cc_weighted = (cc_tdelay * weights).sum(axis=-1)
-    return cc_weighted
-
+    # sigma = time_lag_window
+    # weights = np.exp(- tshifts**2 / (2*sigma**2))
+    # weights /= weights.sum()
+    # return (cc_tdelay * weights).sum(axis=-1)
+    return cc_tdelay.max(axis=-1)
+    
 def cluster_split_and_sort(U, V=None, n_clusters=100, nc=25, 
-                            n_splits=0, time_lag_window=0, ts=0.0, 
+                            n_splits=0, 
+                            time_lag_window=0, symmetric=False,
+                             ts=0.0, 
+                             scaled=True,
                             sticky=True, verbose=False):
-    U_nodes, imax = scaled_kmeans(U, n_clusters=n_clusters)
+    if scaled:
+        U_nodes, imax = scaled_kmeans(U, n_clusters=n_clusters)
+    else:
+        U_nodes, imax = kmeans(U, n_clusters=n_clusters)
     if time_lag_window > 0 and V is not None:
-        cc = compute_cc_tdelay(U, V, U_nodes, time_lag_window)
+        cc = compute_cc_tdelay(U, V, U_nodes, 
+                               time_lag_window=time_lag_window, 
+                               symmetric=symmetric)
     else:
         cc = U_nodes @ U_nodes.T
 
@@ -224,4 +232,4 @@ def cluster_split_and_sort(U, V=None, n_clusters=100, nc=25,
     
     if not sticky:
         ineurons = (U @ U_nodes.T).argmax(axis=1)
-    return U_nodes, Y_nodes, ineurons
+    return U_nodes, Y_nodes, cc, ineurons

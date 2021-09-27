@@ -173,6 +173,7 @@ def travelling_salesman(cc, n_iter=400, ts=0.0, n_skip=None, verbose=False):
     if np.isinf(ts):
         BBt = np.ones((n_nodes, n_nodes))
         BBt = np.tril(np.triu(BBt, -1), 1)
+    BBt = np.triu(BBt)
 
     n_iter = np.int64(n_iter)
     

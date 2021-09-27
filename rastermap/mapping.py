@@ -52,17 +52,19 @@ class Rastermap:
         whether to output progress during optimization
     """
     def __init__(self, n_clusters=100, n_splits=0, time_lag_window=0.0, ts=0.0, smoothness=1, grid_upsample=10, sticky=True,
-                 n_PCs = 200, bin_size=50, keep_norm_X=False, verbose = True):
+                 n_PCs = 200, scaled_kmeans=True, bin_size=50, symmetric=False, keep_norm_X=False, verbose = True):
 
         self.n_components = 1 ### ONLY IN 1D
         self.n_clusters = n_clusters
         self.n_PCs = n_PCs
         self.n_splits = n_splits
         self.time_lag_window = time_lag_window
+        self.symmetric = symmetric
         self.ts = ts
         self.smoothness = smoothness
         self.grid_upsample = grid_upsample
         self.bin_size = bin_size
+        self.scaled_kmeans = scaled_kmeans  
         self.sticky = sticky
 
         self.keep_norm_X = keep_norm_X
@@ -87,13 +89,13 @@ class Rastermap:
         self.fit(X, u)
         return self.embedding
 
-    def fit(self, data=None, u=None, itrain=None, time_bin=0, normalize=True,
+    def fit(self, data=None, u=None, v=None, itrain=None, time_bin=0, normalize=True,
             compute_X_embedding=True, compute_metrics=False):
         """Fit X into an embedded space.
         Inputs
         ----------
         X : array, shape (n_samples, n_features)
-        u,s,v : svd decomposition of X (optional)
+        u, v : svd decomposition of X (optional), u should be u*sv
 
         Assigns
         ----------
@@ -123,7 +125,7 @@ class Rastermap:
             else:
                 Vpca = TruncatedSVD(n_components=nmin, 
                                     random_state=0).fit_transform(bin1d(X, bin_size=time_bin, axis=1))
-            U = Vpca / (Vpca**2).sum(axis=0)**0.5
+            U = Vpca #/ (Vpca**2).sum(axis=0)**0.5
             if itrain is not None:
                 self.X_test = U @ (U.T @ bin1d(X[:,~itrain], bin_size=time_bin, axis=1))
             self.U = Vpca
@@ -150,20 +152,32 @@ class Rastermap:
             print('n_PCs = {0} precomputed'.format(self.n_PCs))
 
 
-        U_nodes, Y_nodes, imax = cluster_split_and_sort(self.U, 
-                                                V=self.U.T @ X if self.time_lag_window>0 else None,
+        self.V = None
+        if self.time_lag_window > 0:
+            self.V = v if v is not None else self.U.T @ X 
+            
+        U_nodes, Y_nodes, cc, imax = cluster_split_and_sort(self.U, 
+                                                V=self.V,
                                                 n_clusters=self.n_clusters, 
                                                 n_splits=self.n_splits,
                                                 time_lag_window=self.time_lag_window,
+                                                symmetric=self.symmetric,
                                                 ts=self.ts,
+                                                scaled=self.scaled_kmeans,
                                                 sticky=self.sticky
                                                 )
+        self.cc = cc
         print('landmarks computed and embedded, time {0:0.2f}'.format(time.time() - t0))
 
         self.embedding_clust = imax
         self.U_nodes = U_nodes 
-        if data is not None:
+        
+        if self.time_lag_window > 0:
+            Vnorm = (self.V**2).sum(axis=1)**0.5
+            self.X_nodes = U_nodes @ (self.V / Vnorm[:,np.newaxis])
+        elif data is not None:
             self.X_nodes = U_nodes @ (self.U.T @ X)
+
         self.Y_nodes = Y_nodes
 
         self.n_clusters = U_nodes.shape[0]
@@ -171,7 +185,7 @@ class Rastermap:
         n_neighbors = max(min(8, self.n_clusters-1), self.n_clusters//5)
         e_neighbor = max(1, min(self.smoothness, n_neighbors-1))
         
-        Y, cc, g, Xrec = grid_upsampling(self.U, U_nodes, Y_nodes, 
+        Y, corr, g, Xrec = grid_upsampling(self.U, U_nodes, Y_nodes, 
                                          n_X=self.n_X, n_neighbors=n_neighbors,
                                          e_neighbor=e_neighbor)
         print('grid upsampled, time {0:0.2f}'.format(time.time() - t0))
