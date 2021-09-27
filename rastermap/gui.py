@@ -101,7 +101,7 @@ class MainW(QtGui.QMainWindow):
         self.win.removeItem(self.p5)
 
         # Set colormap to deafult of gray_r. ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Future: add option to change cmap ~~~~~~~~~~~~~~
-        colormap = cm.get_cmap("gray_r")
+        colormap = cm.get_cmap("gray_r") #bwr, coolwarm
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)  # Convert matplotlib colormap from 0-1 to 0 -255 for Qt
         lut = lut[0:-3,:]
@@ -136,7 +136,7 @@ class MainW(QtGui.QMainWindow):
         self.RadioGroup.addButton(self.default_param_radiobutton)
         self.custom_param_radiobutton = QtGui.QRadioButton("Custom")
         self.custom_param_radiobutton.setStyleSheet("color: gray;")
-        self.custom_param_radiobutton.toggled.connect(lambda: io.get_rastermap_params(self))
+        #self.custom_param_radiobutton.toggled.connect(lambda: io.get_rastermap_params(self))
         self.RadioGroup.addButton(self.custom_param_radiobutton)
 
         self.heatmap_checkBox = QtGui.QCheckBox("Behaviour")
@@ -219,6 +219,15 @@ class MainW(QtGui.QMainWindow):
                                 width=3,
                                 style=QtCore.Qt.SolidLine)
         
+        # Status bar
+        self.statusBar = QtGui.QStatusBar()
+        self.setStatusBar(self.statusBar)
+        self.progressBar = QtGui.QProgressBar()
+        self.statusBar.addPermanentWidget(self.progressBar)
+        self.progressBar.setGeometry(0, 0, 300, 25)
+        self.progressBar.setMaximum(100)
+        self.progressBar.hide()
+
         # Default variables
         self.tpos = -0.5
         self.tsize = 1
@@ -241,7 +250,7 @@ class MainW(QtGui.QMainWindow):
         self.l0.addWidget(self.scatter_comboBox,ops_row_pos+16,12,1,1)
         self.l0.addWidget(self.all_neurons_checkBox,ops_row_pos+18,13,1,1)
         self.l0.addWidget(self.scatterplot_button,ops_row_pos+19,12,1,1)
-
+        
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
         self.show()
@@ -260,9 +269,13 @@ class MainW(QtGui.QMainWindow):
         self.run_loaded = False 
         self.embedded = False
         self.behav_data = None
-        self.behav_labels = None
+        self.behav_binary_data = None
+        self.behav_bin_plot_list = []
+        self.behav_labels = []
         self.behav_loaded = False
         self.behav_labels_loaded = False
+        self.behav_binary_labels = []
+        self.behav_binary_labels_loaded = False
         self.run_corr_all = None
         self.run_corr_selected = None
         self.xpos_dat = None
@@ -272,6 +285,24 @@ class MainW(QtGui.QMainWindow):
         self.embedding = None
         self.heatmap = None
         self.heatmap_chkbxs = []
+        self.run_trace_plot = pg.PlotDataItem()
+        self.run_trace_plot_added = False
+        self.run_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30)
+        self.symbol_list = ['star', 'd', 'x', 'o', 't', 't1', 't2', 'p', '+', 's', 't3', 'h']
+        self.embed_time_range = -1
+        self.params_set = False
+
+    def update_status_bar(self, message, update_progress=False):
+        if update_progress:
+            self.progressBar.show()
+            progressBar_value = [int(s) for s in message.split("%")[0].split() if s.isdigit()]
+            self.progressBar.setValue(progressBar_value[0])
+            frames_processed = np.floor((progressBar_value[0]/100)*float(self.totalFrameNumber.text()))
+            self.setFrame.setText(str(frames_processed))
+            self.statusBar.showMessage(message.split("|")[0])
+        else: 
+            self.progressBar.hide()
+            self.statusBar.showMessage(message)
 
     def plot_scatter_pressed(self):
         request = self.scatter_comboBox.currentIndex()
@@ -284,7 +315,7 @@ class MainW(QtGui.QMainWindow):
             if self.run_loaded and self.embedded:
                 self.plot_run_corr()
             else:
-                print("Please run embedding or upload run data")
+                self.update_status_bar("Please run embedding or upload run data")
         elif request == 2:
             if self.xpos_dat is None or self.ypos_dat is None:
                 io.get_neuron_pos_data(self)
@@ -338,7 +369,7 @@ class MainW(QtGui.QMainWindow):
             self.p5.setLabel('left', "y position")
             self.p5.setLabel('bottom', "x position")
         else:
-            print("Please run embedding")
+            self.update_status_bar("Please run embedding")
 
     def get_colors(self, data):
         num_classes = len(np.unique(data))+1
@@ -347,10 +378,7 @@ class MainW(QtGui.QMainWindow):
         colors = colors.astype(int)
         colors[:,-1] = 127
         brushes = [pg.mkBrush(color=c) for c in colors]
-        ind = np.asarray([np.unique(data).tolist().index(i) for i in data]).astype(int)
-        cmap = []
-        for i in ind:
-            cmap.append(brushes[i])
+        cmap = np.asarray([brushes[np.unique(data).tolist().index(i)] for i in data])
         return cmap
 
     def plot_neuron_depth(self):
@@ -367,7 +395,7 @@ class MainW(QtGui.QMainWindow):
             self.p5.setLabel('left', "Embedding position")
             self.p5.setLabel('bottom', "Neuron depth")
         else:
-            print("Please run embedding")
+            self.update_status_bar("Please run embedding")
 
     def update_plot_p4(self):
         self.update_scatter_ops_pos()
@@ -382,7 +410,7 @@ class MainW(QtGui.QMainWindow):
             except Exception as e:
                 return
         else:
-            print("Please upload a behav file")
+            self.update_status_bar("Please upload a behav file")
             return
         
     def update_plot_p5(self):
@@ -416,22 +444,25 @@ class MainW(QtGui.QMainWindow):
                 self.ROI.setSize([self.sp.shape[1]+1, self.sp.shape[0]+1])
 
     def update_scatter_ops_pos(self):
+        self.l0.removeWidget(self.scatter_comboBox)
+        self.l0.removeWidget(self.all_neurons_checkBox)
+        self.l0.removeWidget(self.scatterplot_button)
         if self.heatmap_checkBox.isChecked() and self.behav_loaded:
-            self.l0.removeWidget(self.scatter_comboBox)
-            self.l0.removeWidget(self.all_neurons_checkBox)
-            self.l0.removeWidget(self.scatterplot_button)
-            if self.behav_labels_loaded:
-                self.l0.addWidget(self.scatterplot_button,14,12,1,2)
-                self.l0.addWidget(self.scatter_comboBox,15,12,1,1)
-                self.l0.addWidget(self.all_neurons_checkBox,15,13,1,1)
+            if len(self.heatmap_chkbxs) <= 3:
+                k = 1
+            elif len(self.heatmap_chkbxs) >= 5:
+                k = -1
             else:
-                self.l0.addWidget(self.scatterplot_button,15,12,1,2)
-                self.l0.addWidget(self.scatter_comboBox,16,12,1,1)
-                self.l0.addWidget(self.all_neurons_checkBox,16,13,1,1)
+                k = 0
+            if self.behav_labels_loaded:
+                self.l0.addWidget(self.scatterplot_button,13+k,12,1,2)
+                self.l0.addWidget(self.scatter_comboBox,14+k,12,1,1)
+                self.l0.addWidget(self.all_neurons_checkBox,14+k,13,1,1)
+            else:
+                self.l0.addWidget(self.scatterplot_button,16,12,1,2)
+                self.l0.addWidget(self.scatter_comboBox,17,12,1,1)
+                self.l0.addWidget(self.all_neurons_checkBox,17,13,1,1)
         else:
-            self.l0.removeWidget(self.scatter_comboBox)
-            self.l0.removeWidget(self.all_neurons_checkBox)
-            self.l0.removeWidget(self.scatterplot_button)
             self.l0.addWidget(self.scatterplot_button,18,12,1,2)
             self.l0.addWidget(self.scatter_comboBox,19,12,1,1)
             self.l0.addWidget(self.all_neurons_checkBox,19,13,1,1)
@@ -556,15 +587,13 @@ class MainW(QtGui.QMainWindow):
         yrange = yrange[yrange<self.sp.shape[0]]
         return xrange,yrange
 
-    def plot_traces(self):
+    def plot_avg_activity_trace(self):
         if self.loaded:
             avg = self.sp_smoothed[np.ix_(self.selected,self.xrange)].mean(axis=0)
             avg -= avg.min()
             avg /= avg.max()
             self.p3.clear()
             self.p3.plot(self.xrange,avg,pen=(255,0,0))
-            if self.run_loaded:
-                self.plot_run_trace()
             self.p3.setXRange(self.xrange[0],self.xrange[-1])
             self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
             self.p3.show()
@@ -572,9 +601,13 @@ class MainW(QtGui.QMainWindow):
     def LINE_position(self):
         _,yrange = self.roi_range(self.LINE)
         self.selected = yrange.astype('int')
-        self.plot_traces()
+        self.plot_avg_activity_trace()
+        if self.run_loaded: 
+            self.plot_run_trace()
         if self.behav_loaded:
             self.behav_ROI_update()
+        if self.behav_binary_data is not None:
+            self.plot_behav_binary_data()
 
     def ROI_position(self):
         xrange,_ = self.roi_range(self.ROI)
@@ -583,11 +616,13 @@ class MainW(QtGui.QMainWindow):
         self.imgROI.setImage(self.sp_smoothed[:, self.xrange])
         self.p2.setXRange(0,self.xrange.size,padding=0)
         # Update avg. activity and other data loaded (behaviour and running)
-        self.plot_traces()
-        if self.run_loaded:
-            self.plot_run_trace()
+        self.plot_avg_activity_trace()
+        if self.run_loaded: 
+            self.plot_run_trace()    
         if self.behav_loaded:
             self.behav_ROI_update()
+        if self.behav_binary_data is not None:
+            self.plot_behav_binary_data()
 
         # reset ROIs
         self.LINE.maxBounds = QtCore.QRectF(-1,-1.,
@@ -634,10 +669,33 @@ class MainW(QtGui.QMainWindow):
         avg -= avg.min()
         avg /= avg.max()
         avg = avg[self.xrange]
-        self.p3.plot(self.xrange, avg, pen=(0,255,0))
+        self.run_trace_plot.setData(self.xrange, avg, pen=(0,255,0))
+        if self.run_trace_plot_added:
+            self.p3.removeItem(self.run_trace_plot)
+        else:
+            self.run_legend.addItem(self.run_trace_plot, name='Run')
+            self.run_legend.setPos(self.run_trace_plot.x()+70, self.run_trace_plot.y())
+            self.run_legend.setParentItem(self.p3)
+        self.p3.addItem(self.run_trace_plot, pen=(0,255,0))
+        self.run_trace_plot_added = True
         self.p3.setXRange(self.xrange[0],self.xrange[-1])
         self.p3.setLimits(xMin=self.xrange[0],xMax=self.xrange[-1])
-        self.p3.show()
+        try:
+            self.run_legend.sigClicked.connect(self.mouseClickEvent)
+        except Exception as e:
+            return
+
+    def plot_behav_binary_data(self):
+        for i in range(len(self.behav_bin_plot_list)):
+            self.p3.removeItem(self.behav_bin_plot_list[i])
+            dat = self.behav_binary_data[i][self.xrange]
+            xdat, ydat = self.xrange[dat>0], dat[dat>0]
+            self.behav_bin_plot_list[i].setData(xdat, ydat, pen=None, symbol=self.symbol_list[i], symbolSize=12)
+            self.p3.addItem(self.behav_bin_plot_list[i])
+            try:
+                self.behav_bin_legend.sigClicked.connect(self.mouseClickEvent)
+            except Exception as e:
+                return
 
     def plot_behav_data(self, selected=None):
         if self.heatmap is not None:
@@ -674,22 +732,34 @@ class MainW(QtGui.QMainWindow):
         return iscell, file_iscell
 
     def run_RMAP(self):
+        self.params_set = False
         if self.default_param_radiobutton.isChecked():
             io.set_rastermap_params(self)
-            print("Using default params")
+            self.params_set = True
+            self.update_status_bar("Using default parameters for rastermap")
         else:
-            print("Using custom rastermap params")
-        model = Rastermap(smoothness=1, 
-                        n_clusters=self.n_clusters, 
-                        n_PCs=200, 
-                        n_splits=self.n_splits,
-                        grid_upsample=self.grid_upsample).fit(self.sp)
-
-        self.embedding = model.embedding
-        self.embedded = True
-        self.sorting = model.isort
-        self.U = model.U
-        self.plot_activity()
+            io.get_rastermap_params(self)
+            self.update_status_bar("Set custom parameters for rastermap")
+        if self.params_set:
+            if self.embed_time_range != -1:
+                dat = self.sp[:,self.embed_time_range[0]:self.embed_time_range[-1]]
+                self.xrange = self.embed_time_range
+                self.ROI.setPos(self.xrange)
+                self.update_status_bar("Running embedding on selected time range", self.embed_time_range, dat.shape)
+            else:
+                dat = self.sp
+            model = Rastermap(smoothness=1, 
+                            n_clusters=self.n_clusters, 
+                            n_PCs=200, 
+                            n_splits=self.n_splits,
+                            grid_upsample=self.grid_upsample).fit(dat)
+            del dat
+            self.embedding = model.embedding
+            self.embedded = True
+            self.sorting = model.isort
+            self.U = model.U
+            self.plot_activity()
+            self.update_status_bar("Rastermap embedding completed. Processed output can be saved from file menu")
 
 def run():
     # Always start by initializing Qt (only once per application)

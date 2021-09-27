@@ -4,31 +4,42 @@ from PyQt5 import QtGui, QtCore, QtWidgets
 import pyqtgraph as pg
 from scipy.stats import zscore
 import scipy.io as sio
+from . import guiparts
 
-def load_mat(parent, name=None):
+def load_mat(parent, name=None): # Load data matrix (neurons x time)
     try:
         if name is None:
             name = QtGui.QFileDialog.getOpenFileName(
-                parent, "Open *.npy", filter="*.npy")
+                parent, "Open *.npy", filter="*.npy *.mat")
             parent.fname = name[0]
             parent.filebase = name[0]
+            ext = parent.fname.split(".")[-1]
         else:
             parent.fname = name
             parent.filebase = name
-        print("Loading", parent.fname)
-        X = np.load(parent.fname)
-        print("Data loaded:", X.shape)
+        parent.update_status_bar("Loading "+ parent.fname)
+        if ext == "mat":        #Note: can only load mat files containing one key assigned to data matrix
+            X = sio.loadmat(parent.fname)
+            for i, key in enumerate(X.keys()):
+                if key not in ['__header__', '__version__', '__globals__']:
+                    X = X[key]
+        elif ext == "npy":
+            X = np.load(parent.fname) # allow_pickle=True
+        else:
+            raise Exception("Invalid file type")
     except Exception as e:
-                print('ERROR: this is not a *.npy array :( ')
-                X = None
+            parent.update_status_bar('ERROR: this is not a *.npy array :( ')
+            #parent.update_status_bar(e)
+            X = None
     if X is not None and X.ndim > 1:
+        parent.update_status_bar("Data loaded: "+ str(X.shape))
         iscell, file_iscell = parent.load_iscell()
         parent.file_iscell = None
         if iscell is not None:
             if iscell.size == X.shape[0]:
                 X = X[iscell, :]
                 parent.file_iscell = file_iscell
-                print('using iscell.npy in folder')
+                parent.update_status_bar('using iscell.npy in folder')
         if len(X.shape) > 2:
             X = X.mean(axis=-1)
         parent.p0.clear()
@@ -47,41 +58,57 @@ def load_mat(parent, name=None):
         parent.upload_run_button.setEnabled(True)
 
 def get_rastermap_params(parent):
-    if parent.custom_param_radiobutton.isChecked():
+    if parent.custom_param_radiobutton.isChecked() and parent.loaded:
         dialog = QtWidgets.QDialog()
         dialog.setWindowTitle("Set rastermap parameters")
+        dialog.setFixedWidth(600)
         dialog.verticalLayout = QtWidgets.QVBoxLayout(dialog)
 
         # Param options
+        dialog.n_components_label = QtWidgets.QLabel(dialog)
+        dialog.n_components_label.setTextFormat(QtCore.Qt.RichText)
+        dialog.n_components_label.setText("n_components:")
+        dialog.n_components = QtGui.QLineEdit()# QtWidgets.QLabel(dialog)
+        dialog.n_components.setText(str(1))
+        dialog.n_components.setFixedWidth(45)
+        dialog.n_components.setReadOnly(True)
+
         dialog.n_clusters_label = QtWidgets.QLabel(dialog)
         dialog.n_clusters_label.setTextFormat(QtCore.Qt.RichText)
         dialog.n_clusters_label.setText("n_clusters:")
         dialog.n_clusters = QtGui.QLineEdit()
         dialog.n_clusters.setText(str(50))
-
-        dialog.n_components_label = QtWidgets.QLabel(dialog)
-        dialog.n_components_label.setTextFormat(QtCore.Qt.RichText)
-        dialog.n_components_label.setText("n_components:")
-        dialog.n_components = QtWidgets.QLabel(dialog)
-        dialog.n_components.setText(str(1))
+        dialog.n_clusters.setFixedWidth(45)
 
         dialog.n_neurons_label = QtWidgets.QLabel(dialog)
         dialog.n_neurons_label.setTextFormat(QtCore.Qt.RichText)
         dialog.n_neurons_label.setText("n_neurons:")
         dialog.n_neurons = QtGui.QLineEdit()
         dialog.n_neurons.setText(str(parent.sp.shape[0]))
+        dialog.n_neurons.setFixedWidth(45)
 
         dialog.grid_upsample_label = QtWidgets.QLabel(dialog)
         dialog.grid_upsample_label.setTextFormat(QtCore.Qt.RichText)
         dialog.grid_upsample_label.setText("grid_upsample:")
         dialog.grid_upsample = QtGui.QLineEdit()
         dialog.grid_upsample.setText(str(10))
+        dialog.grid_upsample.setFixedWidth(45)
 
         dialog.n_splits_label = QtWidgets.QLabel(dialog)
         dialog.n_splits_label.setTextFormat(QtCore.Qt.RichText)
         dialog.n_splits_label.setText("n_splits:")
         dialog.n_splits = QtGui.QLineEdit()
         dialog.n_splits.setText(str(4))
+        dialog.n_splits.setFixedWidth(45)
+
+        dialog.time_label = QtWidgets.QLabel(dialog)
+        dialog.time_label.setTextFormat(QtCore.Qt.RichText)
+        dialog.time_label.setText("Time range:")
+        dialog.slider = guiparts.TimeRangeSlider(parent)
+        dialog.slider.setEnabled(False)
+        dialog.time_checkbox = QtGui.QCheckBox("Set time range")
+        dialog.time_checkbox.setChecked(False)
+        dialog.time_checkbox.toggled.connect(lambda: enable_time_range(dialog))
 
         dialog.ok_button = QtGui.QPushButton('Ok')
         dialog.ok_button.setDefault(True)
@@ -94,15 +121,10 @@ def get_rastermap_params(parent):
         dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget)
         dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
         dialog.horizontalLayout.setObjectName("horizontalLayout")
-        dialog.horizontalLayout.addWidget(dialog.n_clusters_label)
-        dialog.horizontalLayout.addWidget(dialog.n_clusters)
-
-        dialog.widget1 = QtWidgets.QWidget(dialog)
-        dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget1)
-        dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
-        dialog.horizontalLayout.setObjectName("horizontalLayout")
         dialog.horizontalLayout.addWidget(dialog.n_components_label)
         dialog.horizontalLayout.addWidget(dialog.n_components)
+        dialog.horizontalLayout.addWidget(dialog.n_clusters_label)
+        dialog.horizontalLayout.addWidget(dialog.n_clusters)
 
         dialog.widget2 = QtWidgets.QWidget(dialog)
         dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget2)
@@ -110,11 +132,14 @@ def get_rastermap_params(parent):
         dialog.horizontalLayout.setObjectName("horizontalLayout")
         dialog.horizontalLayout.addWidget(dialog.n_neurons_label)
         dialog.horizontalLayout.addWidget(dialog.n_neurons)
+        dialog.horizontalLayout.addWidget(dialog.n_splits_label)
+        dialog.horizontalLayout.addWidget(dialog.n_splits)
 
         dialog.widget3 = QtWidgets.QWidget(dialog)
         dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget3)
         dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
         dialog.horizontalLayout.setObjectName("horizontalLayout")
+        dialog.horizontalLayout.addWidget(dialog.time_checkbox)
         dialog.horizontalLayout.addWidget(dialog.grid_upsample_label)
         dialog.horizontalLayout.addWidget(dialog.grid_upsample)
 
@@ -122,8 +147,8 @@ def get_rastermap_params(parent):
         dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget4)
         dialog.horizontalLayout.setContentsMargins(-1, -1, -1, 0)
         dialog.horizontalLayout.setObjectName("horizontalLayout")
-        dialog.horizontalLayout.addWidget(dialog.n_splits_label)
-        dialog.horizontalLayout.addWidget(dialog.n_splits)
+        dialog.horizontalLayout.addWidget(dialog.time_label)
+        dialog.horizontalLayout.addWidget(dialog.slider)
 
         dialog.widget5 = QtWidgets.QWidget(dialog)
         dialog.horizontalLayout = QtWidgets.QHBoxLayout(dialog.widget5)
@@ -131,7 +156,6 @@ def get_rastermap_params(parent):
         dialog.horizontalLayout.addWidget(dialog.ok_button)
 
         # Add options to dialog box
-        dialog.verticalLayout.addWidget(dialog.widget1)
         dialog.verticalLayout.addWidget(dialog.widget)
         dialog.verticalLayout.addWidget(dialog.widget2)
         dialog.verticalLayout.addWidget(dialog.widget3)
@@ -140,6 +164,12 @@ def get_rastermap_params(parent):
 
         dialog.adjustSize()
         dialog.exec_()
+
+def enable_time_range(dialog):
+    if dialog.time_checkbox.isChecked():
+        dialog.slider.setEnabled(True)
+    else:
+        dialog.slider.setEnabled(False)
 
 def set_rastermap_params(parent):
     if parent.default_param_radiobutton.isChecked():
@@ -151,17 +181,23 @@ def set_rastermap_params(parent):
             parent.n_splits = 4
         parent.n_components = 1
         parent.grid_upsample = min(10, parent.n_neurons // (parent.n_splits * (parent.n_clusters+1)))
-    
+        parent.embed_time_range = -1
+
 def custom_set_params(parent, dialogBox):
     try:
         parent.n_clusters = int(dialogBox.n_clusters.text())
         parent.n_neurons = int(dialogBox.n_neurons.text())
         parent.grid_upsample = int(dialogBox.grid_upsample.text())
         parent.n_splits = int(dialogBox.n_splits.text())
-        parent.n_components = 1        # for rastermap1d, future: int(dialogBox.n_components.text())
+        parent.n_components = int(dialogBox.n_components.text())     
+        if dialogBox.time_checkbox.isChecked():
+            parent.embed_time_range = (dialogBox.slider.get_slider_values())
+        else:
+            parent.embed_time_range = -1
+        parent.params_set = True
     except Exception as e:
         QtGui.QMessageBox.about(parent, 'Error','Invalid input entered')
-        print(e)
+        #parent.update_status_bar(e)
         pass
     dialogBox.close()
 
@@ -228,7 +264,7 @@ def load_behav_comps_file(parent, button):
             if beh.ndim == 1 and beh.shape[0] == parent.behav_data.shape[0]:
                 parent.behav_labels_loaded = True
                 parent.behav_labels = beh
-                print("Behav labels file loaded")
+                parent.update_status_bar("Behav labels file loaded")
                 button.setText("Uploaded!")
                 parent.heatmap_checkBox.setEnabled(True)
             else:
@@ -251,13 +287,13 @@ def add_behav_checkboxes(parent):
         parent.heatmap_chkbxs[0].setStyleSheet("color: gray;")
         parent.heatmap_chkbxs[0].setChecked(True)
         parent.heatmap_chkbxs[0].toggled.connect(parent.behav_chkbx_toggled)
-        parent.l0.addWidget(parent.heatmap_chkbxs[-1], 16, 12, 1, 2)
+        parent.l0.addWidget(parent.heatmap_chkbxs[-1], 15, 12, 1, 2)
         for i, comp_ind in enumerate(parent.behav_labels_selected):
             parent.heatmap_chkbxs.append(QtGui.QCheckBox(parent.behav_labels[comp_ind]))
             parent.heatmap_chkbxs[-1].setStyleSheet("color: gray;")
             parent.heatmap_chkbxs[-1].toggled.connect(parent.behav_chkbx_toggled)
             parent.heatmap_chkbxs[-1].setEnabled(False)
-            parent.l0.addWidget(parent.heatmap_chkbxs[-1], 17+i, 12, 1, 2)
+            parent.l0.addWidget(parent.heatmap_chkbxs[-1], 16+i, 12, 1, 2)
         parent.show_heatmap_ops()
         parent.update_scatter_ops_pos()
         parent.scatterplot_checkBox.setChecked(True)
@@ -329,6 +365,8 @@ def load_behav_file(parent, button):
             if dict_item:
                 load_behav_dict(parent, beh)
             else:  # load matrix w/o labels and set default labels
+                if parent.embedded and parent.embed_time_range != -1:
+                    beh = beh[:,parent.embed_time_range[0]:parent.embed_time_range[-1]]
                 if beh.ndim == 2 and beh.shape[1] == parent.sp.shape[1]:
                     parent.behav_data = beh
                     clear_old_behav_checkboxes(parent)
@@ -349,19 +387,36 @@ def load_behav_file(parent, button):
         return
 
 def load_behav_dict(parent, beh):
-    parent.behav_labels = []
     for i, key in enumerate(beh.keys()):
         if key not in ['__header__', '__version__', '__globals__']:
             if np.array(beh[key]).size == parent.sp.shape[1]:
                 parent.behav_labels.append(key)
-    parent.behav_data = np.zeros((len(parent.behav_labels), parent.sp.shape[1]))
-    for j, key in enumerate(parent.behav_labels):
-        parent.behav_data[j] = beh[key]
-    parent.behav_data = np.array(parent.behav_data)
-    parent.behav_labels = np.array(parent.behav_labels)
-    parent.behav_loaded = True
-    parent.behav_labels_loaded = True
-    add_behav_checkboxes(parent)
+                parent.behav_labels_loaded = True
+            else:
+                parent.behav_binary_labels.append(key)
+                parent.behav_binary_labels_loaded = True
+    if parent.behav_labels_loaded:
+        parent.behav_data = np.zeros((len(parent.behav_labels), parent.sp.shape[1]))
+        for j, key in enumerate(parent.behav_labels):
+            parent.behav_data[j] = beh[key]
+        parent.behav_data = np.array(parent.behav_data)
+        parent.behav_labels = np.array(parent.behav_labels)
+        parent.behav_loaded = True
+        add_behav_checkboxes(parent)
+    if parent.behav_binary_labels_loaded:
+        parent.behav_binary_data = np.zeros((len(parent.behav_binary_labels), parent.sp.shape[1]))
+        parent.behav_bin_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30, colCount=len(parent.behav_binary_labels))
+        for i, key in enumerate(parent.behav_binary_labels):
+            dat = np.zeros(parent.sp.shape[1]) 
+            dat[beh[key]] = 1                   # Convert to binary for stim/lick time
+            parent.behav_binary_data[i] = dat
+            parent.behav_bin_plot_list.append(pg.PlotDataItem(symbol=parent.symbol_list[i]))
+            parent.behav_bin_legend.addItem(parent.behav_bin_plot_list[i], name=parent.behav_binary_labels[i])
+            parent.behav_bin_legend.setPos(parent.run_trace_plot.x()+(20*i), parent.run_trace_plot.y())
+            parent.behav_bin_legend.setParentItem(parent.p3)
+            parent.p3.addItem(parent.behav_bin_plot_list[-1])
+    if parent.behav_binary_data is not None:
+        parent.plot_behav_binary_data()
 
 def load_run_data(parent):
     name = QtGui.QFileDialog.getOpenFileName(
@@ -372,11 +427,13 @@ def load_run_data(parent):
     try:
         run = np.load(name)
         run = run.flatten()
+        if parent.embedded and parent.embed_time_range != -1:
+            run = run[parent.embed_time_range[0]:parent.embed_time_range[-1]]
         if run.size == parent.sp.shape[1]:
             parent.run_loaded = True
     except (ValueError, KeyError, OSError,
             RuntimeError, TypeError, NameError):
-        print("ERROR: this is not a 1D array with length of data")
+        parent.update_status_bar("ERROR: this is not a 1D array with length of data")
     if parent.run_loaded:
         parent.run_data = run
         parent.plot_run_trace()
@@ -467,20 +524,20 @@ def load_neuron_pos(parent, button, xpos=False, ypos=False, depth=False):
         if xpos and data.size == parent.sp.shape[0]:
             parent.xpos_dat = data
             button.setText("Uploaded!")
-            print("xpos data loaded")
+            parent.update_status_bar("xpos data loaded")
         elif ypos and data.size == parent.sp.shape[0]: 
             parent.ypos_dat = data
             button.setText("Uploaded!")
-            print("ypos data loaded")
+            parent.update_status_bar("ypos data loaded")
         elif depth and data.size == parent.sp.shape[0]:
             parent.depth_dat = data
             button.setText("Uploaded!")
-            print("depth data loaded")
+            parent.update_status_bar("depth data loaded")
         else:
-            print("incorrect data uploaded")
+            parent.update_status_bar("incorrect data uploaded")
             return
     except Exception as e:
-        print('ERROR: this is not a *.npy array :( ')
+        parent.update_status_bar('ERROR: this is not a *.npy array :( ')
 
 def save_proc(parent): # Save embedding output
     try:
@@ -497,21 +554,22 @@ def save_proc(parent): # Save embedding output
                 filename, ext = os.path.splitext(filename)
                 savename = os.path.join(parent.save_path, ("%s_rastermap_proc.npy"%filename))
                 # Rastermap embedding parameters
-                ops = {'n_components'   : parent.n_components, 
-                        'n_clusters'    : parent.n_clusters,
-                        'n_neurons'     : parent.n_neurons, 
-                        'grid_upsample' : parent.grid_upsample,
-                        'n_splits'      : parent.n_splits}
+                ops = {'n_components'       : parent.n_components, 
+                        'n_clusters'        : parent.n_clusters,
+                        'n_neurons'         : parent.n_neurons, 
+                        'grid_upsample'     : parent.grid_upsample,
+                        'n_splits'          : parent.n_splits,
+                        'embed_time_range'  : parent.embed_time_range}
                 proc = {'filename': parent.fname, 'save_path': parent.save_path,
                         'isort' : parent.sorting, 'embedding' : parent.embedding,
                         'U' : parent.U, 'ops' : ops}
                 
                 np.save(savename, proc, allow_pickle=True)
-                print("File saved:", savename)
+                parent.update_status_bar("File saved: "+ savename)
         else:
             raise Exception("Please run embedding to save output")
     except Exception as e:
-        print(e)
+        #parent.update_status_bar(e)
         return
 
 def load_proc(parent, name=None):
@@ -532,13 +590,9 @@ def load_proc(parent, name=None):
         y     = parent.proc['embedding']
         u     = parent.proc['U'] 
         ops   = parent.proc['ops']
-        # do not load X, use reconstruction
-        #u     = parent.proc['uv'][0]
-        #v     = parent.proc['uv'][1]
-        #X     = u @ v.T
     except (ValueError, KeyError, OSError,
             RuntimeError, TypeError, NameError):
-        print('ERROR: this is not a *.npy file :( ')
+        parent.update_status_bar('ERROR: this is not a *.npy file :( ')
         X = None
     if X is not None:
         parent.filebase = parent.proc['filename']
@@ -559,14 +613,15 @@ def load_proc(parent, name=None):
         parent.sp = np.maximum(-4, np.minimum(8, parent.sp)) + 4
         parent.sp /= 12
 
+        parent.embed_time_range = ops['embed_time_range']
+        if parent.embed_time_range == -1:
+            parent.sp = parent.sp
+        else:
+            parent.sp = parent.sp[:,parent.embed_time_range[0]:parent.embed_time_range[-1]]
         parent.embedding = y
         parent.sorting = isort
-        parent.U = u #@ np.diag(usv[1])
-        if ops['n_components'] > 1:
-            parent.embedded = True
-        else:
-            parent.p0.clear()
-            parent.embedded=False
+        parent.U = u
+        parent.embedded = True
 
         ineur = 0
         parent.loaded = True
@@ -576,5 +631,5 @@ def load_proc(parent, name=None):
         parent.run_embedding_button.setEnabled(True)
         parent.upload_behav_button.setEnabled(True)
         parent.upload_run_button.setEnabled(True)
-        print("Loaded:", parent.proc['filename'])
+        parent.update_status_bar("Loaded: "+ parent.proc['filename'])
         parent.show()

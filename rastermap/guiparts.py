@@ -3,6 +3,7 @@ import pyqtgraph as pg
 from pyqtgraph import functions as fn
 from pyqtgraph import Point
 import numpy as np
+from pyqtgraph import ItemSample
 
 # custom vertical label
 class VerticalLabel(QtGui.QWidget):
@@ -19,6 +20,48 @@ class VerticalLabel(QtGui.QWidget):
             painter.drawText(0, 0, self.text)
         painter.end()
 
+class TimeRangeSlider(QtGui.QWidget):
+    def __init__(self, parent=None):
+        super(TimeRangeSlider, self).__init__(parent)
+        self.init_custom(parent)
+
+    def init_custom(self, parent):
+        
+        self.slider = RangeSlider(parent) 
+
+        slider_vbox = QtGui.QVBoxLayout()
+        slider_hbox = QtGui.QHBoxLayout()
+        slider_hbox.setContentsMargins(0, 0, 0, 0)
+        slider_vbox.setContentsMargins(0, 0, 0, 0)
+        slider_vbox.setSpacing(0)
+
+        label_minimum = QtGui.QLabel(alignment=QtCore.Qt.AlignLeft)
+        self.slider.minimumChanged.connect(label_minimum.setNum)
+
+        label_maximum = QtGui.QLabel(alignment=QtCore.Qt.AlignRight)
+        self.slider.maximumChanged.connect(label_maximum.setNum)
+
+        slider_vbox.addWidget(self.slider)
+        slider_vbox.addLayout(slider_hbox)
+        slider_hbox.addWidget(label_minimum, QtCore.Qt.AlignLeft)
+        slider_hbox.addWidget(label_maximum, QtCore.Qt.AlignRight)
+        slider_vbox.addStretch()
+
+        min_time, max_time = 0, parent.sp.shape[1]
+        self.slider.setMinimum(min_time)
+        self.slider.setMaximum(max_time)
+        self.slider.setLow(parent.xrange[0])
+        self.slider.setHigh(parent.xrange[-1])
+        self.slider.setTickInterval((self.slider.maximum()-self.slider.minimum())//100)
+
+        vbox = QtGui.QVBoxLayout(self)
+        vbox.addLayout(slider_vbox)
+        self.setGeometry(300, 300, 300, 150)
+        self.show()
+    
+    def get_slider_values(self):
+        return self.slider._low, self.slider._high
+        
 class RangeSlider(QtGui.QSlider):
     """ A slider for ranges.
 
@@ -32,17 +75,20 @@ class RangeSlider(QtGui.QSlider):
         Found this slider here: https://www.mail-archive.com/pyqt@riverbankcomputing.com/msg22889.html
         and modified it
     """
+    minimumChanged = QtCore.Signal(int)
+    maximumChanged = QtCore.Signal(int)
+
     def __init__(self, parent=None, *args):
         super(RangeSlider, self).__init__(*args)
 
         self._low = self.minimum()
         self._high = self.maximum()
+        self.setOrientation(QtCore.Qt.Horizontal)
 
         self.pressed_control = QtGui.QStyle.SC_None
         self.hover_control = QtGui.QStyle.SC_None
         self.click_offset = 0
 
-        self.setOrientation(QtCore.Qt.Vertical)
         self.setTickPosition(QtGui.QSlider.TicksRight)
         self.setStyleSheet(\
                 "QSlider::handle:horizontal {\
@@ -58,9 +104,6 @@ class RangeSlider(QtGui.QSlider):
         self.active_slider = 0
         self.parent = parent
 
-    def level_change(self):
-        self.saturation = [self._low, self._high]
-
     def low(self):
         return self._low
 
@@ -75,6 +118,11 @@ class RangeSlider(QtGui.QSlider):
         self._high = high
         self.update()
 
+    def level_change(self):
+        self.maximumChanged.emit(self._high)
+        self.minimumChanged.emit(self._low)
+        return self._low, self._high
+        
     def paintEvent(self, event):
         # based on http://qt.gitorious.org/qt/qt/blobs/master/src/gui/widgets/qslider.cpp
         painter = QtGui.QPainter(self)
