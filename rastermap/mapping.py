@@ -89,7 +89,7 @@ class Rastermap:
         self.fit(X, u)
         return self.embedding
 
-    def fit(self, data=None, u=None, v=None, itrain=None, time_bin=0, normalize=True,
+    def fit(self, data=None, u=None, v=None, U_nodes=None, itrain=None, time_bin=0, normalize=True,
             compute_X_embedding=True, compute_metrics=False):
         """Fit X into an embedded space.
         Inputs
@@ -148,10 +148,12 @@ class Rastermap:
                 if itrain is not None:
                     self.X_test = self.U @ (self.U.T @ X[:,~itrain])
 
+
             self.n_PCs = self.U.shape[1]
             print('n_PCs = {0} precomputed'.format(self.n_PCs))
 
 
+        self.U_nodes = U_nodes
         self.V = None
         if self.time_lag_window > 0:
             self.V = v if v is not None else self.U.T @ X 
@@ -164,7 +166,9 @@ class Rastermap:
                                                 symmetric=self.symmetric,
                                                 ts=self.ts,
                                                 scaled=self.scaled_kmeans,
-                                                sticky=self.sticky
+                                                sticky=self.sticky,
+                                                U_nodes=self.U_nodes,
+                                                verbose=self.verbose
                                                 )
         self.cc = cc
         print('landmarks computed and embedded, time {0:0.2f}'.format(time.time() - t0))

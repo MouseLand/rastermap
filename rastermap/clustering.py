@@ -181,19 +181,21 @@ def cluster_split_and_sort(U, V=None, n_clusters=100, nc=25,
                             time_lag_window=0, symmetric=False,
                              ts=0.0, 
                              scaled=True,
-                            sticky=True, verbose=False):
-    if scaled:
-        U_nodes, imax = scaled_kmeans(U, n_clusters=n_clusters)
-    else:
-        U_nodes, imax = kmeans(U, n_clusters=n_clusters)
+                            sticky=True, U_nodes=None, verbose=False):
+    if U_nodes is None:
+        if scaled:
+            U_nodes, imax = scaled_kmeans(U, n_clusters=n_clusters)
+        else:
+            U_nodes, imax = kmeans(U, n_clusters=n_clusters)
+    
     if time_lag_window > 0 and V is not None:
         cc = compute_cc_tdelay(U, V, U_nodes, 
-                               time_lag_window=time_lag_window, 
-                               symmetric=symmetric)
+                            time_lag_window=time_lag_window, 
+                            symmetric=symmetric)
     else:
         cc = U_nodes @ U_nodes.T
 
-    cc,inds,seg_len = travelling_salesman(cc, verbose=verbose, ts=ts)
+    cc, inds, seg_len, start_pos, end_pos, flipped = travelling_salesman(cc, verbose=verbose, ts=ts, n_skip=None)
     U_nodes = U_nodes[inds]
     
     n_PCs = U_nodes.shape[1]

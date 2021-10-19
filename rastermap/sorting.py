@@ -109,8 +109,12 @@ def new_correlation(cc, i0, i1, inode, n_nodes, BBt):
 def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
     inds = np.arange(0, n_nodes).astype(np.int32)
     iinds = np.arange(0, n_nodes).astype(np.int32)
-    seg_len = np.ones(n_iter)
+    seg_len = -1*np.ones(n_iter)
+    start_pos = -1*np.ones(n_iter)
+    end_pos = -1*np.ones(n_iter)
+    flipped = -1*np.ones(n_iter)
     n_len = 2
+    #print(n_len, n_skip)
     n_test = n_nodes//n_skip
     test_lengths = np.arange(0, ((n_nodes)//n_len)*n_len).reshape(-1,n_len) + 1
     corr_orig = 0
@@ -133,6 +137,7 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
                     corr_change = new_corr[0] - corr_orig
                     corr_change_seg[ix] = corr_change
                     ordering_seg[ix] = new_corr[1]
+            #corr_change_seg += np.random.randn(corr_change_seg.shape)*(corr_change_seg**2).mean()
             ix = corr_change_seg.argmax()
             corr_change = corr_change_seg[ix]
             if corr_change > 1e-3:
@@ -156,7 +161,10 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
                     print(k, i0, i1, inode, ordering, corr_change, corr_new - corr_orig, corr_new)
                 corr_orig = corr_new
                 seg_len[k] = i1 - i0
-    return cc, inds, seg_len
+                start_pos[k] = i0 
+                end_pos[k] = inode 
+                flipped[k] = ordering
+    return cc, inds, seg_len, start_pos, end_pos, flipped
 
 
 def travelling_salesman(cc, n_iter=400, ts=0.0, n_skip=None, verbose=False):
@@ -177,12 +185,22 @@ def travelling_salesman(cc, n_iter=400, ts=0.0, n_skip=None, verbose=False):
 
     n_iter = np.int64(n_iter)
     
-    cc, inds, seg_len = tsp_fast(cc, n_iter, n_nodes, n_skip, BBt.astype(np.float32), verbose)
+    cc, inds, seg_len, start_pos, end_pos, flipped = tsp_fast(cc, n_iter, n_nodes, n_skip, BBt.astype(np.float32), verbose)
+    iter_completed = np.nonzero(seg_len==-1)[0][0]
+    seg_len = seg_len[:iter_completed]
+    start_pos = start_pos[:iter_completed]
+    end_pos = end_pos[:iter_completed]
+    flipped = flipped[:iter_completed]
     if n_skip > 1:
-        cc, inds2, seg_len2 = tsp_fast(cc, n_iter, n_nodes, 1, BBt.astype(np.float32), verbose)
+        cc, inds2, seg_len2, start_pos2, end_pos2, flipped2 = tsp_fast(cc, n_iter, n_nodes, 1, BBt.astype(np.float32), verbose)
+        iter_completed = np.nonzero(seg_len2==-1)[0][0]
+        seg_len = np.append(seg_len, seg_len2[:iter_completed])
+        start_pos = np.append(start_pos, start_pos2[:iter_completed])
+        end_pos = np.append(end_pos, end_pos2[:iter_completed])
+        flipped = np.append(flipped, flipped2[:iter_completed])
         inds = inds[inds2]
 
-    return cc, inds, seg_len
+    return cc, inds, seg_len, start_pos, end_pos, flipped
 
 @njit('int32[:] (int64, int64, int64, int64, int64)', nogil=True)
 def shift_inds_sub(i0, i1, inode, isforward, n_nodes):

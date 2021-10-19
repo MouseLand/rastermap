@@ -140,7 +140,7 @@ def linearCorridor(root,file):
         
     results = {}    
     #results = GetWall(Timeline)
-    results['imgs'] = Timeline['img']
+    results['imgs'] = images#Timeline['img']
     results['subRun'] = subRun
     results['subRot'] = subRot
     results['whiteSpcStart'] = whiteSpcFrameInd  
