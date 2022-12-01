@@ -9,7 +9,7 @@ dependencies:
   - scikit-learn
   - pyqt
   - pip:
-    - pyqtgraph=0.11.0rc0
+    - pyqtgraph==0.11.0rc0
     - natsort
     - scanimage-tiff-reader
-    - rastermap>0.1.0
+    - rastermap>=0.1.0
