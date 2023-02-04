@@ -7,17 +7,56 @@ from .upsampling import grid_upsampling, kriging_upsampling, quadratic_upsamplin
 from .metrics import embedding_quality
 from .utils import bin1d
 
+def default_settings():
+    settings = {}
+    settings['n_clusters'] = 100
+    settings['n_PCs'] = 200
+    settings['time_lag_window'] = 0
+    settings['locality'] = 0.0
+    settings['grid_upsample'] = 10
+    settings['smoothness'] = 1
+    settings['n_splits'] = 0
+    settings['bin_size'] = 0
+    settings['scaled_kmeans'] = True 
+    settings['symmetric'] = True 
+    settings['keep_norm_X'] = False 
+    settings['sticky'] = True 
+    settings['verbose'] = True
+    settings['verbose_sorting'] = False
+    return settings
 
-def embedding_landmarks(X, n_clusters=50, n_components=1, travelling=True, alpha=1):
-    X_nodes, imax = kmeans(X, n_clusters=n_clusters)
-    if n_components==1 and travelling:
-        cc = X_nodes @ X_nodes.T
-        cc,inds,seg_len = travelling_salesman(cc, verbose=False, alpha=alpha)
-        Y_nodes = np.arange(len(inds))[:,np.newaxis]
-        X_nodes = X_nodes[inds]
-    else:
-        Y_nodes = embed_clusters(X_nodes, n_components=n_components)
-    return X_nodes, Y_nodes, imax
+def sequence_settings():
+    """ good for data with sequences """
+    settings = default_settings()
+    settings['time_lag_window'] = 10
+    settings['locality'] = 1.0
+    return settings
+
+def highd_settings():
+    """ good for large scale data with high-d features like natural image responses """
+    settings = default_settings()
+    settings['n_clusters'] = 100
+    settings['n_splits'] = 3
+    settings['nPCs'] = 400
+    return settings
+
+def settings_info():
+    info = {}
+    info['n_clusters'] = 'number of clusters created from data before upsampling and creating embedding \n (any number above 150 will be very slow due to NP-hard sorting problem)'
+    info['n_PCs'] = 'number of PCs to use during optimization'
+    info['time_lag_window'] = 'number of time points into the future to compute cross-correlation, useful for sequence finding'
+    info['locality'] = 'how local should the algorithm be -- set to 1.0 for highly local + sequence finding'
+    info['grid_upsample'] = 'how much to upsample clusters'
+    info['smoothness'] = 'how much to smooth over clusters when upsampling, set to number from 1 to number of clusters'
+    info['n_splits'] = 'split, recluster and sort n_splits times (increases local neighborhood preservation); \n (4 with 50 clusters => 800 clusters)'
+    info['bin_size'] = 'binning of data across n_samples to return embedding figure, X_embedding; \n if 0, then binning based on data size, if 1 then no binning'
+    info['scaled_kmeans'] = 'run scaled_kmeans as clustering algorithm; if False, run kmeans'
+    info['symmetric'] = 'if False, use only positive time lag cross-correlations for sorting (only makes a difference if time_lag_window > 0); \n keep False for sequence finding' 
+    info['keep_norm_X'] = 'keep normalized version of X saved as member of class'
+    info['sticky'] = 'if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; \n otherwise neurons can move each split (which generally does not work as well)'
+    info['verbose'] = 'whether to output progress during optimization'
+    info['verbose_sorting'] = 'output progress in travelling salesman'
+    return info
 
 class Rastermap:
     """Rastermap embedding algorithm
@@ -30,29 +69,47 @@ class Rastermap:
 
     Parameters
     -----------
-    n_PCs : int, optional (default: 200)
-        number of PCs to use during optimization
     n_clusters : int, optional (default: 100)
         number of clusters created from data before upsampling and creating embedding
         (any number above 150 will be very slow due to NP-hard sorting problem)
-    n_splits : int, optional (default: 0)
-        number of splits to perform to increase cluster size (increases local neighborhood preservation);
-        (e.g. n_splits=3, n_clusters=100 => 800 clusters)
+    n_PCs : int, optional (default: 200)
+        number of PCs to use during optimization
     time_lag_window : int, optional (default: 0)
-        width of gaussian to weight correlations of clusters across time lags for sequence data
+        number of time points into the future to compute cross-correlation, useful for sequence finding
+    locality : float, optional (default: 0.0)
+        how local should the algorithm be -- set to 1.0 for highly local + sequence finding
     grid_upsample : int, optional (default: 10)
         how much to upsample clusters
     smoothness : int, optional (default: 1)
         how much to smooth over clusters when upsampling, number from 1 to number of clusters
-    n_splits : int, optional (default: 4)
-        split, recluster and sort n_splits times (4 with 50 clusters => 800 clusters)
-    bin_size : int, optional (default: 50)
-        binning of data across n_samples to return embedding figure, X_embedding
-    verbose: bool (default: True)
+    n_splits : int, optional (default: 0)
+        split, recluster and sort n_splits times (increases local neighborhood preservation); 
+        (4 with 50 clusters => 800 clusters)
+    bin_size : int, optional (default: 0)
+        binning of data across n_samples to return embedding figure, X_embedding; 
+        if 0, then binning based on data size, if 1 then no binning
+    scaled_kmeans : bool, optional (default: True)
+        run scaled_kmeans as clustering algorithm; if False, run kmeans
+    symmetric : bool, optional (default: False)
+        if False, use only positive time lag cross-correlations for sorting (only makes a difference if time_lag_window > 0); 
+        keep False for sequence finding
+    keep_norm_X : bool, optional (default: False)
+        keep normalized version of X saved as member of class
+    sticky : bool, optional (default: True)
+        if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; 
+        otherwise neurons can move each split (which generally does not work as well)
+    verbose : bool (default: True)
         whether to output progress during optimization
+    verbose_sorting : bool (default: False)
+        output progress in travelling salesman
     """
-    def __init__(self, n_clusters=100, n_splits=0, time_lag_window=0.0, ts=0.0, smoothness=1, grid_upsample=10, sticky=True,
-                 n_PCs = 200, scaled_kmeans=True, bin_size=50, symmetric=False, keep_norm_X=False, verbose = True):
+    def __init__(self, n_clusters=100, n_PCs = 200, 
+                 time_lag_window=0.0, locality=0.0, 
+                 smoothness=1, grid_upsample=10, 
+                 bin_size=0, sticky=True,
+                 n_splits=0, scaled_kmeans=True, 
+                 symmetric=False, keep_norm_X=False, 
+                 verbose = True, verbose_sorting = False):
 
         self.n_components = 1 ### ONLY IN 1D
         self.n_clusters = n_clusters
@@ -60,7 +117,7 @@ class Rastermap:
         self.n_splits = n_splits
         self.time_lag_window = time_lag_window
         self.symmetric = symmetric
-        self.ts = ts
+        self.locality = locality
         self.smoothness = smoothness
         self.grid_upsample = grid_upsample
         self.bin_size = bin_size
@@ -69,6 +126,7 @@ class Rastermap:
 
         self.keep_norm_X = keep_norm_X
         self.verbose = verbose
+        self.verbose_sorting = verbose_sorting
 
         self.sorting_algorithm = 'travelling_salesman'
         self.quadratic_upsample = False
@@ -164,11 +222,12 @@ class Rastermap:
                                                 n_splits=self.n_splits,
                                                 time_lag_window=self.time_lag_window,
                                                 symmetric=self.symmetric,
-                                                ts=self.ts,
+                                                locality=self.locality,
                                                 scaled=self.scaled_kmeans,
                                                 sticky=self.sticky,
                                                 U_nodes=self.U_nodes,
-                                                verbose=self.verbose
+                                                verbose=self.verbose,
+                                                verbose_sorting=self.verbose_sorting
                                                 )
         self.cc = cc
         print('landmarks computed and embedded, time {0:0.2f}'.format(time.time() - t0))
@@ -225,3 +284,14 @@ class Rastermap:
         self.map_time = time.time() - t0 - pc_time
 
         return self
+
+def embedding_landmarks(X, n_clusters=50, n_components=1, travelling=True, alpha=1):
+    X_nodes, imax = kmeans(X, n_clusters=n_clusters)
+    if n_components==1 and travelling:
+        cc = X_nodes @ X_nodes.T
+        cc,inds,seg_len = travelling_salesman(cc, verbose=False, alpha=alpha)
+        Y_nodes = np.arange(len(inds))[:,np.newaxis]
+        X_nodes = X_nodes[inds]
+    else:
+        Y_nodes = embed_clusters(X_nodes, n_components=n_components)
+    return X_nodes, Y_nodes, imax    

@@ -1,35 +1,31 @@
 import numpy as np
 import os
 from PyQt5 import QtGui, QtCore
+from PyQt5.QtWidgets import QMainWindow, QApplication, QSizePolicy, QDialog, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QButtonGroup, QRadioButton, QStatusBar, QTextEdit
+from . import io
 
-### custom QDialog which allows user to fill in ops and run suite2p!
-class RunWindow(QtGui.QDialog):
+### custom QDialog which allows user to fill in ops and run rastermap
+class RunWindow(QDialog):
     def __init__(self, parent=None):
         super(RunWindow, self).__init__(parent)
         self.setGeometry(50,50,600,600)
         self.setWindowTitle('Choose rastermap run options')
-        self.win = QtGui.QWidget(self)
-        self.layout = QtGui.QGridLayout()
+        self.win = QWidget(self)
+        self.layout = QGridLayout()
         self.layout.setHorizontalSpacing(25)
         self.win.setLayout(self.layout)
 
+        print(">>> importing rastermap functions (will be slow if you haven't run rastermap before) <<<")
+        from rastermap.mapping import default_settings, settings_info, Rastermap
         # default ops
-        self.ops = {'n_components': 2, 'n_X': 40, 'alpha': 1., 'K': 1.,
-                    'nPC': 200, 'constraints': 2, 'annealing': True, 'init': 'pca',
-                    'start_time': 0, 'end_time': -1}
-
-        keys = ['n_components','n_X','alpha','constraints','K','nPC','annealing','init','start_time','end_time']
-        tooltips = ['dimensionality of low-D space (1 or 2)',
-                    'number of nodes in low-D space (rasterization)',
-                    'decay of power-law 1/(K + n^alpha)',
-                    'decay of power-law 1/(K + n^alpha)',
-                    'number of PCs used to compute embedding',
-                    '0=no constraints, 1=smoothing only, 2=power-law',
-                    'whether to anneal at the end (otherwise each neuron is kept at assigned node)',
-                    "initialization - 'pca' for PCs, 'random' for random",
-                    "start time for training set",
-                    "end time for training set (if -1, use all points for training)"]
-
+        self.ops = default_settings()
+        info = settings_info()
+        keys = ['n_clusters', 'n_PCs', 
+                 'time_lag_window', 'locality', 
+                 'grid_upsample', 
+                 'bin_size', 'n_splits', 
+                 'scaled_kmeans']
+        tooltips = [info[key] for key in keys]
         bigfont = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
         l=0
         self.keylist = []
@@ -37,7 +33,7 @@ class RunWindow(QtGui.QDialog):
         k=0
         for key in keys:
             qedit = LineEdit(k,key,self)
-            qlabel = QtGui.QLabel(key)
+            qlabel = QLabel(key)
             qlabel.setToolTip(tooltips[k])
             qedit.set_text(self.ops)
             qedit.setFixedWidth(90)
@@ -47,20 +43,17 @@ class RunWindow(QtGui.QDialog):
             self.editlist.append(qedit)
             k+=1
 
-        self.layout.addWidget(QtGui.QLabel("."),19,4,1,1)
-        self.layout.addWidget(QtGui.QLabel("."),19,5,1,1)
-        self.layout.addWidget(QtGui.QLabel("."),19,6,1,1)
-        self.layout.addWidget(QtGui.QLabel("."),19,7,1,1)
-        self.layout.addWidget(QtGui.QLabel("."),19,8,1,1)
-
+        #for j in range(10):
+        #    self.layout.addWidget(QLabel("."),19,4+j,1,1)
+        
         self.layout.setColumnStretch(4,10)
-        self.runButton = QtGui.QPushButton('RUN')
+        self.runButton = QPushButton('RUN')
         self.runButton.clicked.connect(lambda: self.run_RMAP(parent))
         self.layout.addWidget(self.runButton,19,0,1,1)
         #self.runButton.setEnabled(False)
-        self.textEdit = QtGui.QTextEdit()
-        self.textEdit.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        self.layout.addWidget(self.textEdit, 20,0,30,9)
+        self.textEdit = QTextEdit()
+        self.textEdit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.layout.addWidget(self.textEdit, 20,0,30,14)
         self.process = QtCore.QProcess(self)
         self.process.readyReadStandardOutput.connect(self.stdout_write)
         self.process.readyReadStandardError.connect(self.stderr_write)
@@ -68,10 +61,12 @@ class RunWindow(QtGui.QDialog):
         self.process.started.connect(self.started)
         self.process.finished.connect(lambda: self.finished(parent))
         # stop process
-        self.stopButton = QtGui.QPushButton('STOP')
+        self.stopButton = QPushButton('STOP')
         self.stopButton.setEnabled(False)
         self.layout.addWidget(self.stopButton, 19,1,1,1)
         self.stopButton.clicked.connect(self.stop)
+
+        self.show()
 
     def run_RMAP(self, parent):
         del parent.sp
@@ -79,12 +74,12 @@ class RunWindow(QtGui.QDialog):
         self.error = False
         self.save_text()
         np.save('ops.npy', self.ops)
-        print('Running rastermap!')
-        print('starting process')
+        print('Running rastermap with command:')
+        cmd = f'python -u -W ignore -m rastermap --ops ops.npy --S {parent.filebase} '
         if parent.file_iscell is not None:
-            self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s --iscell %s'%(parent.filebase, parent.file_iscell))
-        else:
-            self.process.start('python -u -W ignore -m rastermap --ops ops.npy --S %s'%parent.filebase)
+            cmd += f'--iscell {parent.file_iscell}'
+        print(cmd)
+        self.process.start(cmd)
 
     def stop(self):
         self.finish = False
@@ -106,7 +101,7 @@ class RunWindow(QtGui.QDialog):
                 parent.fname = os.path.join(basename, 'embedding.npy')
             else:
                 parent.fname = 'embedding.npy'
-            parent.load_proc(parent.fname)
+            io.load_proc(parent, name=parent.fname)
         elif not self.error:
             cursor = self.textEdit.textCursor()
             cursor.movePosition(cursor.End)
@@ -135,7 +130,7 @@ class RunWindow(QtGui.QDialog):
         self.textEdit.ensureCursorVisible()
         self.error = True
 
-class LineEdit(QtGui.QLineEdit):
+class LineEdit(QLineEdit):
     def __init__(self,k,key,parent=None):
         super(LineEdit,self).__init__(parent)
         self.key = key

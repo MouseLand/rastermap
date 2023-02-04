@@ -37,11 +37,11 @@ def create_ND_basis(dims, nclust, K, flag=True):
     fxx = fxx[ix]
     return S, fxx
 
-@njit('float32 (float32[:,:], float32[:,:])', nogil=True)
+@njit('float32 (float32[:,:], float32[:,:])', nogil=True, cache=True)
 def elementwise_mult_sum(x, y):
     return (x * y).sum()
 
-@njit('int64[:] (int64, int64, int64, int64)', nogil=True)
+@njit('int64[:] (int64, int64, int64, int64)', nogil=True, cache=True)
 def shift_inds(i0, i1, inode, n_nodes):
     """ shift segment from i0->i1 to position inode"""
     n_seg = i1 - i0 
@@ -58,17 +58,17 @@ def shift_inds(i0, i1, inode, n_nodes):
                                np.arange(i1,n_nodes)))
     return inds
 
-@njit('(float32[:,:], int64[:])', nogil=True)
+@njit('(float32[:,:], int64[:])', nogil=True, cache=True)
 def shift_matrix_inds(cc, ishift):
     return cc[ishift][:,ishift]
 
-@njit('(float32[:,:], int64, int64, int64, int64)', nogil=True)
+@njit('(float32[:,:], int64, int64, int64, int64)', nogil=True, cache=True)
 def shift_matrix_forward(cc, i0, i1, inode, n_nodes):
     ishift = shift_inds(i0, i1, inode, n_nodes)
     cc2 = cc[ishift][:,ishift]
     return cc2, ishift
 
-@njit('(float32[:,:], int64, int64, int64, int64, int64)', nogil=True)
+@njit('(float32[:,:], int64, int64, int64, int64, int64)', nogil=True, cache=True)
 def shift_matrix(cc, i0, i1, inode, n_nodes, ordering):
     cc2, ishift = shift_matrix_forward(cc, i0, i1, inode, n_nodes)
     ilength = i1 - i0
@@ -78,7 +78,7 @@ def shift_matrix(cc, i0, i1, inode, n_nodes, ordering):
         ishift[inode:inode+ilength] = ishift[inode:inode+ilength][::-1].copy()
     return cc2, ishift
 
-@njit('float32[:] (float32[:,:], int64, int64, int64, int64, float32[:,:])', nogil=True)
+@njit('float32[:] (float32[:,:], int64, int64, int64, int64, float32[:,:])', nogil=True, cache=True)
 def new_correlation(cc, i0, i1, inode, n_nodes, BBt):
     """ compute correlation change of moving segment i0:i1+1 to position inode
     inode=-1 is at beginning of sequence
@@ -105,7 +105,7 @@ def new_correlation(cc, i0, i1, inode, n_nodes, BBt):
 
     return corr_out
 
-@njit('(float32[:,:], int64, int64, int64, float32[:,:], boolean)', nogil=True, parallel=True)
+@njit('(float32[:,:], int64, int64, int64, float32[:,:], boolean)', nogil=True, parallel=True, cache=True)
 def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
     inds = np.arange(0, n_nodes).astype(np.int32)
     iinds = np.arange(0, n_nodes).astype(np.int32)
@@ -167,7 +167,7 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
     return cc, inds, seg_len, start_pos, end_pos, flipped
 
 
-def travelling_salesman(cc, n_iter=400, ts=0.0, n_skip=None, verbose=False):
+def travelling_salesman(cc, n_iter=400, locality=0.0, n_skip=None, verbose=False):
     """ matches correlation matrix cc to B@B.T basis functions """
     n_nodes = (cc.shape[0])
     if n_skip is None:
@@ -177,8 +177,8 @@ def travelling_salesman(cc, n_iter=400, ts=0.0, n_skip=None, verbose=False):
     n_components = 1
 
     x = np.arange(0, 1.0, 1.0/n_nodes)[:n_nodes]
-    BBt = compute_BBt(x, x, ts=ts)
-    if np.isinf(ts):
+    BBt = compute_BBt(x, x, locality=locality)
+    if np.isinf(locality):
         BBt = np.ones((n_nodes, n_nodes))
         BBt = np.tril(np.triu(BBt, -1), 1)
     BBt = np.triu(BBt)
@@ -202,7 +202,7 @@ def travelling_salesman(cc, n_iter=400, ts=0.0, n_skip=None, verbose=False):
 
     return cc, inds, seg_len, start_pos, end_pos, flipped
 
-@njit('int32[:] (int64, int64, int64, int64, int64)', nogil=True)
+@njit('int32[:] (int64, int64, int64, int64, int64)', nogil=True, cache=True)
 def shift_inds_sub(i0, i1, inode, isforward, n_nodes):
     """ shift segment from i0->i1 to position inode"""
     n_seg = i1 - i0 + 1
@@ -220,15 +220,15 @@ def shift_inds_sub(i0, i1, inode, isforward, n_nodes):
         inds[seg_pos+1 : seg_pos+1 + n_seg] = inds0[i0 : i1+1][::-1]
     return inds
 
-@njit('(float32[:,:], int32[:])', nogil=True)
+@njit('(float32[:,:], int32[:])', nogil=True, cache=True)
 def shift_matrix_sub(cc, ishift):
     return cc[ishift][:,ishift]
 
-@njit('(float32[:,:], int32[:])', nogil=True)
+@njit('(float32[:,:], int32[:])', nogil=True, cache=True)
 def shift_rows(cc, ishift):
     return cc[ishift]
 
-@njit('float32 (float32[:,:], float32[:,:], int64, int64, int64, int64, int64, float32[:,:], float32[:,:])', nogil=True)
+@njit('float32 (float32[:,:], float32[:,:], int64, int64, int64, int64, int64, float32[:,:], float32[:,:])', nogil=True, cache=True)
 def new_correlation_sub(cc, cc_add, i0, i1, inode, n_nodes, isforward, BBt, BBt_add):
     """ compute correlation change of moving segment i0:i1+1 to position inode
     inode=-1 is at beginning of sequence
@@ -240,7 +240,7 @@ def new_correlation_sub(cc, cc_add, i0, i1, inode, n_nodes, isforward, BBt, BBt_
     return corr_new
 
 
-@njit('(float32[:,:], float32[:,:], int64, int64, int64, float32[:,:],float32[:,:], boolean)', nogil=True, parallel=True)
+@njit('(float32[:,:], float32[:,:], int64, int64, int64, float32[:,:],float32[:,:], boolean)', nogil=True, parallel=True, cache=True)
 def tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add, verbose):
     inds = np.arange(0, n_nodes).astype(np.int32)
     seg_len = np.ones(n_iter)
@@ -328,20 +328,20 @@ def compute_BBt_mask(xi, yi):
     gaussian[(xi[:,np.newaxis] - yi)==0] = 0
     return gaussian 
 
-def compute_BBt(xi, yi, ts=0):
-    if ts > 0:
-        BBt0 = compute_BBt(xi, xi, ts=0)
+def compute_BBt(xi, yi, locality=0):
+    if locality > 0:
+        BBt0 = compute_BBt(xi, xi, locality=0)
         BBt_norm = BBt0.sum()
         BBt_mask_norm = compute_BBt_mask(xi, xi).sum()
     eps = 1e-10
     ds = np.abs(xi[:,np.newaxis] - yi)
     ds[ds==0] = 1 - eps
     BBt = - np.log(eps + ds) 
-    if ts > 0:
+    if locality > 0:
         BBt_mask = compute_BBt_mask(xi, yi)
         # need to make BBt and BBt_mask on same scale
         BBt /= BBt_norm
         BBt_mask /= BBt_mask_norm
-        BBt = BBt * (1-ts) + BBt_mask * ts
+        BBt = BBt * (1-locality) + BBt_mask * locality
         BBt *= BBt_norm
     return BBt

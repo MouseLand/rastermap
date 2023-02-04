@@ -179,9 +179,11 @@ def compute_cc_tdelay(U, V, U_nodes, time_lag_window=5, symmetric=False):
 def cluster_split_and_sort(U, V=None, n_clusters=100, nc=25, 
                             n_splits=0, 
                             time_lag_window=0, symmetric=False,
-                             ts=0.0, 
+                             locality=0.0, 
                              scaled=True,
-                            sticky=True, U_nodes=None, verbose=False):
+                            sticky=True, U_nodes=None, 
+                            verbose=True,
+                            verbose_sorting=False):
     if U_nodes is None:
         if scaled:
             U_nodes, imax = scaled_kmeans(U, n_clusters=n_clusters)
@@ -195,7 +197,10 @@ def cluster_split_and_sort(U, V=None, n_clusters=100, nc=25,
     else:
         cc = U_nodes @ U_nodes.T
 
-    cc, inds, seg_len, start_pos, end_pos, flipped = travelling_salesman(cc, verbose=verbose, ts=ts, n_skip=None)
+    cc, inds = travelling_salesman(cc, 
+                                   verbose=verbose_sorting, 
+                                   locality=locality, 
+                                   n_skip=None)[:2]
     U_nodes = U_nodes[inds]
     
     n_PCs = U_nodes.shape[1]
@@ -203,7 +208,7 @@ def cluster_split_and_sort(U, V=None, n_clusters=100, nc=25,
     for k in range(n_splits):
         U_nodes_new = np.zeros((0, n_PCs))
         n_nodes = U_nodes.shape[0]
-        if not sticky:
+        if not sticky and k > 0:
             ineurons = (U @ U_nodes.T).argmax(axis=1)
         ineurons_new = -1*np.ones(U.shape[0], np.int64)
         for i in range(n_nodes//nc):
@@ -216,10 +221,10 @@ def cluster_split_and_sort(U, V=None, n_clusters=100, nc=25,
             ifrac = node_set.mean()
             x = np.linspace(i*nc/n_nodes, (i+1)*nc/n_nodes, 2*nc+1)[:-1]
             y = np.linspace(0, 1, n_nodes+1)[:-1][~node_set]
-            BBt = compute_BBt(x, x, ts=ts)
+            BBt = compute_BBt(x, x, locality=locality)
             BBt -= np.diag(np.diag(BBt))
 
-            BBt_add = compute_BBt(x, y, ts=ts)
+            BBt_add = compute_BBt(x, y, locality=locality)
 
             cc_out,inds,seg_len = matrix_matching(cc, BBt, 
                                                     cc_add, BBt_add, 

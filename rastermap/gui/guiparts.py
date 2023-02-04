@@ -1,4 +1,5 @@
 from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QStyle, QStyleOptionSlider
 import pyqtgraph as pg
 from pyqtgraph import functions as fn
 from pyqtgraph import Point
@@ -6,7 +7,7 @@ import numpy as np
 from pyqtgraph import ItemSample
 
 # custom vertical label
-class VerticalLabel(QtGui.QWidget):
+class VerticalLabel(QWidget):
     def __init__(self, text=None):
         super(self.__class__, self).__init__()
         self.text = text
@@ -20,7 +21,7 @@ class VerticalLabel(QtGui.QWidget):
             painter.drawText(0, 0, self.text)
         painter.end()
 
-class TimeRangeSlider(QtGui.QWidget):
+class TimeRangeSlider(QWidget):
     def __init__(self, parent=None):
         super(TimeRangeSlider, self).__init__(parent)
         self.init_custom(parent)
@@ -35,10 +36,10 @@ class TimeRangeSlider(QtGui.QWidget):
         slider_vbox.setContentsMargins(0, 0, 0, 0)
         slider_vbox.setSpacing(0)
 
-        label_minimum = QtGui.QLabel(alignment=QtCore.Qt.AlignLeft)
+        label_minimum = QLabel(alignment=QtCore.Qt.AlignLeft)
         self.slider.minimumChanged.connect(label_minimum.setNum)
 
-        label_maximum = QtGui.QLabel(alignment=QtCore.Qt.AlignRight)
+        label_maximum = QLabel(alignment=QtCore.Qt.AlignRight)
         self.slider.maximumChanged.connect(label_maximum.setNum)
 
         slider_vbox.addWidget(self.slider)
@@ -62,7 +63,7 @@ class TimeRangeSlider(QtGui.QWidget):
     def get_slider_values(self):
         return self.slider._low, self.slider._high
         
-class RangeSlider(QtGui.QSlider):
+class RangeSlider(QSlider):
     """ A slider for ranges.
 
         This class provides a dual-slider for ranges, where there is a defined
@@ -75,8 +76,8 @@ class RangeSlider(QtGui.QSlider):
         Found this slider here: https://www.mail-archive.com/pyqt@riverbankcomputing.com/msg22889.html
         and modified it
     """
-    minimumChanged = QtCore.Signal(int)
-    maximumChanged = QtCore.Signal(int)
+    minimumChanged = QtCore.pyqtSignal(int)
+    maximumChanged = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None, *args):
         super(RangeSlider, self).__init__(*args)
@@ -85,11 +86,11 @@ class RangeSlider(QtGui.QSlider):
         self._high = self.maximum()
         self.setOrientation(QtCore.Qt.Horizontal)
 
-        self.pressed_control = QtGui.QStyle.SC_None
-        self.hover_control = QtGui.QStyle.SC_None
+        self.pressed_control = QStyle.SC_None
+        self.hover_control = QStyle.SC_None
         self.click_offset = 0
 
-        self.setTickPosition(QtGui.QSlider.TicksRight)
+        self.setTickPosition(QSlider.TicksRight)
         self.setStyleSheet(\
                 "QSlider::handle:horizontal {\
                 background-color: white;\
@@ -126,33 +127,33 @@ class RangeSlider(QtGui.QSlider):
     def paintEvent(self, event):
         # based on http://qt.gitorious.org/qt/qt/blobs/master/src/gui/widgets/qslider.cpp
         painter = QtGui.QPainter(self)
-        style = QtGui.QApplication.style()
+        style = QApplication.style()
         for i, value in enumerate([self._low, self._high]):
-            opt = QtGui.QStyleOptionSlider()
+            opt = QStyleOptionSlider()
             self.initStyleOption(opt)
             # Only draw the groove for the first slider so it doesn't get drawn
             # on top of the existing ones every time
             if i == 0:
-                opt.subControls = QtGui.QStyle.SC_SliderHandle#QtGui.QStyle.SC_SliderGroove | QtGui.QStyle.SC_SliderHandle
+                opt.subControls = QStyle.SC_SliderHandle#QStyle.SC_SliderGroove | QStyle.SC_SliderHandle
             else:
-                opt.subControls = QtGui.QStyle.SC_SliderHandle
+                opt.subControls = QStyle.SC_SliderHandle
             if self.tickPosition() != self.NoTicks:
-                opt.subControls |= QtGui.QStyle.SC_SliderTickmarks
+                opt.subControls |= QStyle.SC_SliderTickmarks
             if self.pressed_control:
                 opt.activeSubControls = self.pressed_control
-                opt.state |= QtGui.QStyle.State_Sunken
+                opt.state |= QStyle.State_Sunken
             else:
                 opt.activeSubControls = self.hover_control
             opt.sliderPosition = value
             opt.sliderValue = value
-            style.drawComplexControl(QtGui.QStyle.CC_Slider, opt, painter, self)
+            style.drawComplexControl(QStyle.CC_Slider, opt, painter, self)
 
     def mousePressEvent(self, event):
         event.accept()
         style = QtGui.QApplication.style()
         button = event.button()
         if button:
-            opt = QtGui.QStyleOptionSlider()
+            opt = QStyleOptionSlider()
             self.initStyleOption(opt)
             self.active_slider = -1
             for i, value in enumerate([self._low, self._high]):
@@ -166,7 +167,7 @@ class RangeSlider(QtGui.QSlider):
                     self.setSliderDown(True)
                     break
             if self.active_slider < 0:
-                self.pressed_control = QtGui.QStyle.SC_SliderHandle
+                self.pressed_control = QStyle.SC_SliderHandle
                 self.click_offset = self.__pixelPosToRangeValue(self.__pick(event.pos()))
                 self.triggerAction(self.SliderMove)
                 self.setRepeatAction(self.SliderNoAction)
@@ -174,12 +175,12 @@ class RangeSlider(QtGui.QSlider):
             event.ignore()
     
     def mouseMoveEvent(self, event):
-        if self.pressed_control != QtGui.QStyle.SC_SliderHandle:
+        if self.pressed_control != QStyle.SC_SliderHandle:
             event.ignore()
             return
         event.accept()
         new_pos = self.__pixelPosToRangeValue(self.__pick(event.pos()))
-        opt = QtGui.QStyleOptionSlider()
+        opt = QStyleOptionSlider()
         self.initStyleOption(opt)
         if self.active_slider < 0:
             offset = new_pos - self.click_offset
@@ -214,7 +215,7 @@ class RangeSlider(QtGui.QSlider):
             return pt.y()
     
     def __pixelPosToRangeValue(self, pos):
-        opt = QtGui.QStyleOptionSlider()
+        opt = QStyleOptionSlider()
         self.initStyleOption(opt)
         style = QtGui.QApplication.style()
 
@@ -271,14 +272,14 @@ class NeuronSlider(RangeSlider):
         self.parent.imgROI.setLevels([self.parent.sat[0],self.parent.sat[1]])
         self.parent.win.show()
 
-class Slider(QtGui.QSlider):
+class Slider(QSlider):
     def __init__(self, bid, parent=None):
         super(self.__class__, self).__init__()
         self.bid = bid
         self.setMinimum(0)
         self.setMaximum(100)
         self.setValue(parent.sat[bid]*100)
-        self.setTickPosition(QtGui.QSlider)
+        self.setTickPosition(QSlider)
         self.setTickInterval(10)
         self.valueChanged.connect(lambda: self.level_change(parent,bid))
         self.setTracking(False)
