@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QFileDialog, QMainWindow, QApplication, QWidget, QSc
 import pyqtgraph as pg
 from scipy.stats import zscore
 import scipy.io as sio
+import mat73
 from . import guiparts
 
 def load_mat(parent, name=None):
@@ -13,7 +14,7 @@ def load_mat(parent, name=None):
     Note: can only load mat files containing one key assigned to data matrix
     
     """
-    name = 'C:/Users/carse/DATA/gt1/suite2p/plane0/spks.npy'
+    #name = 'C:/Users/carse/DATA/gt1/suite2p/plane0/spks.npy'
     try:
         if name is None:
             name = QFileDialog.getOpenFileName(
@@ -25,11 +26,18 @@ def load_mat(parent, name=None):
             parent.filebase = name
         ext = os.path.splitext(parent.fname)[-1]
         parent.update_status_bar("Loading "+ parent.fname)
-        if ext == '.mat':       
-            X = sio.loadmat(parent.fname)
-            for i, key in enumerate(X.keys()):
-                if key not in ['__header__', '__version__', '__globals__']:
-                    X = X[key]
+        if ext == '.mat':    
+            try:   
+                X = sio.loadmat(parent.fname)
+                for i, key in enumerate(X.keys()):
+                    if key not in ['__header__', '__version__', '__globals__']:
+                        X = X[key]
+            except NotImplementedError:
+                X = mat73.loadmat(parent.fname)
+                if isinstance(X, dict):
+                    for i, key in enumerate(X.keys()):
+                        if key not in ['__header__', '__version__', '__globals__']:
+                            X = X[key]
         elif ext == '.npy':
             X = np.load(parent.fname) # allow_pickle=True
         else:
