@@ -20,14 +20,29 @@ class LinearRegionItem(pg.LinearRegionItem):
         super().__init__(orientation="horizontal", bounds=bounds,
                          pen=self.pen, brush=self.brush, 
                          hoverBrush=self.hover_brush)
+
+        #self.sigRegionChanged.connect(self.cluster_set())
         
     def cluster_set(self):
+        print('hi')
         region = self.getRegion()
+        region = (int(region[0]), int(region[1]))
         self.parent.cluster_slices[self.roi_id] = slice(region[0], region[1])
-        self.selected = self.parent.cluster_slices[self.roi_id]
+        self.parent.selected = self.parent.cluster_slices[self.roi_id]
         self.parent.plot_avg_activity_trace()
         self.parent.update_scatter()
         self.parent.p3.show()
+
+    def lineMoved(self):
+        if self.blockLineSignal:
+            return
+        self.prepareGeometryChange()
+        self.cluster_set()
+        self.sigRegionChanged.emit(self)
+
+    def lineMoveFinished(self):
+        self.cluster_set()
+        self.sigRegionChangeFinished.emit(self)
 
     def mouseDragEvent(self, ev):
         if not self.movable or int(ev.button() & QtCore.Qt.LeftButton) == 0:
@@ -57,6 +72,7 @@ class LinearRegionItem(pg.LinearRegionItem):
             self.cluster_set()
             self.sigRegionChangeFinished.emit(self)
         else:
+            self.cluster_set()
             self.sigRegionChanged.emit(self)
             
     def mouseClickEvent(self, ev):

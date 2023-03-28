@@ -17,6 +17,12 @@ def mainmenu(parent):
     parent.addAction(loadMat)
     file_menu.addAction(loadMat)
     
+    parent.loadXY = QAction("&Load xy(z) positions of neurons", parent)
+    parent.loadXY.setShortcut("Ctrl+X")
+    parent.loadXY.triggered.connect(lambda: io.load_pos(parent, name=None))
+    parent.addAction(parent.loadXY)
+    file_menu.addAction(parent.loadXY)  
+
     parent.loadOne =  QAction("Load &one-d variable", parent)
     parent.loadOne.setShortcut("Ctrl+O")
     parent.loadOne.triggered.connect(lambda: io.load_oned_data(parent))

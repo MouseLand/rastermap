@@ -218,7 +218,7 @@ class MainW(QMainWindow):
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
 
-        io.load_mat(self, 'E:/DATA/GT1/suite2p/plane0/spks.npy')
+        io.load_mat(self, '/media/carsen/ssd2/TX60/suite2p/plane0/spks.npy')
         self.show()
 
     def sat_changed(self):
@@ -239,6 +239,8 @@ class MainW(QMainWindow):
     def reset_variables(self):
         for i in range(len(self.cluster_rois)):
             self.p2.removeItem(self.cluster_rois[i])
+        self.startROI = False 
+        self.posROI = np.zeros((2,2))
         self.cluster_rois = []
         self.loaded = False
         self.oned_loaded = False 
@@ -254,9 +256,7 @@ class MainW(QMainWindow):
         self.oned_corr_all = None
         self.oned_corr_selected = None
         self.xrange = None
-        self.xpos_dat = None
-        self.ypos_dat = None
-        self.depth_dat = None
+        self.neuron_pos = None
         self.save_path = None  # Set default to current folder
         self.embedding = None
         self.heatmap = None
@@ -292,72 +292,31 @@ class MainW(QMainWindow):
             elif x==self.p2 and event.modifiers() == QtCore.Qt.ShiftModifier:
                 if not self.startROI:
                     self.startROI = True
-                    self.endROI = False
                     self.posROI[0,:] = [x,y]
                 else:
                     # plotting
-                    self.startROI = True
-                    self.endROI = False
+                    self.startROI = False 
                     self.posROI[1,:] = [x,y]
-                    #print(self.)
-                    self.posAll.append(self.posROI[:2,:].copy())
-                    pos = self.posAll[-1]
-                    self.lp.append(pg.PlotDataItem(pos[:, 0], pos[:, 1]))
-                    self.posROI[0,:] = [x,y]
-                    self.p0.addItem(self.lp[-1])
-                    self.p0.show()
-            elif self.startROI:
-                self.posROI[1,:] = [x,y]
-                self.posAll.append(self.posROI[:2,:].copy())
-                self.p0.removeItem(self.l0)
-                pos = self.posAll[-1]
-                self.lp.append(pg.PlotDataItem(pos[:, 0], pos[:, 1]))
-                self.p0.addItem(self.lp[-1])
-                self.p0.show()
-                self.endROI = True
-                self.startROI = False
-            elif self.endROI:
-                self.posROI[2,:] = [x,y]
-                self.endROI = False
-                for lp in self.lp:
-                    self.p0.removeItem(lp)
-                print(self.posAll, self.prect)
-                self.ROI_add(self.posAll, self.prect)
+                    self.ROI_add(self.posROI)
                 self.posAll = []
                 self.lp = []
 
     
     def mouse_moved_embedding(self, pos):
         if self.embedded:
-            if self.p0.sceneBoundingRect().contains(pos):
-                x = self.p0.vb.mapSceneToView(pos).x()
-                y = self.p0.vb.mapSceneToView(pos).y()
-                if self.startROI or self.endROI:
+            if self.p2.sceneBoundingRect().contains(pos):
+                x = self.p2.vb.mapSceneToView(pos).x()
+                y = self.p2.vb.mapSceneToView(pos).y()
+                if self.startROI:
                     if self.startROI:
-                        self.p0.removeItem(self.l0)
+                        self.p2.removeItem(self.l0)
                         self.posROI[1,:] = [x,y]
-                        self.l0 = pg.PlotDataItem(self.posROI[:2,0],self.posROI[:2,1])
+                        self.l0 = pg.PlotDataItem(self.posROI[:,0],self.posROI[:,1])
                         self.p0.addItem(self.l0)
-                    else:
-                        # compute the distance from the line to the point
-                        self.posROI[2,:] = [x,y]
-                        d = dist_to_line(self.posROI)
-                        self.prect = []
-                        for k in range(len(self.lp)):
-                            self.p0.removeItem(self.lp[k])
-                            self.prect.append(rect_from_line(self.posAll[k], d))
-                            self.lp[k] = pg.PlotDataItem(self.prect[-1][:,0], self.prect[-1][:,1])
-                            self.p0.addItem(self.lp[k])
-                        #self.prect.append(rect_from_line(self.posROI, d))
-                        #self.p0.removeItem(self.l0)
-                        #self.l0 = pg.PlotDataItem(self.prect[0][:,0], self.prect[0][:,1])
-                        #self.p0.addItem(self.l0)
-                        self.p0.show()
-                        self.show()
-                else:
-                    dists = (self.embedding[self.selected,0] - x)**2 + (self.embedding[self.selected,1] - y)**2
-                    ineur = np.argmin(dists.flatten()).astype(int)
-                    self.update_selected(ineur)
+                #else:
+                #    dists = (self.embedding[self.selected,0] - x)**2 + (self.embedding[self.selected,1] - y)**2
+                #    ineur = np.argmin(dists.flatten()).astype(int)
+                #    self.update_selected(ineur)
 
     def update_scatter_ops_pos(self):
         self.l0.removeWidget(self.scatter_comboBox)
@@ -505,6 +464,8 @@ class MainW(QMainWindow):
         if self.behav_binary_data is not None:
             self.plot_behav_binary_data()
 
+        self.plot_avg_activity_trace()
+
         axy = self.p2.getAxis('left')
         axx = self.p2.getAxis('bottom')
         self.imgROI.setLevels([self.sat[0]/100., self.sat[1]/100.])
@@ -646,9 +607,10 @@ class MainW(QMainWindow):
             else:
                 self.update_status_bar("ERROR: please upload 1D data")
         elif request == 2:
-            if self.xpos_dat is None or self.ypos_dat is None:
-                io.get_neuron_pos_data(self)
-            self.plot_neuron_pos(init=True)
+            if self.neuron_pos is not None:
+                self.plot_neuron_pos(init=True)
+            else:
+                self.update_status_bar("ERROR: please upload neuron position data")
         else:
             return
 
@@ -702,12 +664,13 @@ class MainW(QMainWindow):
                 self.p5.setLabel('bottom', "correlation")
 
     def plot_neuron_pos(self, init=False):
-        if self.xpos_dat is not None or self.ypos_dat is not None:
-            xpos, ypos = self.xpos_dat, -self.ypos_dat
+        if self.neuron_pos is not None:
+            xpos, ypos = self.neuron_pos[:,0], self.neuron_pos[:,0]
             selected = self.neurons_selected()
-            xpos_selected, ypos_selected = self.xpos_dat[selected], -self.ypos_dat[selected]
+            xpos_selected, ypos_selected = xpos[selected], ypos[selected]
             if self.all_neurons_checkBox.isChecked():
                 colors = colormaps.gist_ncar[np.linspace(0, 254, len(xpos)).astype('int')]
+                colors = colors[self.sorting]
                 brushes = [pg.mkBrush(color=c) for c in colors]
                 self.scatter_plot.setData(xpos, ypos, symbol='o', 
                                         brush=brushes, hoverable=True)
@@ -768,8 +731,6 @@ class MainW(QMainWindow):
                 self.hide_heatmap_ops()
             except Exception as e:
                 return
-        
-
 
 def run():
     # Always start by initializing Qt (only once per application)

@@ -184,14 +184,14 @@ class Rastermap:
                 #Vpca = TruncatedSVD(n_components=nmin, 
                 #                    random_state=0).fit_transform(bin1d(X[:,itrain], bin_size=time_bin, axis=1))
             else:
-                Vpca = torch.linalg.svd(torch.from_numpy(bin1d(X, bin_size=time_bin, axis=1)), 
-                                        full_matrices=False)[0].numpy()[:, :nmin]
+                #Vpca = torch.linalg.svd(torch.from_numpy(bin1d(X, bin_size=time_bin, axis=1)), 
+                #                        full_matrices=False)[0].numpy()[:, :nmin]
                 #print(Vpca[0].shape, Vpca[1].shape, Vpca[2].shape)
                 #Vpca = torch.svd_lowrank(torch.from_numpy(bin1d(X, bin_size=time_bin, axis=1)), 
                 #                         q=nmin)[0].numpy()
-                #from sklearn.decomposition import TruncatedSVD
-                #Vpca = TruncatedSVD(n_components=nmin, 
-                 #                   random_state=0).fit_transform(bin1d(X, bin_size=time_bin, axis=1))
+                from sklearn.decomposition import TruncatedSVD
+                Vpca = TruncatedSVD(n_components=nmin, 
+                                   random_state=0).fit_transform(bin1d(X, bin_size=time_bin, axis=1))
             U = Vpca #/ (Vpca**2).sum(axis=0)**0.5
             if itrain is not None:
                 self.X_test = U @ (U.T @ bin1d(X[:,~itrain], bin_size=time_bin, axis=1))
