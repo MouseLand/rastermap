@@ -2,8 +2,15 @@ import sys, time, os
 import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtCore
+from PyQt5 import QtWidgets as QtW
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QButtonGroup, QRadioButton, QStatusBar
 from scipy.stats import zscore, pearsonr
+# patch for Qt 5.15 on macos >= 12
+os.environ["USE_MAC_SLIDER_PATCH"] = "1"
+from superqt import QRangeSlider  # noqa
+Horizontal = QtCore.Qt.Orientation.Horizontal
+Vertical = QtCore.Qt.Orientation.Vertical
+
 from . import menus, guiparts, io, colormaps
 
 class MainW(QMainWindow):
@@ -71,6 +78,7 @@ class MainW(QMainWindow):
         # Plot a zoomed in region from full view (changes across time axis)
         self.selected = slice(0, nn)
         self.p2 = self.win.addPlot(title='ZOOM IN',row=1,col=0,colspan=2)
+        self.p2.setMenuEnabled(False)
         self.imgROI = pg.ImageItem(autoDownsample=True)
         self.p2.addItem(self.imgROI)
         self.p2.setMouseEnabled(x=False, y=False)
@@ -80,6 +88,7 @@ class MainW(QMainWindow):
         ticks = [0]
         ax.setTicks([[(v, '.') for v in ticks ]])
         self.p2.invertY(True)
+        self.p2.scene().sigMouseMoved.connect(self.mouse_moved_embedding)
 
         # Plot avg. activity of neurons selected in ROI of zoomed in view
         self.p3 = self.win.addPlot(title='selected neurons', 
@@ -130,14 +139,16 @@ class MainW(QMainWindow):
         self.scatterplot_checkBox.setStyleSheet("color: gray;")
         self.scatterplot_checkBox.stateChanged.connect(self.update_plot_p5)
         
-        # Add slider for levels  
-        self.sat = [0.3,0.7]
-        slider = guiparts.SatSlider(self)
+        # Add slider for saturation  
+        self.sat = [30.,70.]
+        self.sat_slider = QRangeSlider(Horizontal)
+        self.sat_slider.setRange(0., 200.)
+        self.sat_slider.setTickPosition(QtW.QSlider.TickPosition.TicksAbove)
+        self.sat_slider.valueChanged.connect(self.sat_changed)
+        self.sat_slider.setValue((self.sat[0], self.sat[1]))
         sat_label = QLabel("Saturation")
         sat_label.setStyleSheet('color: white;')
-        self.img.setLevels([self.sat[0], self.sat[1]])
-        self.imgROI.setLevels([self.sat[0], self.sat[1]])
-
+        
         # Add drop down options for scatter plot
         self.scatter_comboBox = QComboBox(self)
         self.scatter_comboBox.setFixedWidth(120)
@@ -174,20 +185,8 @@ class MainW(QMainWindow):
         self.p1.addItem(self.ROI)
         self.ROI.setZValue(10)  # make sure ROI is drawn above image
 
-        self.LINE = pg.RectROI([-1, nn*.4], [nt*.25, nn*.2],
-                      maxBounds=QtCore.QRectF(-1,-1.,nt*.25,nn+1),
-                      pen=redpen)
-        self.selected = np.arange(nn*.4, nn*.6, 1, int)
-        self.LINE.handleSize = 10
-        self.LINE.handlePen = redpen
-        # Add top handle
-        self.LINE.handles = []
-        self.LINE.addScaleHandle([0.5, 1], [0.5, 0])
-        self.LINE.addScaleHandle([0.5, 0], [0.5, 1])
-        self.LINE.sigRegionChangeFinished.connect(self.LINE_position)
-        self.p2.addItem(self.LINE)
-        self.LINE.setZValue(10)  # make sure ROI is drawn above image
-
+        self.cluster_rois = []
+        
         greenpen = pg.mkPen(pg.mkColor(0, 255, 0),
                                 width=3,
                                 style=QtCore.Qt.SolidLine)
@@ -205,19 +204,27 @@ class MainW(QMainWindow):
         self.tpos = -0.5
         self.tsize = 1
         self.reset_variables()
-        
+
         # Add features to window
         ops_row_pos = 0
         self.l0.addWidget(ysm, ops_row_pos, 0, 1, 1)
         self.l0.addWidget(self.smooth, ops_row_pos, 1, 1, 1)
         self.l0.addWidget(sat_label,ops_row_pos+1,0,1,2)
-        self.l0.addWidget(slider, ops_row_pos+2,0,1,2)
+        self.l0.addWidget(self.sat_slider, ops_row_pos+2,0,1,2)
         self.l0.addWidget(self.heatmap_checkBox, ops_row_pos+3, 0, 1, 2)
         self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+4, 0, 1, 2)
         self.l0.addWidget(self.scatter_comboBox,ops_row_pos+16,12,1,1)
-        
+
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
+
+        io.load_mat(self, 'E:/DATA/GT1/suite2p/plane0/spks.npy')
+        self.show()
+
+    def sat_changed(self):
+        self.sat = self.sat_slider.value()
+        self.img.setLevels([self.sat[0]/100., self.sat[1]/100.])
+        self.imgROI.setLevels([self.sat[0]/100., self.sat[1]/100.])
         self.show()
 
     def reset(self): 
@@ -230,6 +237,9 @@ class MainW(QMainWindow):
         self.p5.clear()
     
     def reset_variables(self):
+        for i in range(len(self.cluster_rois)):
+            self.p2.removeItem(self.cluster_rois[i])
+        self.cluster_rois = []
         self.loaded = False
         self.oned_loaded = False 
         self.embedded = False
@@ -251,6 +261,7 @@ class MainW(QMainWindow):
         self.embedding = None
         self.heatmap = None
         self.heatmap_chkbxs = []
+        self.sat_slider.setValue([30.,70.])
         self.oned_trace_plot = pg.PlotDataItem()
         self.oned_trace_plot_added = False
         self.oned_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30)
@@ -278,6 +289,75 @@ class MainW(QMainWindow):
             if x==self.p1 and event.button()==1 and event.double():
                 self.ROI.setPos([-1,-1])
                 self.ROI.setSize([self.sp.shape[1]+1, self.sp.shape[0]+1])
+            elif x==self.p2 and event.modifiers() == QtCore.Qt.ShiftModifier:
+                if not self.startROI:
+                    self.startROI = True
+                    self.endROI = False
+                    self.posROI[0,:] = [x,y]
+                else:
+                    # plotting
+                    self.startROI = True
+                    self.endROI = False
+                    self.posROI[1,:] = [x,y]
+                    #print(self.)
+                    self.posAll.append(self.posROI[:2,:].copy())
+                    pos = self.posAll[-1]
+                    self.lp.append(pg.PlotDataItem(pos[:, 0], pos[:, 1]))
+                    self.posROI[0,:] = [x,y]
+                    self.p0.addItem(self.lp[-1])
+                    self.p0.show()
+            elif self.startROI:
+                self.posROI[1,:] = [x,y]
+                self.posAll.append(self.posROI[:2,:].copy())
+                self.p0.removeItem(self.l0)
+                pos = self.posAll[-1]
+                self.lp.append(pg.PlotDataItem(pos[:, 0], pos[:, 1]))
+                self.p0.addItem(self.lp[-1])
+                self.p0.show()
+                self.endROI = True
+                self.startROI = False
+            elif self.endROI:
+                self.posROI[2,:] = [x,y]
+                self.endROI = False
+                for lp in self.lp:
+                    self.p0.removeItem(lp)
+                print(self.posAll, self.prect)
+                self.ROI_add(self.posAll, self.prect)
+                self.posAll = []
+                self.lp = []
+
+    
+    def mouse_moved_embedding(self, pos):
+        if self.embedded:
+            if self.p0.sceneBoundingRect().contains(pos):
+                x = self.p0.vb.mapSceneToView(pos).x()
+                y = self.p0.vb.mapSceneToView(pos).y()
+                if self.startROI or self.endROI:
+                    if self.startROI:
+                        self.p0.removeItem(self.l0)
+                        self.posROI[1,:] = [x,y]
+                        self.l0 = pg.PlotDataItem(self.posROI[:2,0],self.posROI[:2,1])
+                        self.p0.addItem(self.l0)
+                    else:
+                        # compute the distance from the line to the point
+                        self.posROI[2,:] = [x,y]
+                        d = dist_to_line(self.posROI)
+                        self.prect = []
+                        for k in range(len(self.lp)):
+                            self.p0.removeItem(self.lp[k])
+                            self.prect.append(rect_from_line(self.posAll[k], d))
+                            self.lp[k] = pg.PlotDataItem(self.prect[-1][:,0], self.prect[-1][:,1])
+                            self.p0.addItem(self.lp[k])
+                        #self.prect.append(rect_from_line(self.posROI, d))
+                        #self.p0.removeItem(self.l0)
+                        #self.l0 = pg.PlotDataItem(self.prect[0][:,0], self.prect[0][:,1])
+                        #self.p0.addItem(self.l0)
+                        self.p0.show()
+                        self.show()
+                else:
+                    dists = (self.embedding[self.selected,0] - x)**2 + (self.embedding[self.selected,1] - y)**2
+                    ineur = np.argmin(dists.flatten()).astype(int)
+                    self.update_selected(ineur)
 
     def update_scatter_ops_pos(self):
         self.l0.removeWidget(self.scatter_comboBox)
@@ -331,7 +411,6 @@ class MainW(QMainWindow):
         move = False
         if self.loaded:
             xrange = self.roi_range(self.ROI)[0]
-            yrange = self.roi_range(self.LINE)[1]
             if event.key() == QtCore.Qt.Key_Down:
                 bid = 0
             elif event.key() == QtCore.Qt.Key_Up:
@@ -343,7 +422,6 @@ class MainW(QMainWindow):
 
             if event.modifiers() != QtCore.Qt.ShiftModifier:
                 move_time = True if bid==2 or bid==3 and (xrange.stop - xrange.start < self.ntime) else False
-                move_neurons = True if bid==0 or bid==1 and (yrange.stop - yrange.start < self.nsmooth) else False
                 if move_time:
                     ### move in time in increments of 1/2 size of window
                     twin = xrange.stop - xrange.start    
@@ -359,21 +437,6 @@ class MainW(QMainWindow):
                             x0 = x1 - (xrange.stop - xrange.start)
                     if move:
                         self.set_ROI_position(xrange = slice(x0, x1))
-                elif move_neurons:
-                    ### move in neurons in increments of 1/2 size of window
-                    nwin = yrange.stop - yrange.start    
-                    if bid==1:
-                        if yrange.start > 0:
-                            move = True
-                            x0 = max(0, yrange.start - nwin//2)
-                            x1 = yrange.stop - yrange.start + x0
-                    elif bid==0:
-                        if yrange.stop < self.nsmooth:
-                            move = True
-                            x1 = min(self.nsmooth, yrange.stop + nwin//2)
-                            x0 = x1 - (yrange.stop - yrange.start)
-                    if move:
-                        self.LINE.setPos([-0.5, x0])
             else:
                 if bid==2 or bid==3:
                     twin = xrange.stop - xrange.start    
@@ -389,22 +452,7 @@ class MainW(QMainWindow):
                             x0 = max(0, xrange.start - tbin//2)
                             x1 = min(self.ntime, x0 + (xrange.stop - xrange.start) + tbin)
                         self.set_ROI_position(xrange = slice(x0, x1))
-                else:
-                    nwin = yrange.stop - yrange.start    
-                    nbin = 10
-                    zoom_in = True if bid==0 and nwin > nbin else False
-                    zoom_out = True if bid==1 and nwin < self.nsmooth else False
-                    move_neurons = zoom_in or zoom_out
-                    if move_neurons:
-                        if zoom_in:
-                            x0 = yrange.start + nbin//2
-                            x1 = max(x0 + nbin, yrange.stop - nbin//2)
-                        elif zoom_out:
-                            x0 = max(0, yrange.start - nbin//2)
-                            x1 = min(self.nsmooth, x0 + (yrange.stop - yrange.start) + nbin)
-                        self.LINE.setPos([-0.5, x0])
-                        self.LINE.setSize([xrange.stop - xrange.start + 1, x1 - x0])
-
+                
     def roi_range(self, roi):
         pos = roi.pos()
         posy = pos.y()
@@ -434,10 +482,8 @@ class MainW(QMainWindow):
             self.p3.show()
         
     def LINE_position(self):
-        _,yrange = self.roi_range(self.LINE)
+        yrange = np.arange(self.LINE.span[0], self.LINE.span[1]+1)
         self.selected = yrange
-        #for i in range(len(self.LINE.handles)):
-        #    self.LINE.handles[i]['item'].setSelectable(True)
         self.plot_avg_activity_trace()
         self.LINE.setZValue(10)
         self.update_scatter()
@@ -453,15 +499,6 @@ class MainW(QMainWindow):
         # Update zoom in plot
         self.imgROI.setImage(self.sp_smoothed[:, self.xrange])
         self.p2.setXRange(0, self.xrange.stop - self.xrange.start,padding=0)
-        
-        # reset LINE ROI
-        self.LINE.maxBounds = QtCore.QRectF(-1,-1.,
-                                self.xrange.stop - self.xrange.start + 1, self.nsmooth+1)
-        self.LINE.setPos(-.5, self.selected.start)
-        self.LINE.setSize([self.xrange.stop - self.xrange.start + 1,
-                           self.selected.stop - self.selected.start
-                           ])
-        self.LINE.setZValue(10)
 
         if self.behav_loaded:
             self.behav_ROI_update()
@@ -470,7 +507,7 @@ class MainW(QMainWindow):
 
         axy = self.p2.getAxis('left')
         axx = self.p2.getAxis('bottom')
-        self.imgROI.setLevels([self.sat[0], self.sat[1]])
+        self.imgROI.setLevels([self.sat[0]/100., self.sat[1]/100.])
 
     def smooth_activity(self):
         N = int(self.smooth.text())
@@ -488,6 +525,20 @@ class MainW(QMainWindow):
         yr0 = min(4, self.nsmooth//4)
         ym = self.nsmooth//2
         self.selected = slice(ym - yr0, ym + yr0)
+        if len(self.cluster_rois) > 0:
+            for i in range(len(self.cluster_rois)):
+                self.p2.removeItem(self.cluster_rois[i])
+        self.cluster_rois, self.cluster_slices = [], []
+        self.cluster_rois.append(guiparts.LinearRegionItem(self, color=[50,50,255,150], 
+                                bounds=(0,nn)))
+        self.cluster_slices.append(self.selected)
+        self.cluster_rois[0].setRegion((self.selected.start, self.selected.stop))
+        self.p2.addItem(self.cluster_rois[0])
+        self.cluster_rois[0].setZValue(10)  # make sure ROI is drawn above image
+        self.plot_avg_activity_trace()
+        self.update_scatter()
+        self.p2.show()
+        self.p3.show()
         if self.oned_loaded: 
             self.oned_corr_all = None
             self.plot_1d_corr()
@@ -500,7 +551,7 @@ class MainW(QMainWindow):
             self.smooth_activity()
             nn, nt = self.sp_smoothed.shape
             self.img.setImage(self.sp_smoothed)
-            self.img.setLevels([self.sat[0],self.sat[1]])
+            self.img.setLevels([self.sat[0]/100.,self.sat[1]/100.])
             self.p1.setXRange(-nt*0.01, nt*1.01, padding=0)
             self.p1.setYRange(-nn*0.01, nn*1.01, padding=0)
             self.p1.show()
@@ -718,17 +769,7 @@ class MainW(QMainWindow):
             except Exception as e:
                 return
         
-    def load_iscell(self):
-        basename,filename = os.path.split(self.filebase)
-        try:
-            iscell = np.load(basename + "/iscell.npy")
-            probcell = iscell[:, 1]
-            iscell = iscell[:, 0].astype(np.bool)
-            file_iscell = basename + "/iscell.npy"
-        except (ValueError, OSError, RuntimeError, TypeError, NameError):
-            iscell = None
-            file_iscell = None
-        return iscell, file_iscell
+
 
 def run():
     # Always start by initializing Qt (only once per application)

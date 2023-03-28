@@ -2,7 +2,6 @@ import time
 from scipy.stats import zscore, spearmanr
 import multiprocessing
 from multiprocessing import Pool
-from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import pdist
 import numpy as np
 import scipy
@@ -28,7 +27,7 @@ def distance_matrix(Z, n_X = None, wrapping=False, correlation = False):
 
 def embedding_score(X, Z, knn=[10, 100, 1000], subsetsize=5000,
                         wrapping=False, n_X = 0):
-
+    from sklearn.neighbors import NearestNeighbors
     np.random.seed(101)
     subset = np.random.choice(X.shape[0], size=subsetsize, replace=False)
     Xdist = distance_matrix(X[subset], correlation=True)
@@ -58,7 +57,7 @@ def embedding_score(X, Z, knn=[10, 100, 1000], subsetsize=5000,
 
 def embedding_quality(X, Z, classes=None, knn=20, knn_global=500, subsetsize=2000,
                         wrapping=False, n_X = 0):
-
+    from sklearn.neighbors import NearestNeighbors
     np.random.seed(101)
     subset = np.random.choice(X.shape[0], size=subsetsize, replace=False)
     Xdist = distance_matrix(X[subset], correlation=True)

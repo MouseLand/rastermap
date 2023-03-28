@@ -1,9 +1,9 @@
 import time 
-from sklearn.decomposition import TruncatedSVD, PCA
+import torch
 import numpy as np
 from scipy.stats import zscore
 from .clustering import kmeans, travelling_salesman, cluster_split_and_sort
-from .upsampling import grid_upsampling, kriging_upsampling, quadratic_upsampling1D, upsample_grad
+from .upsampling import grid_upsampling
 from .metrics import embedding_quality
 from .utils import bin1d
 
@@ -152,7 +152,7 @@ class Rastermap:
         """Fit X into an embedded space.
         Inputs
         ----------
-        X : array, shape (n_samples, n_features)
+        X : array, shape (n_samples, n_features) - float32 recommended
         u, v : svd decomposition of X (optional), u should be u*sv
 
         Assigns
@@ -178,11 +178,20 @@ class Rastermap:
             nmin = min(nmin, self.n_PCs)
             self.n_PCs = nmin
             if itrain is not None:
-                Vpca = TruncatedSVD(n_components=nmin, 
-                                    random_state=0).fit_transform(bin1d(X[:,itrain], bin_size=time_bin, axis=1))
+                Vpca = torch.svd_lowrank(torch.from_numpy(bin1d(X[:,itrain], bin_size=time_bin, axis=1)), 
+                                         q=nmin)[0].numpy()
+                #from sklearn.decomposition import TruncatedSVD
+                #Vpca = TruncatedSVD(n_components=nmin, 
+                #                    random_state=0).fit_transform(bin1d(X[:,itrain], bin_size=time_bin, axis=1))
             else:
-                Vpca = TruncatedSVD(n_components=nmin, 
-                                    random_state=0).fit_transform(bin1d(X, bin_size=time_bin, axis=1))
+                Vpca = torch.linalg.svd(torch.from_numpy(bin1d(X, bin_size=time_bin, axis=1)), 
+                                        full_matrices=False)[0].numpy()[:, :nmin]
+                #print(Vpca[0].shape, Vpca[1].shape, Vpca[2].shape)
+                #Vpca = torch.svd_lowrank(torch.from_numpy(bin1d(X, bin_size=time_bin, axis=1)), 
+                #                         q=nmin)[0].numpy()
+                #from sklearn.decomposition import TruncatedSVD
+                #Vpca = TruncatedSVD(n_components=nmin, 
+                 #                   random_state=0).fit_transform(bin1d(X, bin_size=time_bin, axis=1))
             U = Vpca #/ (Vpca**2).sum(axis=0)**0.5
             if itrain is not None:
                 self.X_test = U @ (U.T @ bin1d(X[:,~itrain], bin_size=time_bin, axis=1))
@@ -257,11 +266,6 @@ class Rastermap:
         if data is not None:
             self.X_upsampled = Xrec @ (self.U.T @ X)
         self.embedding_grid = Y
-        
-        if self.quadratic_upsample:
-            Y = quadratic_upsampling1D(cc, g)
-        elif self.gradient_upsample:
-            Y = upsample_grad(cc, self.n_components, self.n_X)
         
         isort = Y[:,0].argsort()         
 

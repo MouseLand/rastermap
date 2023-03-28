@@ -1,5 +1,4 @@
 import numpy as np
-from sklearn.cluster import KMeans
 from scipy.stats import zscore
 import warnings
 from .sorting import compute_BBt, matrix_matching, travelling_salesman
@@ -141,6 +140,7 @@ def scaled_kmeans(X, n_clusters=100, n_iter=50,
     return X_nodes, imax
 
 def kmeans(X, n_clusters=100, random_state=0):
+    from sklearn.cluster import KMeans
     np.random.seed(random_state)
     #X_nodes = (np.random.randn(n_clusters, n_features) / 
     #                            (1 + np.arange(n_features))**0.5)

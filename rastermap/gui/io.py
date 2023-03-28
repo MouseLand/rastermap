@@ -5,7 +5,6 @@ from PyQt5.QtWidgets import QFileDialog, QMainWindow, QApplication, QWidget, QSc
 import pyqtgraph as pg
 from scipy.stats import zscore
 import scipy.io as sio
-import mat73
 from . import guiparts
 
 def load_mat(parent, name=None):
@@ -29,10 +28,15 @@ def load_mat(parent, name=None):
         if ext == '.mat':    
             try:   
                 X = sio.loadmat(parent.fname)
-                for i, key in enumerate(X.keys()):
-                    if key not in ['__header__', '__version__', '__globals__']:
-                        X = X[key]
+                if isinstance(X, dict):
+                    for i, key in enumerate(X.keys()):
+                        if key not in ['__header__', '__version__', '__globals__']:
+                            X = X[key]
             except NotImplementedError:
+                try:
+                    import mat73
+                except ImportError:
+                    print('please "pip install mat73"')
                 X = mat73.loadmat(parent.fname)
                 if isinstance(X, dict):
                     for i, key in enumerate(X.keys()):
@@ -63,7 +67,7 @@ def load_mat(parent, name=None):
         parent.update_status_bar('ERROR: matrix with fewer than 10 neurons provided')
     
     parent.update_status_bar(f'activity loaded: {X.shape[0]} neurons by {X.shape[1]} timepoints')
-    iscell, file_iscell = parent.load_iscell()
+    iscell, file_iscell = load_iscell(parent)
     parent.file_iscell = None
     if iscell is not None:
         if iscell.size == X.shape[0]:
@@ -89,6 +93,7 @@ def load_mat(parent, name=None):
         smooth = 10
     parent.update_status_bar(f'setting neuron bin size to {smooth} for visualization')
     parent.smooth.setText(str(smooth))
+    
     parent.loaded = True
     parent.plot_activity()
     parent.show()
@@ -152,6 +157,18 @@ def get_behav_data(parent):
 
     dialog.adjustSize()
     dialog.exec_()
+
+def load_iscell(parent):
+    basename,filename = os.path.split(parent.filebase)
+    try:
+        iscell = np.load(basename + "/iscell.npy")
+        probcell = iscell[:, 1]
+        iscell = iscell[:, 0].astype(np.bool)
+        file_iscell = basename + "/iscell.npy"
+    except (ValueError, OSError, RuntimeError, TypeError, NameError):
+        iscell = None
+        file_iscell = None
+    return iscell, file_iscell
 
 def load_behav_comps_file(parent, button):
     name = QFileDialog.getOpenFileName(
@@ -501,7 +518,7 @@ def load_proc(parent, name=None):
         X = None
     if X is not None:
         parent.filebase = parent.proc['filename']
-        iscell, file_iscell = parent.load_iscell()
+        iscell, file_iscell = load_iscell(parent)
 
         parent.startROI = False
         parent.endROI = False

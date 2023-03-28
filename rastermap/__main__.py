@@ -66,6 +66,6 @@ if __name__ == '__main__':
             print('GUI ERROR: %s'%GUI_ERROR)
             if GUI_IMPORT:
                 print('GUI FAILED: GUI dependencies may not be installed, to install, run')
-                print('     pip install cellpose[gui]')
+                print('     pip install rastermap[gui]')
         else:
             gui.run()
