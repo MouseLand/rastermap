@@ -11,7 +11,9 @@ from superqt import QRangeSlider  # noqa
 Horizontal = QtCore.Qt.Orientation.Horizontal
 Vertical = QtCore.Qt.Orientation.Vertical
 
-from . import menus, guiparts, io, colormaps
+from . import menus, guiparts, io, colormaps, views
+
+nclust_max = 100
 
 class MainW(QMainWindow):
     def __init__(self):
@@ -66,7 +68,7 @@ class MainW(QMainWindow):
         self.p0.setMenuEnabled(False)
 
         # Plot entire neural activity dataset
-        self.p1 = self.win.addPlot(title="FULL VIEW",row=0,col=1)
+        self.p1 = self.win.addPlot(title="FULL VIEW",row=0,col=1,colspan=2)
         self.p1.setMouseEnabled(x=False,y=False)
         self.img = pg.ImageItem(autoDownsample=True)
         self.p1.addItem(self.img)
@@ -74,10 +76,11 @@ class MainW(QMainWindow):
         self.p1.setYRange(0,nn)
         self.p1.setLabel('left', 'binned neurons')
         self.p1.setLabel('bottom', 'time')
+        self.p1.invertY(True)
 
         # Plot a zoomed in region from full view (changes across time axis)
         self.selected = slice(0, nn)
-        self.p2 = self.win.addPlot(title='ZOOM IN',row=1,col=0,colspan=2)
+        self.p2 = self.win.addPlot(title='ZOOM IN',row=1,col=0,colspan=2,rowspan=1)
         self.p2.setMenuEnabled(False)
         self.imgROI = pg.ImageItem(autoDownsample=True)
         self.p2.addItem(self.imgROI)
@@ -88,38 +91,50 @@ class MainW(QMainWindow):
         ticks = [0]
         ax.setTicks([[(v, '.') for v in ticks ]])
         self.p2.invertY(True)
-        self.p2.scene().sigMouseMoved.connect(self.mouse_moved_embedding)
+        self.p2.scene().sigMouseMoved.connect(self.mouse_moved)
 
         # Plot avg. activity of neurons selected in ROI of zoomed in view
-        self.p3 = self.win.addPlot(title='selected neurons', 
-                                   row=2, col=0,
+        self.p3 = self.win.addPlot(row=2, col=0, rowspan=1,
                                    colspan=2, padding=0)
         self.p3.setMouseEnabled(x=False,y=False)
         self.p3.setLabel('bottom', 'time')
-        self.p3.setLabel('left', 'avg activity')
-
+        self.p3.setLabel('left', 'selected')
+        self.cluster_plots = []
+        for i in range(nclust_max):
+            self.cluster_plots.append(pg.PlotDataItem())
+        for i in range(nclust_max):
+            self.p3.addItem(self.cluster_plots[i])
+        
         # Plot behavioral dataset as heatmap
-        self.p4 = self.win.addPlot(title='behavior',row=3,col=0,colspan=2)
+        self.p4 = self.win.addPlot(row=3,col=0,colspan=2,rowspan=1)
         self.p4.setMouseEnabled(x=False,y=False)
         self.p4.setLabel('bottom', 'time')
+        self.p4.setLabel('left', 'behavior')
+
+        # align plots
+        self.p2.getAxis('left').setWidth(int(40))
+        self.p3.getAxis('left').setWidth(int(40))
+        self.p4.getAxis('left').setWidth(int(40))
 
         # Scatter plot for oned correlation, neuron position, and depth (ephys) information
         self.p5 = self.win.addPlot(title='scatter plot',row=1,col=2)
         self.p5.setMouseEnabled(x=False,y=False)
-        self.scatter_plot = pg.ScatterPlotItem()
-        self.scatter_plot_selected = pg.ScatterPlotItem()
+        self.scatter_plots = [[]]
+        for i in range(nclust_max+1):
+            self.scatter_plots[0].append(pg.ScatterPlotItem())
+        for i in range(nclust_max+1):
+            self.p5.addItem(self.scatter_plots[0][i])
+                
         
-        # Optional plots toggled w/ checkboxes
-        self.win.removeItem(self.p4)
-        self.win.removeItem(self.p5)
-
         # Set colormap to deafult of gray_r. ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Future: add option to change cmap ~~~~~~~~~~~~~~
         lut = colormaps.gray[::-1]
         # apply the colormap
         self.img.setLookupTable(lut)
         self.imgROI.setLookupTable(lut)
         layout.setColumnStretchFactor(1,3)
-        layout.setRowStretchFactor(1,3)
+        layout.setRowStretchFactor(1,4)
+        layout.setRowStretchFactor(2,2)
+        layout.setRowStretchFactor(3,0.5)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Options on top left of GUI ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # add bin size across neurons
@@ -131,14 +146,6 @@ class MainW(QMainWindow):
         self.smooth.setAlignment(QtCore.Qt.AlignRight)
         self.smooth.returnPressed.connect(self.plot_activity)
 
-        self.heatmap_checkBox = QCheckBox("show n-d array")
-        self.heatmap_checkBox.setStyleSheet("color: gray;")
-        self.heatmap_checkBox.stateChanged.connect(self.update_plot_p4)
-        self.heatmap_checkBox.setEnabled(False)
-        self.scatterplot_checkBox = QCheckBox("scatter pos / corr")
-        self.scatterplot_checkBox.setStyleSheet("color: gray;")
-        self.scatterplot_checkBox.stateChanged.connect(self.update_plot_p5)
-        
         # Add slider for saturation  
         self.sat = [30.,70.]
         self.sat_slider = QRangeSlider(Horizontal)
@@ -152,22 +159,20 @@ class MainW(QMainWindow):
         # Add drop down options for scatter plot
         self.scatter_comboBox = QComboBox(self)
         self.scatter_comboBox.setFixedWidth(120)
-        scatter_comboBox_ops = ["-- Select --", "1D correlation", "neuron position"]
+        scatter_comboBox_ops = ["-- Select --", "neuron position", "1D correlation"]
         self.scatter_comboBox.setEditable(True)
         self.scatter_comboBox.addItems(scatter_comboBox_ops)
         self.scatter_comboBox.setCurrentIndex(0)
-        line_edit = self.scatter_comboBox.lineEdit()
-        line_edit.setAlignment(QtCore.Qt.AlignCenter)  
-        line_edit.setReadOnly(True)
         self.scatter_comboBox.setCurrentIndex(0)
-        self.scatter_comboBox.hide()
         self.all_neurons_checkBox = QCheckBox("color all neurons")
         self.all_neurons_checkBox.setStyleSheet("color: gray;")
-        self.all_neurons_checkBox.hide()
-        self.scatterplot_button = QPushButton('Plot')
+        self.scatterplot_button = QPushButton('plot')
         self.scatterplot_button.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
         self.scatterplot_button.clicked.connect(self.plot_scatter_pressed)
-        self.scatterplot_button.hide()
+        self.scatterplot_button_3D = QPushButton('view 3D')
+        self.scatterplot_button_3D.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.scatterplot_button_3D.clicked.connect(self.plane_window)
+        
 
         # ROI on main plot
         bluepen = pg.mkPen(pg.mkColor(0, 0, 255),
@@ -187,19 +192,9 @@ class MainW(QMainWindow):
 
         self.cluster_rois = []
         
-        greenpen = pg.mkPen(pg.mkColor(0, 255, 0),
-                                width=3,
-                                style=QtCore.Qt.SolidLine)
-        
         # Status bar
         self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        self.progressBar = QProgressBar()
-        self.statusBar.addPermanentWidget(self.progressBar)
-        self.progressBar.setGeometry(0, 0, 300, 25)
-        self.progressBar.setMaximum(100)
-        self.progressBar.hide()
-
+        
         # Default variables
         self.tpos = -0.5
         self.tsize = 1
@@ -211,15 +206,26 @@ class MainW(QMainWindow):
         self.l0.addWidget(self.smooth, ops_row_pos, 1, 1, 1)
         self.l0.addWidget(sat_label,ops_row_pos+1,0,1,2)
         self.l0.addWidget(self.sat_slider, ops_row_pos+2,0,1,2)
-        self.l0.addWidget(self.heatmap_checkBox, ops_row_pos+3, 0, 1, 2)
-        self.l0.addWidget(self.scatterplot_checkBox, ops_row_pos+4, 0, 1, 2)
-        self.l0.addWidget(self.scatter_comboBox,ops_row_pos+16,12,1,1)
 
+        self.l0.addWidget(self.scatterplot_button,16,12,1,1)
+        self.l0.addWidget(self.scatterplot_button_3D,16,13,1,1)
+        self.l0.addWidget(self.scatter_comboBox,17,12,1,1)
+        self.l0.addWidget(self.all_neurons_checkBox,17,13,1,1)
+
+        
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
 
-        io.load_mat(self, '/media/carsen/ssd2/TX60/suite2p/plane0/spks.npy')
+        #io.load_mat(self, '/media/carsen/ssd2/TX60/suite2p/plane0/spks.npy')
+        io.load_mat(self, 'C:/Users/CSMP/Downloads/fish_subject17_spks.npy')
         self.show()
+
+    def randomize_colors(self, random=False):
+        np.random.seed(0 if not random else np.random.randint(500))
+        rperm = np.random.permutation(nclust_max)
+        self.colors = colormaps.gist_rainbow[np.linspace(0, 254, nclust_max).astype('int')][rperm]
+        self.colors[:,-1] = 50
+        self.colors = list(self.colors)
 
     def sat_changed(self):
         self.sat = self.sat_slider.value()
@@ -229,7 +235,6 @@ class MainW(QMainWindow):
 
     def reset(self): 
         self.run_embedding_button.setEnabled(False)
-        self.heatmap_checkBox.setEnabled(False)
         self.p1.clear()
         self.p2.clear()
         self.p3.clear()
@@ -239,9 +244,16 @@ class MainW(QMainWindow):
     def reset_variables(self):
         for i in range(len(self.cluster_rois)):
             self.p2.removeItem(self.cluster_rois[i])
+        for i in range(nclust_max+1):
+            self.scatter_plots[0][i].setData([], [])
+            if i < nclust_max:
+                self.cluster_plots[i].setData([], [])
+        self.p2.show()
+        self.p5.show()
+        self.randomize_colors()
         self.startROI = False 
         self.posROI = np.zeros((2,2))
-        self.cluster_rois = []
+        self.cluster_rois, self.cluster_slices = [], []
         self.loaded = False
         self.oned_loaded = False 
         self.embedded = False
@@ -256,18 +268,25 @@ class MainW(QMainWindow):
         self.oned_corr_all = None
         self.oned_corr_selected = None
         self.xrange = None
+        self.file_iscell = None
+        self.iscell = None
         self.neuron_pos = None
         self.save_path = None  # Set default to current folder
         self.embedding = None
         self.heatmap = None
         self.heatmap_chkbxs = []
         self.sat_slider.setValue([30.,70.])
+        self.line = pg.PlotDataItem()
         self.oned_trace_plot = pg.PlotDataItem()
         self.oned_trace_plot_added = False
         self.oned_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30)
         self.symbol_list = ['star', 'd', 'x', 'o', 't', 't1', 't2', 'p', '+', 's', 't3', 'h']
         self.embed_time_range = -1
         self.params_set = False
+
+    def plane_window(self):
+        self.PlaneWindow = views.PlaneWindow(self)
+        self.PlaneWindow.show()
 
     def update_status_bar(self, message, update_progress=False):
         if update_progress:
@@ -278,7 +297,6 @@ class MainW(QMainWindow):
             self.setFrame.setText(str(frames_processed))
             self.statusBar.showMessage(message.split("|")[0])
         else: 
-            self.progressBar.hide()
             self.statusBar.showMessage(message)
             print(message)
         self.show()
@@ -289,7 +307,9 @@ class MainW(QMainWindow):
             if x==self.p1 and event.button()==1 and event.double():
                 self.ROI.setPos([-1,-1])
                 self.ROI.setSize([self.sp.shape[1]+1, self.sp.shape[0]+1])
-            elif x==self.p2 and event.modifiers() == QtCore.Qt.ShiftModifier:
+            elif x==self.p2 and event.button() == QtCore.Qt.RightButton:
+                pos = self.p2.vb.mapSceneToView(event.scenePos())
+                x,y = pos.x(), pos.y()
                 if not self.startROI:
                     self.startROI = True
                     self.posROI[0,:] = [x,y]
@@ -297,50 +317,30 @@ class MainW(QMainWindow):
                     # plotting
                     self.startROI = False 
                     self.posROI[1,:] = [x,y]
-                    self.ROI_add(self.posROI)
+                    self.p2.removeItem(self.line)
+                    y0, y1 = self.posROI[:,1].min(), self.posROI[:,1].max()
+                    y0, y1 = int(y0), int(y1)
+                    y1 = y1 if y1 > y0 else y0+1
+                    self.selected = slice(y0, y1)
+                    self.add_cluster()
                 self.posAll = []
                 self.lp = []
 
     
-    def mouse_moved_embedding(self, pos):
-        if self.embedded:
-            if self.p2.sceneBoundingRect().contains(pos):
-                x = self.p2.vb.mapSceneToView(pos).x()
-                y = self.p2.vb.mapSceneToView(pos).y()
-                if self.startROI:
-                    if self.startROI:
-                        self.p2.removeItem(self.l0)
-                        self.posROI[1,:] = [x,y]
-                        self.l0 = pg.PlotDataItem(self.posROI[:,0],self.posROI[:,1])
-                        self.p0.addItem(self.l0)
-                #else:
-                #    dists = (self.embedding[self.selected,0] - x)**2 + (self.embedding[self.selected,1] - y)**2
-                #    ineur = np.argmin(dists.flatten()).astype(int)
-                #    self.update_selected(ineur)
-
-    def update_scatter_ops_pos(self):
-        self.l0.removeWidget(self.scatter_comboBox)
-        self.l0.removeWidget(self.all_neurons_checkBox)
-        self.l0.removeWidget(self.scatterplot_button)
-        if self.heatmap_checkBox.isChecked() and self.behav_loaded:
-            if len(self.heatmap_chkbxs) <= 3:
-                k = 1
-            elif len(self.heatmap_chkbxs) >= 5:
-                k = -1
-            else:
-                k = 0
-            if self.behav_labels_loaded:
-                self.l0.addWidget(self.scatterplot_button,13+k,12,1,2)
-                self.l0.addWidget(self.scatter_comboBox,14+k,12,1,1)
-                self.l0.addWidget(self.all_neurons_checkBox,14+k,13,1,1)
-            else:
-                self.l0.addWidget(self.scatterplot_button,16,12,1,2)
-                self.l0.addWidget(self.scatter_comboBox,17,12,1,1)
-                self.l0.addWidget(self.all_neurons_checkBox,17,13,1,1)
-        else:
-            self.l0.addWidget(self.scatterplot_button,18,12,1,2)
-            self.l0.addWidget(self.scatter_comboBox,19,12,1,1)
-            self.l0.addWidget(self.all_neurons_checkBox,19,13,1,1)
+    def mouse_moved(self, pos):
+        if self.p2.sceneBoundingRect().contains(pos):
+            x = self.p2.vb.mapSceneToView(pos).x()
+            y = self.p2.vb.mapSceneToView(pos).y()
+            if self.startROI:
+                self.posROI[1,:] = [x,y]
+                self.p2.removeItem(self.line)
+                pen = pg.mkPen(color='yellow', width=3)
+                self.line = pg.PlotDataItem(self.posROI[:,0], self.posROI[:,1], pen=pen)
+                self.p2.addItem(self.line)
+            #else:
+            #    dists = (self.embedding[self.selected,0] - x)**2 + (self.embedding[self.selected,1] - y)**2
+            #    ineur = np.argmin(dists.flatten()).astype(int)
+            #    self.update_selected(ineur)
 
     def behav_chkbx_toggled(self):
         if self.heatmap_chkbxs[0].isChecked():
@@ -356,14 +356,6 @@ class MainW(QMainWindow):
                     disp_ind.append(np.where(self.heatmap_chkbxs[k].text() == self.behav_labels)[0][0])
             if len(disp_ind) > 0:
                 self.plot_behav_data(np.array(disp_ind))
-
-    def show_heatmap_ops(self):
-        for k in range(len(self.heatmap_chkbxs)):
-            self.heatmap_chkbxs[k].show()
-    
-    def hide_heatmap_ops(self):
-        for k in range(len(self.heatmap_chkbxs)):
-            self.heatmap_chkbxs[k].hide()
 
     def keyPressEvent(self, event):
         bid = -1
@@ -427,25 +419,37 @@ class MainW(QMainWindow):
         xrange = slice(xrange[0], xrange[-1]+1)
         return xrange, yrange
 
-    def plot_avg_activity_trace(self):
+    #def update_avg_activity_trace(self):
+        
+    def plot_avg_activity_trace(self, roi_id=None):
         if self.loaded:
-            avg = self.sp_smoothed[self.selected, self.xrange].mean(axis=0)
-            avg -= avg.min()
-            avg /= avg.max()
-            self.p3.clear()
-            self.p3.plot(np.arange(self.xrange.start, self.xrange.stop), avg, pen=(255,0,0))
+            kspace = 0.5
+            x = np.arange(self.xrange.start, self.xrange.stop)
+            if roi_id is None:
+                for roi_id in range(nclust_max):
+                    if roi_id < len(self.cluster_rois):
+                        selected = self.cluster_slices[roi_id]
+                        y = self.sp_smoothed[selected].mean(axis=0)
+                        y -= y.min()
+                        y /= y.max()
+                        y += kspace * roi_id
+                        self.cluster_plots[roi_id].setData(x, y[self.xrange],
+                                                           pen=pg.mkPen(color=self.colors[roi_id][:3]))
+                    else:
+                        self.cluster_plots[roi_id].setData([], [])
+            else:
+                selected = self.cluster_slices[roi_id]
+                y = self.sp_smoothed[selected].mean(axis=0)
+                y -= y.min()
+                y /= y.max()
+                y += kspace * roi_id
+                self.cluster_plots[roi_id].setData(x, y[self.xrange],
+                                                    pen=pg.mkPen(color=self.colors[roi_id][:3]))
             self.p3.setXRange(self.xrange.start, self.xrange.stop-1)
             self.p3.setLimits(xMin=self.xrange.start, xMax=self.xrange.stop-1)
             if self.oned_loaded: 
                 self.plot_oned_trace()
             self.p3.show()
-        
-    def LINE_position(self):
-        yrange = np.arange(self.LINE.span[0], self.LINE.span[1]+1)
-        self.selected = yrange
-        self.plot_avg_activity_trace()
-        self.LINE.setZValue(10)
-        self.update_scatter()
 
     def set_ROI_position(self, xrange):
         self.xrange = xrange
@@ -490,12 +494,7 @@ class MainW(QMainWindow):
             for i in range(len(self.cluster_rois)):
                 self.p2.removeItem(self.cluster_rois[i])
         self.cluster_rois, self.cluster_slices = [], []
-        self.cluster_rois.append(guiparts.LinearRegionItem(self, color=[50,50,255,150], 
-                                bounds=(0,nn)))
-        self.cluster_slices.append(self.selected)
-        self.cluster_rois[0].setRegion((self.selected.start, self.selected.stop))
-        self.p2.addItem(self.cluster_rois[0])
-        self.cluster_rois[0].setZValue(10)  # make sure ROI is drawn above image
+        self.add_cluster()
         self.plot_avg_activity_trace()
         self.update_scatter()
         self.p2.show()
@@ -503,6 +502,16 @@ class MainW(QMainWindow):
         if self.oned_loaded: 
             self.oned_corr_all = None
             self.plot_1d_corr()
+
+    def add_cluster(self):
+        roi_id = len(self.cluster_rois)
+        self.cluster_rois.append(guiparts.LinearRegionItem(self, color=self.colors[roi_id], 
+                                bounds=(0,self.sp_smoothed.shape[0]), roi_id=roi_id))
+        self.cluster_slices.append(self.selected)
+        self.cluster_rois[-1].setRegion((self.selected.start, self.selected.stop))
+        self.p2.addItem(self.cluster_rois[-1])
+        self.cluster_rois[-1].setZValue(10)  # make sure ROI is drawn above image
+        self.cluster_rois[-1].cluster_set()
             
     def plot_activity(self):
         if self.loaded:
@@ -521,6 +530,7 @@ class MainW(QMainWindow):
             self.p2.show()
             self.ROI.maxBounds = QtCore.QRectF(-1.,-1.,nt+1,nn+1)
             self.set_ROI_position(xrange = self.xrange)
+            self.plot_avg_activity_trace()
         self.show()
         self.win.show()
 
@@ -595,18 +605,15 @@ class MainW(QMainWindow):
 
     def plot_scatter_pressed(self):
         request = self.scatter_comboBox.currentIndex()
-        self.p5.clear()
-        self.p5.removeItem(self.scatter_plot)
-        self.p5.removeItem(self.scatter_plot_selected)
         self.p5.setLabel('left', "")
         self.p5.setLabel('bottom', "")
         self.p5.invertY(False)
-        if request == 1:
+        if request == 2:
             if self.oned_loaded:
                 self.plot_1d_corr(init=True)
             else:
                 self.update_status_bar("ERROR: please upload 1D data")
-        elif request == 2:
+        elif request == 1:
             if self.neuron_pos is not None:
                 self.plot_neuron_pos(init=True)
             else:
@@ -614,12 +621,12 @@ class MainW(QMainWindow):
         else:
             return
 
-    def update_scatter(self):
+    def update_scatter(self, roi_id=None):
         request = self.scatter_comboBox.currentIndex()
-        if request == 1:
-            self.plot_1d_corr()
-        elif request == 2:
-            self.plot_neuron_pos()
+        if request == 2:
+            self.plot_1d_corr(roi_id=roi_id)
+        elif request == 1:
+            self.plot_neuron_pos(roi_id=roi_id)
         else:
             return
 
@@ -630,107 +637,67 @@ class MainW(QMainWindow):
         else:
             return self.oned_corr_all
         
-    def neurons_selected(self):
+    def neurons_selected(self, selected=None):
+        selected = selected if selected is not None else self.selected
         if self.embedded:
-            selected = self.sorting[self.selected.start * self.smooth_bin : self.selected.stop * self.smooth_bin]
+            neurons_select = self.sorting[selected.start * self.smooth_bin : selected.stop * self.smooth_bin]
         else:
-            selected = slice(self.selected.start * self.smooth_bin, 
-                             self.selected.stop * self.smooth_bin)  
-        return selected      
+            neurons_select = slice(selected.start * self.smooth_bin, 
+                                   selected.stop * self.smooth_bin)  
+        return neurons_select      
 
-    def plot_1d_corr(self, init=False):
+    def plot_scatter(self, x, y, roi_id=None, iplane=0):
+        if self.all_neurons_checkBox.isChecked() and roi_id is None:
+            colors = colormaps.gist_ncar[np.linspace(0, 254, len(x)).astype('int')][self.sorting]
+            brushes = [pg.mkBrush(color=c) for c in colors]
+            self.scatter_plots[iplane][0].setData(x, y, symbol='o', 
+                                      brush=brushes, hoverable=True)
+            for i in range(1, nclust_max+1):
+                self.scatter_plots[iplane][i].setData([], [])
+        else:
+            if roi_id is None:
+                self.scatter_plots[iplane][0].setData(x, y, symbol='o', 
+                                              brush=pg.mkBrush(color=(180,180,180)), hoverable=True)
+                for roi_id in range(nclust_max):
+                    if roi_id < len(self.cluster_rois):
+                        selected = self.neurons_selected(self.cluster_slices[roi_id])
+                        self.scatter_plots[iplane][roi_id+1].setData(x[selected], 
+                                                    y[selected], symbol='o', 
+                                                    brush=pg.mkBrush(color=self.colors[roi_id][:3]), 
+                                                    hoverable=True)
+                    else:
+                        self.scatter_plots[iplane][roi_id+1].setData([],[])
+            else:
+                selected = self.neurons_selected(self.cluster_slices[roi_id])
+                self.scatter_plots[iplane][roi_id+1].setData(x[selected], 
+                                            y[selected], symbol='o', 
+                                            brush=pg.mkBrush(color=self.colors[roi_id][:3]), 
+                                            hoverable=True)
+
+    def plot_1d_corr(self, init=False, roi_id=None):
         if self.oned_loaded:
             r = self.get_oned_corr()
-            if self.all_neurons_checkBox.isChecked():
-                colors = colormaps.gist_ncar[np.linspace(0, 254, self.nsmooth).astype('int')]
-                brushes = [pg.mkBrush(color=c) for c in colors]
-                self.scatter_plot.setData(r, np.arange(0, self.nsmooth), symbol='o', 
-                                          brush=brushes, hoverable=True)
-                self.scatter_plot_selected.setData([], [])
-            else:
-                self.scatter_plot.setData(r, np.arange(0, self.nsmooth), symbol='o', 
-                                          brush=pg.mkBrush(color=(180,180,180)), hoverable=True)
-                self.scatter_plot_selected.setData(r[self.selected], 
-                                                   np.arange(self.selected.start, self.selected.stop), 
-                                                   symbol='o', 
-                                                   brush=pg.mkBrush(color=(255,0,0)), 
-                                                   hoverable=True)
+            self.plot_scatter(r, np.arange(0, self.nsmooth), roi_id=roi_id)
             self.p5.setYRange(0, self.nsmooth)
             if init:
-                self.p5.addItem(self.scatter_plot)
-                self.p5.addItem(self.scatter_plot_selected)
                 self.p5.invertY(True)
                 self.p5.setLabel('left', "position")
                 self.p5.setLabel('bottom', "correlation")
 
-    def plot_neuron_pos(self, init=False):
+    def plot_neuron_pos(self, init=False, roi_id=None):
         if self.neuron_pos is not None:
-            xpos, ypos = self.neuron_pos[:,0], self.neuron_pos[:,0]
-            selected = self.neurons_selected()
-            xpos_selected, ypos_selected = xpos[selected], ypos[selected]
-            if self.all_neurons_checkBox.isChecked():
-                colors = colormaps.gist_ncar[np.linspace(0, 254, len(xpos)).astype('int')]
-                colors = colors[self.sorting]
-                brushes = [pg.mkBrush(color=c) for c in colors]
-                self.scatter_plot.setData(xpos, ypos, symbol='o', 
-                                        brush=brushes, hoverable=True)
-                self.scatter_plot_selected.setData([], [])
-            else:
-                self.scatter_plot.setData(xpos, ypos, symbol='o', 
-                                            brush=pg.mkBrush(color=(180,180,180)), hoverable=True)
-                self.scatter_plot_selected.setData(xpos_selected, ypos_selected, symbol='o', 
-                                                brush=pg.mkBrush(color=(255,0,0)), hoverable=True)
+            ypos, xpos = self.neuron_pos[:,0], self.neuron_pos[:,1]
+            self.plot_scatter(ypos, xpos, roi_id=roi_id)
             if init:
-                self.p5.addItem(self.scatter_plot)
-                self.p5.addItem(self.scatter_plot_selected)
                 self.p5.setLabel('left', "y position")
                 self.p5.setLabel('bottom', "x position") 
-            
-    def get_colors(self, data):
-        num_classes = len(np.unique(data))
-        colors = gist_ncar[np.linspace(0, 254, nd).astype('int')]
-        brushes = [pg.mkBrush(color=c) for c in colors]
-        cmap = np.asarray([brushes[np.unique(data).tolist().index(i)] for i in data])
-        return cmap
 
     def update_plot_p4(self):
-        self.update_scatter_ops_pos()
-        if self.heatmap_checkBox.isChecked() and self.behav_loaded:
-            self.win.addItem(self.p4, row=3, col=0, colspan=2)
-            if self.scatterplot_checkBox.isChecked():
-                self.show_heatmap_ops()
-        elif not self.heatmap_checkBox.isChecked() and self.behav_loaded:
-            try:
-                self.win.removeItem(self.p4)
-                self.hide_heatmap_ops()
-            except Exception as e:
-                return
+        if self.behav_loaded:
+            print('loaded')
         else:
             self.update_status_bar("Please upload a behav file")
             return
-        
-    def update_plot_p5(self):
-        self.update_scatter_ops_pos()
-        if self.scatterplot_checkBox.isChecked():
-            self.win.addItem(self.p5, row=1, col=2)
-            self.win.removeItem(self.p1)
-            self.win.addItem(self.p1, row=0, col=1, colspan=2)
-            self.scatter_comboBox.show()
-            self.all_neurons_checkBox.show()
-            self.scatterplot_button.show()
-            if self.heatmap_checkBox.isChecked():
-                self.show_heatmap_ops()
-        else:
-            try:
-                self.win.removeItem(self.p5)
-                self.win.removeItem(self.p1)
-                self.win.addItem(self.p1, row=0, col=1)
-                self.scatter_comboBox.hide()
-                self.all_neurons_checkBox.hide()
-                self.scatterplot_button.hide()
-                self.hide_heatmap_ops()
-            except Exception as e:
-                return
 
 def run():
     # Always start by initializing Qt (only once per application)

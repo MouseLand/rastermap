@@ -1,7 +1,8 @@
 import time 
-import torch
 import numpy as np
 from scipy.stats import zscore
+from sklearn.decomposition import TruncatedSVD
+
 from .clustering import kmeans, travelling_salesman, cluster_split_and_sort
 from .upsampling import grid_upsampling
 from .metrics import embedding_quality
@@ -178,18 +179,9 @@ class Rastermap:
             nmin = min(nmin, self.n_PCs)
             self.n_PCs = nmin
             if itrain is not None:
-                Vpca = torch.svd_lowrank(torch.from_numpy(bin1d(X[:,itrain], bin_size=time_bin, axis=1)), 
-                                         q=nmin)[0].numpy()
-                #from sklearn.decomposition import TruncatedSVD
-                #Vpca = TruncatedSVD(n_components=nmin, 
-                #                    random_state=0).fit_transform(bin1d(X[:,itrain], bin_size=time_bin, axis=1))
+                Vpca = TruncatedSVD(n_components=nmin, 
+                                    random_state=0).fit_transform(bin1d(X[:,itrain], bin_size=time_bin, axis=1))
             else:
-                #Vpca = torch.linalg.svd(torch.from_numpy(bin1d(X, bin_size=time_bin, axis=1)), 
-                #                        full_matrices=False)[0].numpy()[:, :nmin]
-                #print(Vpca[0].shape, Vpca[1].shape, Vpca[2].shape)
-                #Vpca = torch.svd_lowrank(torch.from_numpy(bin1d(X, bin_size=time_bin, axis=1)), 
-                #                         q=nmin)[0].numpy()
-                from sklearn.decomposition import TruncatedSVD
                 Vpca = TruncatedSVD(n_components=nmin, 
                                    random_state=0).fit_transform(bin1d(X, bin_size=time_bin, axis=1))
             U = Vpca #/ (Vpca**2).sum(axis=0)**0.5

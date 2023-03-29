@@ -7,15 +7,6 @@ gui_deps = [
         'superqt',
         ]
 
-try:
-    import torch
-    a = torch.ones(2, 3)
-    major_version, minor_version, _ = torch.__version__.split(".")
-    if major_version == "2" or int(minor_version) >= 6:
-        install_deps.remove("torch>=1.6")
-except:
-    pass
-
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
@@ -29,7 +20,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/MouseLand/rastermap",
     packages=setuptools.find_packages(),
-	install_requires = ['numpy>=1.13.0', 'scipy', 'torch>=1.6', 'numba','natsort'],
+	install_requires = ['numpy>=1.13.0', 'scipy', 'scikit-learn', 'numba','natsort'],
     extras_require = {
       'gui': gui_deps
     },

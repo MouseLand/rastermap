@@ -2,7 +2,7 @@ from PyQt5 import QtGui, QtCore, QtWidgets
 from PyQt5.QtWidgets import QAction
 import pyqtgraph as pg
 import numpy as np
-from . import io, run
+from . import io, run, gui, views
 
 # ------ MENU BAR -----------------
 def mainmenu(parent): 
@@ -19,7 +19,7 @@ def mainmenu(parent):
     
     parent.loadXY = QAction("&Load xy(z) positions of neurons", parent)
     parent.loadXY.setShortcut("Ctrl+X")
-    parent.loadXY.triggered.connect(lambda: io.load_pos(parent, name=None))
+    parent.loadXY.triggered.connect(lambda: io.load_neuron_pos(parent))
     parent.addAction(parent.loadXY)
     file_menu.addAction(parent.loadXY)  
 
@@ -59,6 +59,14 @@ def mainmenu(parent):
     parent.addAction(parent.runRmap)
     run_menu.addAction(parent.runRmap)
 
+    #view_menu = main_menu.addMenu("&Views")
+    #parent.view3D = QAction("&View multi-plane data", parent)
+    #parent.view3D.setShortcut("Ctrl+V")
+    #parent.view3D.triggered.connect(lambda: plane_window(parent))
+    #parent.view3D.setEnabled(False)
+    #parent.addAction(parent.view3D)
+    #view_menu.addAction(parent.view3D)
+
     save_menu = main_menu.addMenu("&Save")
     # Save processed data
     parent.saveProc = QAction("&Save processed data", parent)
@@ -70,4 +78,3 @@ def mainmenu(parent):
 def export_fig(parent):
     parent.win.scene().contextMenuItem = parent.p0
     parent.win.scene().showExportDialog()
-

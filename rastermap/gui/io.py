@@ -152,6 +152,10 @@ def load_sp(parent):
     
     parent.loaded = True
     parent.plot_activity()
+    if parent.neuron_pos is not None:
+        parent.scatter_comboBox.setCurrentIndex(1)
+        parent.plot_scatter_pressed() 
+            
     parent.show()
     parent.loadOne.setEnabled(True)
     parent.loadNd.setEnabled(True)
@@ -173,7 +177,7 @@ def load_iscell_stat(parent):
         if iscell is not None and len(xy)==len(iscell): 
             xy = xy[iscell]
         if len(xy) == parent.sp.shape[0]:
-            parent.neuron_pos = xy 
+            parent.neuron_pos = xy
             parent.update_status_bar(f'using stat.npy in folder for xy positions of neurons')
             parent.file_stat = file_stat
 
@@ -481,21 +485,24 @@ def get_neuron_depth_data(parent):
     dialog.adjustSize()
     dialog.exec_()
 
-def load_neuron_pos(parent, button, xpos=False, ypos=False, depth=False):
+def load_neuron_pos(parent):
     try:
         file_name = QFileDialog.getOpenFileName(
                     parent, "Open *.npy (array or stat.npy)", filter="*.npy")
         data = np.load(file_name[0], allow_pickle=True)
-
-        if len(data) != parent.X.shape[0] and hasattr(parent, 'iscell'):
+        
+        if len(data) != parent.sp.shape[0] and hasattr(parent, 'iscell') and parent.iscell is not None:
             data = np.array(data)[parent.iscell]
-        else:
+        elif len(data) != parent.sp.shape[0]:
             parent.update_status_bar('ERROR: npy array is not the same length as data ')
             
-        if len(data) == parent.X.shape[0] and isinstance(data[0], np.ndarray):
+        if isinstance(data[0], np.ndarray):
             parent.neuron_pos = data
-        elif len(data) == parent.X.shape[0] and isinstance(data[0], dict):
-            xy = np.array([s['med'] for s in data])
+        elif isinstance(data[0], dict):
+            parent.neuron_pos = np.array([s['med'] for s in data])
+
+        parent.scatter_comboBox.setCurrentIndex(1)
+        parent.plot_neuron_pos(init=True)
         
     except Exception as e:
         parent.update_status_bar('ERROR: this is not a *.npy array :( ')
