@@ -217,7 +217,6 @@ class MainW(QMainWindow):
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
 
         #io.load_mat(self, '/media/carsen/ssd2/TX60/suite2p/plane0/spks.npy')
-        io.load_mat(self, 'C:/Users/CSMP/Downloads/fish_subject17_spks.npy')
         self.show()
 
     def randomize_colors(self, random=False):
