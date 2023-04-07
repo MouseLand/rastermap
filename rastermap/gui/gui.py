@@ -16,7 +16,7 @@ from . import menus, guiparts, io, colormaps, views
 nclust_max = 100
 
 class MainW(QMainWindow):
-    def __init__(self):
+    def __init__(self, filename=None):
         super(MainW, self).__init__()
         pg.setConfigOptions(imageAxisOrder="row-major")
         self.setGeometry(25, 25, 1800, 1000)
@@ -59,7 +59,9 @@ class MainW(QMainWindow):
         # Neural activity/spike dataset set as self.sps
         sp = np.zeros((100,100), np.float32)
         self.sp = sp
+        self.sp_smoothed = self.sp.copy()
         nt = sp.shape[1]
+        self.ntime = nt
         nn = sp.shape[0]
 
         # --- cells image        
@@ -100,6 +102,7 @@ class MainW(QMainWindow):
         self.p3.setLabel('bottom', 'time')
         self.p3.setLabel('left', 'selected')
         self.cluster_plots = []
+        self.cluster_rois = []
         for i in range(nclust_max):
             self.cluster_plots.append(pg.PlotDataItem())
         for i in range(nclust_max):
@@ -159,8 +162,7 @@ class MainW(QMainWindow):
         # Add drop down options for scatter plot
         self.scatter_comboBox = QComboBox(self)
         self.scatter_comboBox.setFixedWidth(120)
-        scatter_comboBox_ops = ["-- Select --", "neuron position", "1D correlation"]
-        self.scatter_comboBox.setEditable(True)
+        scatter_comboBox_ops = ["neuron position"]
         self.scatter_comboBox.addItems(scatter_comboBox_ops)
         self.scatter_comboBox.setCurrentIndex(0)
         self.scatter_comboBox.setCurrentIndex(0)
@@ -174,23 +176,6 @@ class MainW(QMainWindow):
         self.scatterplot_button_3D.clicked.connect(self.plane_window)
         
 
-        # ROI on main plot
-        bluepen = pg.mkPen(pg.mkColor(0, 0, 255),
-                                width=3,
-                                style=QtCore.Qt.SolidLine)
-        redpen = pg.mkPen(pg.mkColor(255, 0, 0),
-                                width=3,
-                                style=QtCore.Qt.SolidLine)
-        self.ROI = pg.RectROI([nt*.25, -1], [nt*.25, nn+1],
-                      maxBounds=QtCore.QRectF(-1.,-1.,nt+1,nn+1),
-                      pen=bluepen)
-        self.xrange = np.arange(nt*.25, nt*.5,1,int)
-        self.ROI.handles = []
-        self.ROI.sigRegionChangeFinished.connect(self.ROI_position)
-        self.p1.addItem(self.ROI)
-        self.ROI.setZValue(10)  # make sure ROI is drawn above image
-
-        self.cluster_rois = []
         
         # Status bar
         self.statusBar = QStatusBar()
@@ -200,6 +185,9 @@ class MainW(QMainWindow):
         self.tsize = 1
         self.reset_variables()
 
+        self.init_time_roi()
+
+        
         # Add features to window
         ops_row_pos = 0
         self.l0.addWidget(ysm, ops_row_pos, 0, 1, 1)
@@ -216,8 +204,19 @@ class MainW(QMainWindow):
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
 
-        #io.load_mat(self, '/media/carsen/ssd2/TX60/suite2p/plane0/spks.npy')
+        if filename is not None:
+            io.load_mat(self, filename)
         self.show()
+
+    def init_time_roi(self):
+        self.TimeROI = guiparts.TimeROI(parent=self, color=[0,0,255,25], 
+                                        bounds=[0, self.ntime])
+        self.xrange = slice(0, min(500, ((self.ntime//10)//4)*4))
+        self.TimeROI.setRegion([self.xrange.start, self.xrange.stop-1])
+        self.TimeROI.sigRegionChangeFinished.connect(self.TimeROI.time_set)
+        self.p1.addItem(self.TimeROI)
+        self.TimeROI.setZValue(10)  # make sure ROI is drawn above image
+        self.TimeROI.time_set()
 
     def randomize_colors(self, random=False):
         np.random.seed(0 if not random else np.random.randint(500))
@@ -254,7 +253,6 @@ class MainW(QMainWindow):
         self.posROI = np.zeros((2,2))
         self.cluster_rois, self.cluster_slices = [], []
         self.loaded = False
-        self.oned_loaded = False 
         self.embedded = False
         self.behav_data = None
         self.behav_binary_data = None
@@ -264,8 +262,7 @@ class MainW(QMainWindow):
         self.behav_labels_loaded = False
         self.behav_binary_labels = []
         self.behav_binary_labels_loaded = False
-        self.oned_corr_all = None
-        self.oned_corr_selected = None
+        self.behav_corr_all = None
         self.xrange = None
         self.file_iscell = None
         self.iscell = None
@@ -273,12 +270,8 @@ class MainW(QMainWindow):
         self.save_path = None  # Set default to current folder
         self.embedding = None
         self.heatmap = None
-        self.heatmap_chkbxs = []
         self.sat_slider.setValue([30.,70.])
         self.line = pg.PlotDataItem()
-        self.oned_trace_plot = pg.PlotDataItem()
-        self.oned_trace_plot_added = False
-        self.oned_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30)
         self.symbol_list = ['star', 'd', 'x', 'o', 't', 't1', 't2', 'p', '+', 's', 't3', 'h']
         self.embed_time_range = -1
         self.params_set = False
@@ -304,8 +297,7 @@ class MainW(QMainWindow):
         items = self.win.scene().items(event.scenePos())
         for x in items:
             if x==self.p1 and event.button()==1 and event.double():
-                self.ROI.setPos([-1,-1])
-                self.ROI.setSize([self.sp.shape[1]+1, self.sp.shape[0]+1])
+                self.TimeROI.setRegion([0, self.ntime])
             elif x==self.p2 and event.button() == QtCore.Qt.RightButton:
                 pos = self.p2.vb.mapSceneToView(event.scenePos())
                 x,y = pos.x(), pos.y()
@@ -341,138 +333,67 @@ class MainW(QMainWindow):
             #    ineur = np.argmin(dists.flatten()).astype(int)
             #    self.update_selected(ineur)
 
-    def behav_chkbx_toggled(self):
-        if self.heatmap_chkbxs[0].isChecked():
-            self.plot_behav_data()
-            for k in np.arange(1, len(self.heatmap_chkbxs)):
-                self.heatmap_chkbxs[k].setEnabled(False)
-        else:
-            for k in np.arange(1, len(self.heatmap_chkbxs)):
-                self.heatmap_chkbxs[k].setEnabled(True)
-            disp_ind = []
-            for k in np.arange(1, len(self.heatmap_chkbxs)):
-                if self.heatmap_chkbxs[k].isChecked():
-                    disp_ind.append(np.where(self.heatmap_chkbxs[k].text() == self.behav_labels)[0][0])
-            if len(disp_ind) > 0:
-                self.plot_behav_data(np.array(disp_ind))
-
     def keyPressEvent(self, event):
         bid = -1
-        move = False
+        move_time = False
         if self.loaded:
-            xrange = self.roi_range(self.ROI)[0]
-            if event.key() == QtCore.Qt.Key_Down:
-                bid = 0
-            elif event.key() == QtCore.Qt.Key_Up:
-                bid=1
-            elif event.key() == QtCore.Qt.Key_Left:
-                bid=2
-            elif event.key() == QtCore.Qt.Key_Right:
-                bid=3
-
-            if event.modifiers() != QtCore.Qt.ShiftModifier:
-                move_time = True if bid==2 or bid==3 and (xrange.stop - xrange.start < self.ntime) else False
-                if move_time:
-                    ### move in time in increments of 1/2 size of window
-                    twin = xrange.stop - xrange.start    
-                    if bid==2:
-                        if xrange.start > 0:
-                            move = True
+            xrange = self.xrange
+            twin = xrange.stop - xrange.start   
+            # todo: zoom and move across neurons
+            #if event.key() == QtCore.Qt.Key_Down or event.key() == QtCore.Qt.Key_Up:
+            # zoom and move in time
+            if event.key() == QtCore.Qt.Key_Left or event.key() == QtCore.Qt.Key_Right:
+                if event.modifiers() != QtCore.Qt.ShiftModifier:
+                    move_time = True if (xrange.stop - xrange.start < self.ntime) else False
+                    if move_time:
+                        ### move in time in increments of 1/2 size of window
+                        if xrange.start > 0 and event.key() == QtCore.Qt.Key_Left:
                             x0 = max(0, xrange.start - twin//2)
-                            x1 = xrange.stop - xrange.start + x0
-                    elif bid==3:
-                        if xrange.stop < self.ntime:
-                            move = True
+                            x1 = x0 + (xrange.stop - xrange.start)
+                        elif xrange.stop < self.ntime and event.key() == QtCore.Qt.Key_Right:
                             x1 = min(self.ntime, xrange.stop + twin//2)
                             x0 = x1 - (xrange.stop - xrange.start)
-                    if move:
-                        self.set_ROI_position(xrange = slice(x0, x1))
-            else:
-                if bid==2 or bid==3:
-                    twin = xrange.stop - xrange.start    
+                        else:
+                            move_time = False
+                else:
                     tbin = 50
-                    zoom_in = True if bid==2 and twin > tbin else False
-                    zoom_out = True if bid==3 and twin < self.ntime else False
-                    move_time = zoom_in or zoom_out
-                    if move_time:
-                        if zoom_in:
-                            x0 = xrange.start + tbin//2
-                            x1 = max(x0 + tbin, xrange.stop - tbin//2)
-                        elif zoom_out:
-                            x0 = max(0, xrange.start - tbin//2)
-                            x1 = min(self.ntime, x0 + (xrange.stop - xrange.start) + tbin)
-                        self.set_ROI_position(xrange = slice(x0, x1))
+                    move_time = True
+                    if twin > tbin and event.key() == QtCore.Qt.Key_Left: # zoom in
+                        x0 = xrange.start + tbin//2
+                        x1 = max(x0 + tbin, xrange.stop - tbin//2)
+                    elif twin < self.ntime and event.key() == QtCore.Qt.Key_Right: # zoom out
+                        x0 = max(0, xrange.start - tbin//2)
+                        x1 = min(self.ntime, x0 + (xrange.stop - xrange.start) + tbin)
+                    else:
+                        move_time = False
+                if move_time:
+                    self.TimeROI.setRegion([x0, x1-1])
                 
-    def roi_range(self, roi):
-        pos = roi.pos()
-        posy = pos.y()
-        posx = pos.x()
-        sizex,sizey = roi.size()
-        xrange = (np.arange(0,int(sizex)) + int(posx)).astype(np.int32)
-        yrange = (np.arange(0,int(sizey)) + int(posy)).astype(np.int32)
-        xrange = xrange[xrange>=0]
-        xrange = xrange[xrange<self.ntime]
-        yrange = yrange[yrange>=0]
-        yrange = yrange[yrange<self.nsmooth]
-        yrange = slice(yrange[0], yrange[-1]+1)
-        xrange = slice(xrange[0], xrange[-1]+1)
-        return xrange, yrange
-
-    #def update_avg_activity_trace(self):
-        
-    def plot_avg_activity_trace(self, roi_id=None):
+    def plot_traces(self, roi_id=None):
         if self.loaded:
-            kspace = 0.5
-            x = np.arange(self.xrange.start, self.xrange.stop)
             if roi_id is None:
                 for roi_id in range(nclust_max):
-                    if roi_id < len(self.cluster_rois):
-                        selected = self.cluster_slices[roi_id]
-                        y = self.sp_smoothed[selected].mean(axis=0)
-                        y -= y.min()
-                        y /= y.max()
-                        y += kspace * roi_id
-                        self.cluster_plots[roi_id].setData(x, y[self.xrange],
-                                                           pen=pg.mkPen(color=self.colors[roi_id][:3]))
-                    else:
-                        self.cluster_plots[roi_id].setData([], [])
+                    if roi_id < len(self.cluster_rois): self.plot_roi_trace(roi_id)
+                    else: self.cluster_plots[roi_id].setData([], [])
             else:
-                selected = self.cluster_slices[roi_id]
-                y = self.sp_smoothed[selected].mean(axis=0)
-                y -= y.min()
-                y /= y.max()
-                y += kspace * roi_id
-                self.cluster_plots[roi_id].setData(x, y[self.xrange],
-                                                    pen=pg.mkPen(color=self.colors[roi_id][:3]))
+                self.plot_roi_trace(roi_id)
             self.p3.setXRange(self.xrange.start, self.xrange.stop-1)
             self.p3.setLimits(xMin=self.xrange.start, xMax=self.xrange.stop-1)
-            if self.oned_loaded: 
-                self.plot_oned_trace()
+            if self.behav_data and 1:
+                self.plot_behav_data()
+            elif self.behav_binary_data: 
+                self.plot_behav_binary_data()
             self.p3.show()
-
-    def set_ROI_position(self, xrange):
-        self.xrange = xrange
-        self.ROI.setPos([xrange.start, -1])
-        self.ROI.setSize([xrange.stop - xrange.start, self.nneurons + 1])
-
-    def ROI_position(self):
-        xrange,_ = self.roi_range(self.ROI)    
-        self.xrange = xrange
-        # Update zoom in plot
-        self.imgROI.setImage(self.sp_smoothed[:, self.xrange])
-        self.p2.setXRange(0, self.xrange.stop - self.xrange.start,padding=0)
-
-        if self.behav_loaded:
-            self.behav_ROI_update()
-        if self.behav_binary_data is not None:
-            self.plot_behav_binary_data()
-
-        self.plot_avg_activity_trace()
-
-        axy = self.p2.getAxis('left')
-        axx = self.p2.getAxis('bottom')
-        self.imgROI.setLevels([self.sat[0]/100., self.sat[1]/100.])
-
+    
+    def plot_roi_trace(self, roi_id):
+        x = np.arange(0, self.ntime)
+        kspace = 0.5
+        selected = self.cluster_slices[roi_id]
+        y = self.sp_smoothed[selected].mean(axis=0)
+        y = (y - y.min()) / (y.max() - y.min())
+        y += kspace * roi_id
+        self.cluster_plots[roi_id].setData(x, y, pen=pg.mkPen(color=self.colors[roi_id][:3]))
+    
     def smooth_activity(self):
         N = int(self.smooth.text())
         self.smooth_bin = N
@@ -494,17 +415,15 @@ class MainW(QMainWindow):
                 self.p2.removeItem(self.cluster_rois[i])
         self.cluster_rois, self.cluster_slices = [], []
         self.add_cluster()
-        self.plot_avg_activity_trace()
+        self.get_behav_corr() if self.behav_data else None
+        self.plot_traces()
         self.update_scatter()
         self.p2.show()
         self.p3.show()
-        if self.oned_loaded: 
-            self.oned_corr_all = None
-            self.plot_1d_corr()
-
+        
     def add_cluster(self):
         roi_id = len(self.cluster_rois)
-        self.cluster_rois.append(guiparts.LinearRegionItem(self, color=self.colors[roi_id], 
+        self.cluster_rois.append(guiparts.ClusterROI(self, color=self.colors[roi_id], 
                                 bounds=(0,self.sp_smoothed.shape[0]), roi_id=roi_id))
         self.cluster_slices.append(self.selected)
         self.cluster_rois[-1].setRegion((self.selected.start, self.selected.stop))
@@ -512,47 +431,21 @@ class MainW(QMainWindow):
         self.cluster_rois[-1].setZValue(10)  # make sure ROI is drawn above image
         self.cluster_rois[-1].cluster_set()
             
-    def plot_activity(self):
+    def plot_activity(self, init=False):
         if self.loaded:
             self.nneurons, self.ntime = self.sp.shape
-            if self.xrange is None:
-                self.xrange = slice(0, min(500, ((self.ntime//10)//4)*4))
             self.smooth_activity()
             nn, nt = self.sp_smoothed.shape
             self.img.setImage(self.sp_smoothed)
             self.img.setLevels([self.sat[0]/100.,self.sat[1]/100.])
-            self.p1.setXRange(-nt*0.01, nt*1.01, padding=0)
-            self.p1.setYRange(-nn*0.01, nn*1.01, padding=0)
-            self.p1.show()
-            self.p2.setXRange(0, nt, padding=0)
-            self.p2.setYRange(0, nn, padding=0)
-            self.p2.show()
-            self.ROI.maxBounds = QtCore.QRectF(-1.,-1.,nt+1,nn+1)
-            self.set_ROI_position(xrange = self.xrange)
-            self.plot_avg_activity_trace()
+            self.p1.setXRange(0, nt, padding=0); self.p1.setYRange(0, nn, padding=0); self.p1.show()
+            self.p2.setXRange(0, nt, padding=0); self.p2.setYRange(0, nn, padding=0); self.p2.show()
+            if init:
+                self.p1.removeItem(self.TimeROI)
+                self.init_time_roi()
+            self.plot_traces()
         self.show()
         self.win.show()
-
-    def plot_oned_trace(self):
-        avg = self.oned_data
-        avg -= avg.min()
-        avg /= avg.max()
-        avg = avg[self.xrange]
-        self.oned_trace_plot.setData(np.arange(self.xrange.start, self.xrange.stop), avg, pen=(0,255,0))
-        if self.oned_trace_plot_added:
-            self.p3.removeItem(self.oned_trace_plot)
-        else:
-            self.oned_legend.addItem(self.oned_trace_plot, name='1D variable')
-            self.oned_legend.setPos(self.oned_trace_plot.x()+70, self.oned_trace_plot.y())
-            self.oned_legend.setParentItem(self.p3)
-        self.p3.addItem(self.oned_trace_plot, pen=(0,255,0))
-        self.oned_trace_plot_added = True
-        self.p3.setXRange(self.xrange.start, self.xrange.stop-1)
-        self.p3.setLimits(xMin=self.xrange.start, xMax=self.xrange.stop-1)
-        try:
-            self.oned_legend.sigClicked.connect(self.mouseClickEvent)
-        except Exception as e:
-            return
 
     def plot_behav_binary_data(self):
         for i in range(len(self.behav_bin_plot_list)):
@@ -561,10 +454,6 @@ class MainW(QMainWindow):
             xdat, ydat = np.arange(self.xrange.start, self.xrange.stop)[dat>0], dat[dat>0]
             self.behav_bin_plot_list[i].setData(xdat, ydat, pen=None, symbol=self.symbol_list[i], symbolSize=12)
             self.p4.addItem(self.behav_bin_plot_list[i])
-            try:
-                self.behav_bin_legend.sigClicked.connect(self.mouseClickEvent)
-            except Exception as e:
-                return
         self.p4.setLabel('left', '.')
 
     def plot_behav_data(self, selected=None):
@@ -574,16 +463,12 @@ class MainW(QMainWindow):
                     self.p4.removeItem(self.heatmap[i])
             else:
                 self.p4.removeItem(self.heatmap)
-        if selected is None:
-            beh = self.behav_data
-        else:
-            beh = self.behav_data[selected]
+        beh = self.behav_data
         if beh.shape[0] > 10:
-            vmin, vmax = -np.percentile(self.behav_data, 95), np.percentile(self.behav_data, 95)
+            vmin, vmax = np.percentile(beh, 5), np.percentile(beh, 95)
             self.heatmap = pg.ImageItem(beh, autoDownsample=True, levels=(vmin,vmax))
-            lut = colormaps.viridis
             # apply the colormap
-            self.heatmap.setLookupTable(lut)        
+            self.heatmap.setLookupTable(colormaps.viridis)        
             self.p4.addItem(self.heatmap)
             self.p4.setLabel('left', 'index')
         else:
@@ -596,54 +481,53 @@ class MainW(QMainWindow):
                 self.heatmap[-1].setPen({'color': cmap[i], 'width': 1})
                 self.p4.addItem(self.heatmap[-1])
             self.p4.setLabel('left', 'z-scored')
-        self.behav_ROI_update()
-
-    def behav_ROI_update(self):
-        self.p4.setLimits(xMin=self.xrange.start, xMax=self.xrange.stop)
-        self.p4.setXRange(self.xrange.start, self.xrange.stop)
-
+    
     def plot_scatter_pressed(self):
-        request = self.scatter_comboBox.currentIndex()
-        self.p5.setLabel('left', "")
-        self.p5.setLabel('bottom', "")
-        self.p5.invertY(False)
-        if request == 2:
-            if self.oned_loaded:
-                self.plot_1d_corr(init=True)
-            else:
-                self.update_status_bar("ERROR: please upload 1D data")
-        elif request == 1:
-            if self.neuron_pos is not None:
-                self.plot_neuron_pos(init=True)
-            else:
-                self.update_status_bar("ERROR: please upload neuron position data")
-        else:
-            return
+        self.update_scatter(init=True)
 
-    def update_scatter(self, roi_id=None):
+    def update_scatter(self, init=False, roi_id=None):
+        if init:
+            self.p5.setLabel('left', "")
+            self.p5.setLabel('bottom', "")
+            self.p5.invertY(False)    
         request = self.scatter_comboBox.currentIndex()
-        if request == 2:
-            self.plot_1d_corr(roi_id=roi_id)
-        elif request == 1:
-            self.plot_neuron_pos(roi_id=roi_id)
-        else:
-            return
-
-    def get_oned_corr(self):
-        if self.oned_corr_all is None:
-            self.oned_corr_all = (self.sp_smoothed * zscore(self.oned_data)).mean(axis=-1)
-            return self.oned_corr_all
-        else:
-            return self.oned_corr_all
+        if request > 0: 
+            self.plot_behav_corr(roi_id=roi_id, init=init)  
+        else: 
+            self.plot_neuron_pos(roi_id=roi_id, init=init)
+        
+    def get_behav_corr(self):
+        beh = self.behav_data
+        self.behav_corr_all = (self.sp_smoothed @ beh.T) / self.ntime
         
     def neurons_selected(self, selected=None):
         selected = selected if selected is not None else self.selected
-        if self.embedded:
-            neurons_select = self.sorting[selected.start * self.smooth_bin : selected.stop * self.smooth_bin]
+        select_slice = slice(selected.start * self.smooth_bin, 
+                             selected.stop * self.smooth_bin) 
+        neurons_select = self.sorting[select_slice] if self.embedded else select_slice
+        return neurons_select  
+
+    def plot_behav_corr(self, init=False, roi_id=None):
+        if self.behav_data is not None:
+            r = self.behav_corr_all()[:, self.scatter_comboBox.currentIndex() - 1]
+            self.plot_scatter(r, np.arange(0, self.nsmooth), roi_id=roi_id)
+            self.p5.setYRange(0, self.nsmooth)
+            if init:
+                self.p5.invertY(True)
+                self.p5.setLabel('left', "position")
+                self.p5.setLabel('bottom', "correlation")
         else:
-            neurons_select = slice(selected.start * self.smooth_bin, 
-                                   selected.stop * self.smooth_bin)  
-        return neurons_select      
+            self.update_status_bar("ERROR: please upload behavioral data")
+
+    def plot_neuron_pos(self, init=False, roi_id=None):
+        if self.neuron_pos is not None:
+            ypos, xpos = self.neuron_pos[:,0], self.neuron_pos[:,1]
+            self.plot_scatter(ypos, xpos, roi_id=roi_id)
+            if init:
+                self.p5.setLabel('left', "y position")
+                self.p5.setLabel('bottom', "x position") 
+        else:
+            self.update_status_bar("ERROR: please upload neuron position data")
 
     def plot_scatter(self, x, y, roi_id=None, iplane=0):
         if self.all_neurons_checkBox.isChecked() and roi_id is None:
@@ -673,32 +557,7 @@ class MainW(QMainWindow):
                                             brush=pg.mkBrush(color=self.colors[roi_id][:3]), 
                                             hoverable=True)
 
-    def plot_1d_corr(self, init=False, roi_id=None):
-        if self.oned_loaded:
-            r = self.get_oned_corr()
-            self.plot_scatter(r, np.arange(0, self.nsmooth), roi_id=roi_id)
-            self.p5.setYRange(0, self.nsmooth)
-            if init:
-                self.p5.invertY(True)
-                self.p5.setLabel('left', "position")
-                self.p5.setLabel('bottom', "correlation")
-
-    def plot_neuron_pos(self, init=False, roi_id=None):
-        if self.neuron_pos is not None:
-            ypos, xpos = self.neuron_pos[:,0], self.neuron_pos[:,1]
-            self.plot_scatter(ypos, xpos, roi_id=roi_id)
-            if init:
-                self.p5.setLabel('left', "y position")
-                self.p5.setLabel('bottom', "x position") 
-
-    def update_plot_p4(self):
-        if self.behav_loaded:
-            print('loaded')
-        else:
-            self.update_status_bar("Please upload a behav file")
-            return
-
-def run():
+def run(filename=None):
     # Always start by initializing Qt (only once per application)
     app = QApplication(sys.argv)
     icon_path = os.path.join(
@@ -712,7 +571,7 @@ def run():
     app_icon.addFile(icon_path, QtCore.QSize(96, 96))
     app_icon.addFile(icon_path, QtCore.QSize(256, 256))
     app.setWindowIcon(app_icon)
-    GUI = MainW()
+    GUI = MainW(filename=filename)
     ret = app.exec_()
     # GUI.save_gui_data()
     sys.exit(ret)

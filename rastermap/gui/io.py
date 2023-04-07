@@ -95,8 +95,17 @@ def load_proc(parent, name=None):
     try:
         proc = np.load(name, allow_pickle=True).item()
         parent.proc = proc
-        X    = np.load(parent.proc['filename'])
-        parent.filebase = parent.proc['filename']
+        foldername = os.path.split(name)[0]
+        filename = os.path.split(parent.proc['filename'])[-1]
+        if os.path.exists(parent.proc['filename']):
+            X    = np.load(parent.proc['filename'])
+            parent.filebase = parent.proc['filename']
+        elif os.path.exists(os.path.join(foldername, filename)):
+            X = np.load(os.path.join(foldername, filename))
+            parent.filebase = os.path.join(foldername, filename)
+        else:
+            print(f"ERROR: {parent.proc['filename']} not found")
+            return 
         isort = parent.proc['isort']
         y     = parent.proc['embedding']
         u     = parent.proc['uv'][0] 
@@ -151,13 +160,12 @@ def load_sp(parent):
     parent.smooth.setText(str(smooth))
     
     parent.loaded = True
-    parent.plot_activity()
+    parent.plot_activity(init=True)
     if parent.neuron_pos is not None:
-        parent.scatter_comboBox.setCurrentIndex(1)
+        parent.scatter_comboBox.setCurrentIndex(0)
         parent.plot_scatter_pressed() 
             
     parent.show()
-    parent.loadOne.setEnabled(True)
     parent.loadNd.setEnabled(True)
     parent.loadXY.setEnabled(True)
     parent.runRmap.setEnabled(True)
@@ -267,12 +275,10 @@ def load_behav_comps_file(parent, button):
         parent, "Open *.npy", filter="*.npy"
     )
     name = name[0]
-    parent.behav_labels_loaded = False
     try:
-        if parent.behav_loaded:
+        if parent.behav_data is not None:
             beh = np.load(name, allow_pickle=True) # Load file (behav_comps x time)
             if beh.ndim == 1 and beh.shape[0] == parent.behav_data.shape[0]:
-                parent.behav_labels_loaded = True
                 parent.behav_labels = beh
                 parent.update_status_bar("Behav labels file loaded")
                 button.setText("Uploaded!")
@@ -284,75 +290,6 @@ def load_behav_comps_file(parent, button):
             raise Exception("Please upload behav data (matrix) first")
     except Exception as e:
         print(e)
-    add_behav_checkboxes(parent)
-
-def add_behav_checkboxes(parent):
-    # Add checkboxes for behav comps to display on heatmap and/or avg trace
-    if parent.behav_labels_loaded:
-        parent.behav_labels_selected = np.arange(0, len(parent.behav_labels)+1)
-        if len(parent.behav_labels) > 5:
-            prompt_behav_comps_ind(parent)
-        clear_old_behav_checkboxes(parent)
-        parent.heatmap_chkbxs.append(QCheckBox("All"))
-        parent.heatmap_chkbxs[0].setStyleSheet("color: gray;")
-        parent.heatmap_chkbxs[0].setChecked(True)
-        parent.heatmap_chkbxs[0].toggled.connect(parent.behav_chkbx_toggled)
-        parent.l0.addWidget(parent.heatmap_chkbxs[-1], 15, 12, 1, 2)
-        for i, comp_ind in enumerate(parent.behav_labels_selected):
-            parent.heatmap_chkbxs.append(QCheckBox(parent.behav_labels[comp_ind]))
-            parent.heatmap_chkbxs[-1].setStyleSheet("color: gray;")
-            parent.heatmap_chkbxs[-1].toggled.connect(parent.behav_chkbx_toggled)
-            parent.heatmap_chkbxs[-1].setEnabled(False)
-            parent.l0.addWidget(parent.heatmap_chkbxs[-1], 16+i, 12, 1, 2)
-        parent.show_heatmap_ops()
-        parent.update_scatter_ops_pos()
-        parent.scatterplot_checkBox.setChecked(True)
-    else:
-        return
-
-def clear_old_behav_checkboxes(parent):
-    for k in range(len(parent.heatmap_chkbxs)):
-        parent.l0.removeWidget(parent.heatmap_chkbxs[k])
-    parent.heatmap_chkbxs = []
-
-def prompt_behav_comps_ind(parent):
-    dialog = QtWidgets.QDialog()
-    dialog.setWindowTitle("Select max 5")
-    dialog.verticalLayout = QtWidgets.QVBoxLayout(dialog)
-
-    dialog.chkbxs = [] 
-    for k in range(len(parent.behav_labels)):
-        dialog.chkbxs.append(QCheckBox(parent.behav_labels[k]))
-        dialog.chkbxs[k].setStyleSheet("color: black;")
-        dialog.chkbxs[k].toggled.connect(lambda: restrict_behav_comps_selection(dialog, parent))
-
-    dialog.ok_button = QPushButton('Done')
-    dialog.ok_button.setDefault(True)
-    dialog.ok_button.clicked.connect(lambda: get_behav_comps_ind(dialog, parent))
-
-    # Add options to dialog box
-    for k in range(len(dialog.chkbxs)):
-        dialog.verticalLayout.addWidget(dialog.chkbxs[k])
-    dialog.verticalLayout.addWidget(dialog.ok_button)
-    
-    dialog.adjustSize()
-    dialog.exec_()
-
-def get_behav_comps_ind(dialog, parent):
-    parent.behav_labels_selected = []
-    for k in range(len(parent.behav_labels)):
-        if dialog.chkbxs[k].isChecked():
-            parent.behav_labels_selected.append(k)
-    dialog.close()
-
-def restrict_behav_comps_selection(dialog, parent):
-    chkbxs_count = 0
-    for k in range(len(dialog.chkbxs)):
-        if dialog.chkbxs[k].isChecked():
-            chkbxs_count += 1
-    if chkbxs_count > 5:
-        for k in range(len(dialog.chkbxs)):
-            dialog.chkbxs[k].setChecked(False)
 
 def load_behav_file(parent, button):
     name = QFileDialog.getOpenFileName(
@@ -375,26 +312,24 @@ def load_behav_file(parent, button):
             if dict_item:
                 load_behav_dict(parent, beh)
             else:  # load matrix w/o labels and set default labels
-                if beh.ndim==1:
-                    beh = beh[np.newaxis,:]
-                elif beh.ndim==3:
+                beh = beh[np.newaxis,:] if beh.ndim==1 else beh
+                if beh.ndim==3:
                     parent.update_status_bar('WARNING: 3D array provided (n>3), rastermap requires 2D array, will flatten to 2D')
                     beh = beh.reshape(beh.shape[0], -1)
-                if parent.embedded and parent.embed_time_range != -1:
-                    beh = beh[:,parent.embed_time_range[0]:parent.embed_time_range[-1]]
+                beh = beh.T.copy() if beh.shape[0] == parent.sp.shape[1] else beh
                 if beh.shape[1] == parent.sp.shape[1]:
                     parent.behav_data = beh
-                    clear_old_behav_checkboxes(parent)
-                    parent.behav_loaded = True
                 else:
                     raise Exception("File contains incorrect dataset. Dimensions mismatch",
                                 beh.shape[1], "not same as", parent.sp.shape[1])
             del beh
     except Exception as e:
         parent.update_status_bar(f'ERROR: {e}')
+    
     if parent.behav_loaded:
         button.setText("Uploaded!")
         parent.behav_data = zscore(parent.behav_data, axis=1)
+        parent.get_behav_corr()
         parent.plot_behav_data()
         parent.heatmap_checkBox.setEnabled(True)
         parent.heatmap_checkBox.setChecked(True)
@@ -417,7 +352,6 @@ def load_behav_dict(parent, beh):
         parent.behav_data = np.array(parent.behav_data)
         parent.behav_labels = np.array(parent.behav_labels)
         parent.behav_loaded = True
-        add_behav_checkboxes(parent)
     if parent.behav_binary_labels_loaded:
         parent.behav_binary_data = np.zeros((len(parent.behav_binary_labels), parent.sp.shape[1]))
         parent.behav_bin_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30, colCount=len(parent.behav_binary_labels))
@@ -432,30 +366,6 @@ def load_behav_dict(parent, beh):
             parent.p3.addItem(parent.behav_bin_plot_list[-1])
     if parent.behav_binary_data is not None:
         parent.plot_behav_binary_data()
-
-def load_oned_data(parent):
-    name = QFileDialog.getOpenFileName(
-        parent, "Open *.npy", filter="*.npy"
-    )
-    name = name[0]
-    parent.oned_loaded = False
-    try:
-        oned = np.load(name)
-        oned = oned.flatten()
-        if parent.embedded and parent.embed_time_range != -1:
-            oned = oned[parent.embed_time_range[0]:parent.embed_time_range[-1]]
-        if oned.size == parent.sp.shape[1]:
-            parent.oned_loaded = True
-    except (ValueError, KeyError, OSError,
-            RuntimeError, TypeError, NameError):
-        parent.update_status_bar("ERROR: this is not a 1D array with length of data")
-    if parent.oned_loaded:
-        parent.oned_data = oned
-        parent.plot_oned_trace()
-        if parent.scatterplot_checkBox.isChecked():
-            parent.scatterplot_checkBox.setChecked(True)
-    else:
-        return
 
 def get_neuron_depth_data(parent):
     dialog = QtWidgets.QDialog()

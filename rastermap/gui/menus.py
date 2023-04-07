@@ -22,13 +22,6 @@ def mainmenu(parent):
     parent.loadXY.triggered.connect(lambda: io.load_neuron_pos(parent))
     parent.addAction(parent.loadXY)
     file_menu.addAction(parent.loadXY)  
-
-    parent.loadOne =  QAction("Load &one-d variable", parent)
-    parent.loadOne.setShortcut("Ctrl+O")
-    parent.loadOne.triggered.connect(lambda: io.load_oned_data(parent))
-    parent.loadOne.setEnabled(False)
-    parent.addAction(parent.loadOne)
-    file_menu.addAction(parent.loadOne)
     
     parent.loadNd =  QAction("Load &n-d variable (times or cont.)", parent)
     parent.loadNd.setShortcut("Ctrl+N")

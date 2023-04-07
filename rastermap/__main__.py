@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--iscell', default=[], type=str, help='which cells to use')
     args = parser.parse_args()
 
-    if len(args.S)>0:
+    if len(args.ops) > 0 and len(args.S) > 0:
         from rastermap.mapping import Rastermap
         S = np.load(args.S)
         ops = np.load(args.ops, allow_pickle=True).item()
@@ -68,4 +68,5 @@ if __name__ == '__main__':
                 print('GUI FAILED: GUI dependencies may not be installed, to install, run')
                 print('     pip install rastermap[gui]')
         else:
-            gui.run()
+            filename = args.S if len(args.S) > 0 else None
+            gui.run(filename=filename)
