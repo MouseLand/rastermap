@@ -16,7 +16,7 @@ from . import menus, guiparts, io, colormaps, views
 nclust_max = 100
 
 class MainW(QMainWindow):
-    def __init__(self, filename=None):
+    def __init__(self, filename=None, proc=False):
         super(MainW, self).__init__()
         pg.setConfigOptions(imageAxisOrder="row-major")
         self.setGeometry(25, 25, 1800, 1000)
@@ -165,7 +165,6 @@ class MainW(QMainWindow):
         scatter_comboBox_ops = ["neuron position"]
         self.scatter_comboBox.addItems(scatter_comboBox_ops)
         self.scatter_comboBox.setCurrentIndex(0)
-        self.scatter_comboBox.setCurrentIndex(0)
         self.all_neurons_checkBox = QCheckBox("color all neurons")
         self.all_neurons_checkBox.setStyleSheet("color: gray;")
         self.scatterplot_button = QPushButton('plot')
@@ -200,12 +199,14 @@ class MainW(QMainWindow):
         self.l0.addWidget(self.scatter_comboBox,17,12,1,1)
         self.l0.addWidget(self.all_neurons_checkBox,17,13,1,1)
 
-        
         self.win.show()
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
 
         if filename is not None:
-            io.load_mat(self, filename)
+            if not proc:
+                io.load_mat(self, filename)
+            else:
+                io.load_proc(self, name=filename)
         self.show()
 
     def init_time_roi(self):
@@ -252,17 +253,15 @@ class MainW(QMainWindow):
         self.startROI = False 
         self.posROI = np.zeros((2,2))
         self.cluster_rois, self.cluster_slices = [], []
+        self.user_clusters = None
         self.loaded = False
-        self.embedded = False
         self.behav_data = None
         self.behav_binary_data = None
         self.behav_bin_plot_list = []
         self.behav_labels = []
-        self.behav_loaded = False
-        self.behav_labels_loaded = False
         self.behav_binary_labels = []
-        self.behav_binary_labels_loaded = False
         self.behav_corr_all = None
+        self.zstack = None
         self.xrange = None
         self.file_iscell = None
         self.iscell = None
@@ -289,8 +288,8 @@ class MainW(QMainWindow):
             self.setFrame.setText(str(frames_processed))
             self.statusBar.showMessage(message.split("|")[0])
         else: 
-            self.statusBar.showMessage(message)
             print(message)
+            #self.statusBar.showMessage(message)
         self.show()
 
     def plot_clicked(self,event):
@@ -414,10 +413,11 @@ class MainW(QMainWindow):
             for i in range(len(self.cluster_rois)):
                 self.p2.removeItem(self.cluster_rois[i])
         self.cluster_rois, self.cluster_slices = [], []
-        self.add_cluster()
+        if self.user_clusters is None:
+            self.add_cluster()
         self.get_behav_corr() if self.behav_data else None
-        self.plot_traces()
-        self.update_scatter()
+        if self.neuron_pos is not None or self.behav_data is not None:
+            self.update_scatter(init=True)
         self.p2.show()
         self.p3.show()
         
@@ -443,6 +443,8 @@ class MainW(QMainWindow):
             if init:
                 self.p1.removeItem(self.TimeROI)
                 self.init_time_roi()
+            else:
+                self.TimeROI.time_set()
             self.plot_traces()
         self.show()
         self.win.show()
@@ -492,6 +494,7 @@ class MainW(QMainWindow):
             self.p5.invertY(False)    
         request = self.scatter_comboBox.currentIndex()
         if request > 0: 
+            
             self.plot_behav_corr(roi_id=roi_id, init=init)  
         else: 
             self.plot_neuron_pos(roi_id=roi_id, init=init)
@@ -504,7 +507,7 @@ class MainW(QMainWindow):
         selected = selected if selected is not None else self.selected
         select_slice = slice(selected.start * self.smooth_bin, 
                              selected.stop * self.smooth_bin) 
-        neurons_select = self.sorting[select_slice] if self.embedded else select_slice
+        neurons_select = self.sorting[select_slice] if self.embedding is not None else select_slice
         return neurons_select  
 
     def plot_behav_corr(self, init=False, roi_id=None):
@@ -557,7 +560,7 @@ class MainW(QMainWindow):
                                             brush=pg.mkBrush(color=self.colors[roi_id][:3]), 
                                             hoverable=True)
 
-def run(filename=None):
+def run(filename=None, proc=False):
     # Always start by initializing Qt (only once per application)
     app = QApplication(sys.argv)
     icon_path = os.path.join(
@@ -571,7 +574,7 @@ def run(filename=None):
     app_icon.addFile(icon_path, QtCore.QSize(96, 96))
     app_icon.addFile(icon_path, QtCore.QSize(256, 256))
     app.setWindowIcon(app_icon)
-    GUI = MainW(filename=filename)
+    GUI = MainW(filename=filename, proc=proc)
     ret = app.exec_()
     # GUI.save_gui_data()
     sys.exit(ret)

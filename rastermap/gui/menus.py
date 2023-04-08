@@ -22,10 +22,17 @@ def mainmenu(parent):
     parent.loadXY.triggered.connect(lambda: io.load_neuron_pos(parent))
     parent.addAction(parent.loadXY)
     file_menu.addAction(parent.loadXY)  
+
+    # load Z-stack
+    parent.loadProc = QAction("&Load z-stack (mean images)", parent)
+    parent.loadProc.setShortcut("Ctrl+Z")
+    parent.loadProc.triggered.connect(lambda: io.load_zstack(parent, name=None))
+    parent.addAction(parent.loadProc)
+    file_menu.addAction(parent.loadProc) 
     
     parent.loadNd =  QAction("Load &n-d variable (times or cont.)", parent)
     parent.loadNd.setShortcut("Ctrl+N")
-    parent.loadNd.triggered.connect(lambda: io.load_behav_file(parent))
+    parent.loadNd.triggered.connect(lambda: io.get_behav_data(parent))
     parent.loadNd.setEnabled(False)
     parent.addAction(parent.loadNd)
     file_menu.addAction(parent.loadNd)

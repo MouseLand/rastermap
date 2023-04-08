@@ -69,7 +69,8 @@ class ClusterROI(pg.LinearRegionItem):
             self.parent.cluster_slices[self.roi_id] = slice(region[0], region[1])
             self.parent.selected = self.parent.cluster_slices[self.roi_id]
             self.parent.plot_traces(roi_id=self.roi_id)
-            self.parent.update_scatter(roi_id=self.roi_id)
+            if self.parent.neuron_pos is not None or self.parent.behav_data is not None:
+                self.parent.update_scatter(roi_id=self.roi_id)
             if hasattr(self.parent, 'PlaneWindow'):
                 self.parent.PlaneWindow.update_plots(roi_id=self.roi_id)
             self.parent.p3.show()

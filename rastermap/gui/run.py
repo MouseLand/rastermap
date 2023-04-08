@@ -73,9 +73,9 @@ class RunWindow(QDialog):
         self.finish = True
         self.error = False
         self.save_text()
-        np.save('ops.npy', self.ops)
+        np.save('rmap_ops.npy', self.ops)
         print('Running rastermap with command:')
-        cmd = f'python -u -W ignore -m rastermap --ops ops.npy --S {parent.filebase} '
+        cmd = f'python -u -W ignore -m rastermap --ops rmap_ops.npy --S {parent.filebase} '
         if parent.file_iscell is not None:
             cmd += f'--iscell {parent.file_iscell}'
         print(cmd)
@@ -97,10 +97,11 @@ class RunWindow(QDialog):
             cursor.movePosition(cursor.End)
             cursor.insertText('Opening in GUI (can close this window)\n')
             basename,fname = os.path.split(parent.fname)
-            if os.path.isfile(os.path.join(basename, 'embedding.npy')):
-                parent.fname = os.path.join(basename, 'embedding.npy')
+            fname = os.path.splitext(fname)[0]
+            if os.path.isfile(os.path.join(basename, f'{fname}_embedding.npy')):
+                parent.fname = os.path.join(basename, f'{fname}_embedding.npy')
             else:
-                parent.fname = 'embedding.npy'
+                parent.fname = f'{fname}_embedding.npy'
             io.load_proc(parent, name=parent.fname)
         elif not self.error:
             cursor = self.textEdit.textCursor()

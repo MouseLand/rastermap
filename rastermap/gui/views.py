@@ -37,10 +37,13 @@ class PlaneWindow(QMainWindow):
             y, x = neuron_pos.T
             z = np.zeros_like(y)
 
-        z = np.unique(z, return_inverse=True)[1].astype(int)
+        zgt, z = np.unique(z, return_inverse=True)
         n_planes = z.max() + 1
         if n_planes > 30:
-            z = np.digitize(z, np.linspace(0, n_planes+1, 30))
+            bins = np.linspace(0, n_planes+1, 30)
+            bin_centers = bins[:-1] + np.diff(bins)[0]/2
+            zgt = zgt[bin_centers.astype(int)]
+            z = np.digitize(z, bins)
             z = np.unique(z, return_inverse=True)[1].astype(int)
         n_planes = z.max() + 1
         
@@ -54,24 +57,29 @@ class PlaneWindow(QMainWindow):
         self.nX, self.nY = nX, nY
         self.plots = []
         self.scatter_plots = []
+        self.imgs = []
 
         self.parent.PlaneWindow = self
         
         self.all_neurons_checkBox = self.parent.all_neurons_checkBox
-        self.embedded = self.parent.embedded
+        self.embedding = self.parent.embedding
         self.sorting = self.parent.sorting
         self.cluster_rois = self.parent.cluster_rois
         self.cluster_slices = self.parent.cluster_slices 
         self.colors = self.parent.colors
         self.smooth_bin = self.parent.smooth_bin
+        self.zstack = self.parent.zstack
 
         for ii in range(self.nY):
             for jj in range(self.nX):
                 iplane = ii*self.nX + jj
-                ip = self.z==iplane
                 self.plots.append(self.win.addPlot(title=f"z = {iplane}",
                                                    row=ii, col=jj, rowspan=1, colspan=1))
                 self.scatter_plots.append([])
+                self.imgs.append(pg.ImageItem())
+                self.plots[-1].addItem(self.imgs[-1])
+                if self.zstack is not None:
+                    self.imgs[-1].setImage(self.zstack[zgt[iplane]])
                 for i in range(nclust_max+1):
                     self.scatter_plots[-1].append(pg.ScatterPlotItem())
                     self.plots[-1].addItem(self.scatter_plots[-1][-1])

@@ -19,8 +19,9 @@ except Exception as err:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='spikes')
     parser.add_argument('--S', default=[], type=str, help='spiking matrix')
-    parser.add_argument('--ops', default=[], type=str, help='options file')
-    parser.add_argument('--iscell', default=[], type=str, help='which cells to use')
+    parser.add_argument('--proc', default=[], type=str, help='processed data file "embedding.npy"')
+    parser.add_argument('--ops', default=[], type=str, help='options file "ops.npy"')
+    parser.add_argument('--iscell', default=[], type=str, help='which cells to select for processing')
     args = parser.parse_args()
 
     if len(args.ops) > 0 and len(args.S) > 0:
@@ -52,11 +53,12 @@ if __name__ == '__main__':
         model.fit(S[:, train_time])
         
         proc  = {'embedding': model.embedding, 'isort': model.isort, 
-                'uv': [model.U, model.V],
+                'U': model.U, 'V': model.V,
                  'ops': ops, 'filename': args.S, 'train_time': train_time}
         basename, fname = os.path.split(args.S)
+        fname = os.path.splitext(fname)[0]
         try:
-            np.save(os.path.join(basename, 'embedding.npy'), proc)
+            np.save(os.path.join(basename, f'{fname}_embedding.npy'), proc)
         except Exception as e:
             print('ERROR: no permission to write to data folder')
             #os.path.dirname(args.ops)
@@ -68,5 +70,7 @@ if __name__ == '__main__':
                 print('GUI FAILED: GUI dependencies may not be installed, to install, run')
                 print('     pip install rastermap[gui]')
         else:
-            filename = args.S if len(args.S) > 0 else None
-            gui.run(filename=filename)
+            # use proc path if it exists, else use S path
+            filename = args.proc if len(args.proc) > 0 else None
+            filename = args.S if len(args.S) > 0 and filename is None else filename
+            gui.run(filename=filename, proc=len(args.proc)>0)

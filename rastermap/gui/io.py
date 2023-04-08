@@ -82,73 +82,6 @@ def load_mat(parent, name=None):
     parent.sorting = np.arange(0, parent.sp.shape[0]).astype(np.int64)
     load_sp(parent)
 
-
-def load_proc(parent, name=None):
-    if name is None:
-        name = QFileDialog.getOpenFileName(
-            parent, "Open processed file", filter="*.npy"
-            )
-        parent.fname = name[0]
-        name = parent.fname
-    else:
-        parent.fname = name
-    try:
-        proc = np.load(name, allow_pickle=True).item()
-        parent.proc = proc
-        foldername = os.path.split(name)[0]
-        filename = os.path.split(parent.proc['filename'])[-1]
-        if os.path.exists(parent.proc['filename']):
-            X    = np.load(parent.proc['filename'])
-            parent.filebase = parent.proc['filename']
-        elif os.path.exists(os.path.join(foldername, filename)):
-            X = np.load(os.path.join(foldername, filename))
-            parent.filebase = os.path.join(foldername, filename)
-        else:
-            print(f"ERROR: {parent.proc['filename']} not found")
-            return 
-        isort = parent.proc['isort']
-        y     = parent.proc['embedding']
-        u     = parent.proc['uv'][0] 
-        ops   = parent.proc['ops']
-    except Exception as e:
-        parent.update_status_bar(e)
-        X = None
-
-    if X is not None:
-        parent.filebase = parent.proc['filename']
-        iscell, file_iscell = load_iscell(parent)
-        xy, file_stat = load_stat(parent)
-
-        parent.neuron_pos = xy 
-        parent.iscell = iscell
-        parent.startROI = False
-        parent.posROI = np.zeros((2,2))
-        parent.p0.clear()
-
-        parent.update_status_bar(f'z-scoring activity matrix')
-        parent.sp = zscore(X, axis=1)
-        del X
-        
-        parent.embedding = y
-        parent.sorting = isort
-        parent.U = u
-        parent.embedded = True
-
-        parent.update_status_bar("Loaded: "+ parent.proc['filename'])
-        load_iscell_stat(parent)
-        load_sp(parent)
-        parent.show()
-    if 0:
-        #elif X is not None:
-        parent.filebase = parent.proc['filename']
-        parent.embedding = y
-        parent.sorting = isort
-        parent.U = u
-        parent.embedded = True
-        parent.plot_activity() 
-        parent.show()
-
-
 def load_sp(parent):
     if parent.sp.shape[0] < 100:
         smooth = 1
@@ -161,9 +94,6 @@ def load_sp(parent):
     
     parent.loaded = True
     parent.plot_activity(init=True)
-    if parent.neuron_pos is not None:
-        parent.scatter_comboBox.setCurrentIndex(0)
-        parent.plot_scatter_pressed() 
             
     parent.show()
     parent.loadNd.setEnabled(True)
@@ -296,7 +226,6 @@ def load_behav_file(parent, button):
         parent, "Load behavior data", filter="*.npy *.mat"
     )
     name = name[0]
-    parent.behav_loaded = False
     try:  # Load file (behav_comps x time)
         ext = name.split(".")[-1]
         if ext == "mat":
@@ -323,49 +252,52 @@ def load_behav_file(parent, button):
                     raise Exception("File contains incorrect dataset. Dimensions mismatch",
                                 beh.shape[1], "not same as", parent.sp.shape[1])
             del beh
-    except Exception as e:
-        parent.update_status_bar(f'ERROR: {e}')
-    
-    if parent.behav_loaded:
         button.setText("Uploaded!")
         parent.behav_data = zscore(parent.behav_data, axis=1)
         parent.get_behav_corr()
-        parent.plot_behav_data()
-        parent.heatmap_checkBox.setEnabled(True)
-        parent.heatmap_checkBox.setChecked(True)
-    else:
+        parent.plot_behav_data()    
+    except Exception as e:
+        parent.update_status_bar(f'ERROR: {e}')
         return
 
 def load_behav_dict(parent, beh):
+    binary = False
     for i, key in enumerate(beh.keys()):
         if key not in ['__header__', '__version__', '__globals__']:
             if np.array(beh[key]).size == parent.sp.shape[1]:
+                if j==0:
+                    parent.behav_labels = []
                 parent.behav_labels.append(key)
-                parent.behav_labels_loaded = True
+                binary = False
             else:
+                if j==0:
+                    parent.behav_binary_labels = []
                 parent.behav_binary_labels.append(key)
-                parent.behav_binary_labels_loaded = True
-    if parent.behav_labels_loaded:
-        parent.behav_data = np.zeros((len(parent.behav_labels), parent.sp.shape[1]))
-        for j, key in enumerate(parent.behav_labels):
-            parent.behav_data[j] = beh[key]
-        parent.behav_data = np.array(parent.behav_data)
-        parent.behav_labels = np.array(parent.behav_labels)
-        parent.behav_loaded = True
-    if parent.behav_binary_labels_loaded:
-        parent.behav_binary_data = np.zeros((len(parent.behav_binary_labels), parent.sp.shape[1]))
-        parent.behav_bin_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30, colCount=len(parent.behav_binary_labels))
-        for i, key in enumerate(parent.behav_binary_labels):
-            dat = np.zeros(parent.sp.shape[1]) 
-            dat[beh[key]] = 1                   # Convert to binary for stim/lick time
-            parent.behav_binary_data[i] = dat
-            parent.behav_bin_plot_list.append(pg.PlotDataItem(symbol=parent.symbol_list[i]))
-            parent.behav_bin_legend.addItem(parent.behav_bin_plot_list[i], name=parent.behav_binary_labels[i])
-            parent.behav_bin_legend.setPos(parent.oned_trace_plot.x()+(20*i), parent.oned_trace_plot.y())
-            parent.behav_bin_legend.setParentItem(parent.p3)
-            parent.p3.addItem(parent.behav_bin_plot_list[-1])
-    if parent.behav_binary_data is not None:
-        parent.plot_behav_binary_data()
+                binary = True
+            j+=1
+    if j>0:
+        if not binary:
+            parent.behav_data = np.zeros((len(parent.behav_labels), parent.sp.shape[1]))
+            for j, key in enumerate(parent.behav_labels):
+                parent.behav_data[j] = beh[key]
+            parent.behav_data = np.array(parent.behav_data)
+            parent.behav_data = zscore(parent.behav_data, axis=1)
+            parent.behav_labels = np.array(parent.behav_labels)
+            parent.get_behav_corr()
+            parent.plot_behav_data()    
+        else:
+            parent.behav_binary_data = np.zeros((len(parent.behav_binary_labels), parent.sp.shape[1]))
+            parent.behav_bin_legend = pg.LegendItem(labelTextSize='12pt', horSpacing=30, colCount=len(parent.behav_binary_labels))
+            for i, key in enumerate(parent.behav_binary_labels):
+                dat = np.zeros(parent.sp.shape[1]) 
+                dat[beh[key]] = 1                   # Convert to binary for stim/lick time
+                parent.behav_binary_data[i] = dat
+                parent.behav_bin_plot_list.append(pg.PlotDataItem(symbol=parent.symbol_list[i]))
+                parent.behav_bin_legend.addItem(parent.behav_bin_plot_list[i], name=parent.behav_binary_labels[i])
+                parent.behav_bin_legend.setPos(parent.oned_trace_plot.x()+(20*i), parent.oned_trace_plot.y())
+                parent.behav_bin_legend.setParentItem(parent.p3)
+                parent.p3.addItem(parent.behav_bin_plot_list[-1])
+            parent.plot_behav_binary_data()
 
 def get_neuron_depth_data(parent):
     dialog = QtWidgets.QDialog()
@@ -411,41 +343,137 @@ def load_neuron_pos(parent):
         elif isinstance(data[0], dict):
             parent.neuron_pos = np.array([s['med'] for s in data])
 
-        parent.scatter_comboBox.setCurrentIndex(1)
+        parent.scatter_comboBox.setCurrentIndex(0)
         parent.plot_neuron_pos(init=True)
         
     except Exception as e:
         parent.update_status_bar('ERROR: this is not a *.npy array :( ')
 
+def load_zstack(parent, name=None):
+    try:
+        file_name = QFileDialog.getOpenFileName(
+                    parent, "Open *.npy (array or ops.npy)", filter="*.npy")
+        data = np.load(file_name[0], allow_pickle=True)
+        
+        if isinstance(data[0], np.ndarray):
+            parent.zstack = data
+            
+        elif isinstance(data[0], dict):
+            parent.zstack = np.array(data['meanImg'])
+        if parent.zstack.ndim!=3:
+            parent.update_status_bar('ERROR: zstack must be a 3D array with Z axis first')
+            
+    except Exception as e:
+        parent.update_status_bar('ERROR: this is not a *.npy array :( ')
+
+
+def load_proc(parent, name=None):
+    if name is None:
+        name = QFileDialog.getOpenFileName(
+            parent, "Open processed file", filter="*.npy"
+            )
+    try:
+        proc = np.load(name, allow_pickle=True).item()
+        parent.proc = proc
+        foldername = os.path.split(name)[0]
+        parent.save_path = foldername
+        filename = os.path.split(parent.proc['filename'])[-1]
+
+        # check if file exists in original location or in current folder
+        if os.path.exists(parent.proc['filename']):
+            X    = np.load(parent.proc['filename'])
+            parent.fname = parent.proc['filename']
+        elif os.path.exists(os.path.join(foldername, filename)):
+            X = np.load(os.path.join(foldername, filename))
+            parent.fname = os.path.join(foldername, filename)
+        else:
+            print(f"ERROR: {parent.proc['filename']} not found")
+            return 
+        
+        isort = parent.proc['isort']
+        y     = parent.proc['embedding']
+        u     = parent.proc['U']
+        ops   = parent.proc['ops']
+        user_clusters = parent.proc.get('user_clusters', None)
+    except Exception as e:
+        parent.update_status_bar(e)
+        X = None
+
+    if X is not None:
+        parent.filebase = parent.proc['filename']
+        iscell, file_iscell = load_iscell(parent)
+        xy, file_stat = load_stat(parent)
+
+        parent.neuron_pos = xy 
+        parent.iscell = iscell
+        parent.startROI = False
+        parent.posROI = np.zeros((2,2))
+        parent.p0.clear()
+
+        parent.update_status_bar(f'z-scoring activity matrix')
+        parent.sp = zscore(X, axis=1)
+        del X
+
+        if user_clusters is not None:
+            parent.smooth_bin = user_clusters[0]['binsize']
+            parent.smooth.setText(str(int(parent.smooth_bin)))
+            
+        parent.embedding = y
+        parent.sorting = isort
+        parent.U = u
+        parent.ops = ops
+        parent.user_clusters = user_clusters
+
+        parent.update_status_bar(f"loaded:  {parent.proc['filename']}")
+        load_iscell_stat(parent)
+        load_sp(parent) 
+
+        if user_clusters is not None:
+            for uc in user_clusters:
+                parent.selected = uc['slice']
+                parent.add_cluster()
+        parent.user_clusters = None # remove after loading
+
+        parent.show()
+    
 def save_proc(parent): # Save embedding output
     try:
-        if parent.embedded:
+        if parent.embedding is not None:
             if parent.save_path is None:
                 folderName = QFileDialog.getExistingDirectory(parent,
                                     "Choose save folder")
-                parent.save_path = folderName
-                    
-            else:
-                raise Exception("Incorrect folder. Please select a folder")
+                parent.save_path = folderName  
             if parent.save_path:
                 filename = parent.fname.split("/")[-1]
                 filename, ext = os.path.splitext(filename)
-                savename = os.path.join(parent.save_path, ("%s_rastermap_proc.npy"%filename))
+                savename = os.path.join(parent.save_path, ("%s_embedding.npy"%filename))
+                # save user clusters
+                if len(parent.cluster_slices) > 0:
+                    user_clusters = []
+                    for roi_id, cs in enumerate(parent.cluster_slices):
+                        user_clusters.append(
+                            {'ids'      : parent.neurons_selected(cs),
+                            'slice'    : cs, 
+                            'binsize'  : parent.smooth_bin,
+                            'color'    : parent.colors[roi_id]}
+                        )
+                else:
+                    user_clusters = None
                 # Rastermap embedding parameters
-                ops = {'n_components'       : parent.n_components, 
-                        'n_clusters'        : parent.n_clusters,
-                        'n_neurons'         : parent.n_neurons, 
-                        'grid_upsample'     : parent.grid_upsample,
-                        'n_splits'          : parent.n_splits,
-                        'embed_time_range'  : parent.embed_time_range}
-                proc = {'filename': parent.fname, 'save_path': parent.save_path,
-                        'isort' : parent.sorting, 'embedding' : parent.embedding,
-                        'U' : parent.U, 'ops' : ops}
+                ops = parent.ops
+                proc = {'filename'      : parent.fname, 
+                        'save_path'     : parent.save_path,
+                        'isort'         : parent.sorting, 
+                        'embedding'     : parent.embedding,
+                        'U'             : parent.U, 
+                        'user_clusters' : user_clusters,
+                        'ops'           : ops}
                 
                 np.save(savename, proc, allow_pickle=True)
-                parent.update_status_bar("File saved: "+ savename)
+                parent.update_status_bar(f"processed file saved: {savename}")
         else:
             raise Exception("Please run embedding to save output")
     except Exception as e:
+        print(e)
         #parent.update_status_bar(e)
         return
