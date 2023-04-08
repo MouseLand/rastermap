@@ -361,7 +361,7 @@ def load_zstack(parent, name=None):
         elif isinstance(data[0], dict):
             parent.zstack = np.array(data['meanImg'])
         if parent.zstack.ndim!=3:
-            parent.update_status_bar('ERROR: zstack must be a 3D array with Z axis first')
+            parent.update_status_bar('ERROR: zstack must be a 3D array with Z axis last')
             
     except Exception as e:
         parent.update_status_bar('ERROR: this is not a *.npy array :( ')

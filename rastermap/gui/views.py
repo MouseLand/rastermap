@@ -79,7 +79,7 @@ class PlaneWindow(QMainWindow):
                 self.imgs.append(pg.ImageItem())
                 self.plots[-1].addItem(self.imgs[-1])
                 if self.zstack is not None:
-                    self.imgs[-1].setImage(self.zstack[zgt[iplane]])
+                    self.imgs[-1].setImage(self.zstack[:,:,zgt[iplane]])
                 for i in range(nclust_max+1):
                     self.scatter_plots[-1].append(pg.ScatterPlotItem())
                     self.plots[-1].addItem(self.scatter_plots[-1][-1])
