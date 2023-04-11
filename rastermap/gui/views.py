@@ -38,6 +38,7 @@ class PlaneWindow(QMainWindow):
             z = np.zeros_like(y)
 
         zgt, z = np.unique(z, return_inverse=True)
+        zgt = zgt.astype('int')
         n_planes = z.max() + 1
         if n_planes > 30:
             bins = np.linspace(0, n_planes+1, 30)
