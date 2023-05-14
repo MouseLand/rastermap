@@ -4,56 +4,59 @@ from PyQt5 import QtGui, QtCore
 from PyQt5.QtWidgets import QMainWindow, QApplication, QSizePolicy, QDialog, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QButtonGroup, QRadioButton, QStatusBar, QTextEdit
 from . import io
 
+
 ### custom QDialog which allows user to fill in ops and run rastermap
 class RunWindow(QDialog):
+
     def __init__(self, parent=None):
         super(RunWindow, self).__init__(parent)
-        self.setGeometry(50,50,600,600)
-        self.setWindowTitle('Choose rastermap run options')
+        self.setGeometry(50, 50, 600, 600)
+        self.setWindowTitle("Choose rastermap run options")
         self.win = QWidget(self)
         self.layout = QGridLayout()
         self.layout.setHorizontalSpacing(25)
         self.win.setLayout(self.layout)
 
-        print(">>> importing rastermap functions (will be slow if you haven't run rastermap before) <<<")
+        print(
+            ">>> importing rastermap functions (will be slow if you haven't run rastermap before) <<<"
+        )
         from rastermap.mapping import default_settings, settings_info, Rastermap
         # default ops
         self.ops = default_settings()
         info = settings_info()
-        keys = ['n_clusters', 'n_PCs', 
-                 'time_lag_window', 'locality', 
-                 'grid_upsample', 
-                 'bin_size', 'n_splits', 
-                 'scaled_kmeans']
+        keys = [
+            "n_clusters", "n_PCs", "time_lag_window", "locality", "grid_upsample",
+            "bin_size", "n_splits", "scaled_kmeans"
+        ]
         tooltips = [info[key] for key in keys]
         bigfont = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
-        l=0
+        l = 0
         self.keylist = []
         self.editlist = []
-        k=0
+        k = 0
         for key in keys:
-            qedit = LineEdit(k,key,self)
+            qedit = LineEdit(k, key, self)
             qlabel = QLabel(key)
             qlabel.setToolTip(tooltips[k])
             qedit.set_text(self.ops)
             qedit.setFixedWidth(90)
-            self.layout.addWidget(qlabel,k,0,1,1)
-            self.layout.addWidget(qedit,k,1,1,1)
+            self.layout.addWidget(qlabel, k, 0, 1, 1)
+            self.layout.addWidget(qedit, k, 1, 1, 1)
             self.keylist.append(key)
             self.editlist.append(qedit)
-            k+=1
+            k += 1
 
         #for j in range(10):
         #    self.layout.addWidget(QLabel("."),19,4+j,1,1)
-        
-        self.layout.setColumnStretch(4,10)
-        self.runButton = QPushButton('RUN')
+
+        self.layout.setColumnStretch(4, 10)
+        self.runButton = QPushButton("RUN")
         self.runButton.clicked.connect(lambda: self.run_RMAP(parent))
-        self.layout.addWidget(self.runButton,19,0,1,1)
+        self.layout.addWidget(self.runButton, 19, 0, 1, 1)
         #self.runButton.setEnabled(False)
         self.textEdit = QTextEdit()
         self.textEdit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.layout.addWidget(self.textEdit, 20,0,30,14)
+        self.layout.addWidget(self.textEdit, 20, 0, 30, 14)
         self.process = QtCore.QProcess(self)
         self.process.readyReadStandardOutput.connect(self.stdout_write)
         self.process.readyReadStandardError.connect(self.stderr_write)
@@ -61,9 +64,9 @@ class RunWindow(QDialog):
         self.process.started.connect(self.started)
         self.process.finished.connect(lambda: self.finished(parent))
         # stop process
-        self.stopButton = QPushButton('STOP')
+        self.stopButton = QPushButton("STOP")
         self.stopButton.setEnabled(False)
-        self.layout.addWidget(self.stopButton, 19,1,1,1)
+        self.layout.addWidget(self.stopButton, 19, 1, 1, 1)
         self.stopButton.clicked.connect(self.stop)
 
         self.show()
@@ -73,11 +76,11 @@ class RunWindow(QDialog):
         self.finish = True
         self.error = False
         self.save_text()
-        np.save('rmap_ops.npy', self.ops)
-        print('Running rastermap with command:')
-        cmd = f'python -u -W ignore -m rastermap --ops rmap_ops.npy --S {parent.filebase} '
+        np.save("rmap_ops.npy", self.ops)
+        print("Running rastermap with command:")
+        cmd = f"python -u -W ignore -m rastermap --ops rmap_ops.npy --S {parent.filebase} "
         if parent.file_iscell is not None:
-            cmd += f'--iscell {parent.file_iscell}'
+            cmd += f"--iscell {parent.file_iscell}"
         print(cmd)
         self.process.start(cmd)
 
@@ -95,22 +98,22 @@ class RunWindow(QDialog):
         if self.finish and not self.error:
             cursor = self.textEdit.textCursor()
             cursor.movePosition(cursor.End)
-            cursor.insertText('Opening in GUI (can close this window)\n')
-            basename,fname = os.path.split(parent.fname)
+            cursor.insertText("Opening in GUI (can close this window)\n")
+            basename, fname = os.path.split(parent.fname)
             fname = os.path.splitext(fname)[0]
-            if os.path.isfile(os.path.join(basename, f'{fname}_embedding.npy')):
-                parent.fname = os.path.join(basename, f'{fname}_embedding.npy')
+            if os.path.isfile(os.path.join(basename, f"{fname}_embedding.npy")):
+                parent.fname = os.path.join(basename, f"{fname}_embedding.npy")
             else:
-                parent.fname = f'{fname}_embedding.npy'
+                parent.fname = f"{fname}_embedding.npy"
             io.load_proc(parent, name=parent.fname)
         elif not self.error:
             cursor = self.textEdit.textCursor()
             cursor.movePosition(cursor.End)
-            cursor.insertText('Interrupted by user (not finished)\n')
+            cursor.insertText("Interrupted by user (not finished)\n")
         else:
             cursor = self.textEdit.textCursor()
             cursor.movePosition(cursor.End)
-            cursor.insertText('Interrupted by error (not finished)\n')
+            cursor.insertText("Interrupted by error (not finished)\n")
 
     def save_text(self):
         for k in range(len(self.editlist)):
@@ -120,28 +123,30 @@ class RunWindow(QDialog):
     def stdout_write(self):
         cursor = self.textEdit.textCursor()
         cursor.movePosition(cursor.End)
-        cursor.insertText(str(self.process.readAllStandardOutput(), 'utf-8'))
+        cursor.insertText(str(self.process.readAllStandardOutput(), "utf-8"))
         self.textEdit.ensureCursorVisible()
 
     def stderr_write(self):
         cursor = self.textEdit.textCursor()
         cursor.movePosition(cursor.End)
-        cursor.insertText('>>>ERROR<<<\n')
-        cursor.insertText(str(self.process.readAllStandardError(), 'utf-8'))
+        cursor.insertText(">>>ERROR<<<\n")
+        cursor.insertText(str(self.process.readAllStandardError(), "utf-8"))
         self.textEdit.ensureCursorVisible()
         self.error = True
 
+
 class LineEdit(QLineEdit):
-    def __init__(self,k,key,parent=None):
-        super(LineEdit,self).__init__(parent)
+
+    def __init__(self, k, key, parent=None):
+        super(LineEdit, self).__init__(parent)
         self.key = key
         #self.textEdited.connect(lambda: self.edit_changed(parent.ops, k))
 
-    def get_text(self,okey):
+    def get_text(self, okey):
         key = self.key
-        if key=='diameter' or key=='block_size':
-            diams = self.text().replace(' ','').split(',')
-            if len(diams)>1:
+        if key == "diameter" or key == "block_size":
+            diams = self.text().replace(" ", "").split(",")
+            if len(diams) > 1:
                 okey = [int(diams[0]), int(diams[1])]
             else:
                 okey = int(diams[0])
@@ -155,11 +160,11 @@ class LineEdit(QLineEdit):
 
         return okey
 
-    def set_text(self,ops):
+    def set_text(self, ops):
         key = self.key
-        if key=='diameter' or key=='block_size':
-            if (type(ops[key]) is not int) and (len(ops[key])>1):
-                dstr = str(int(ops[key][0])) + ', ' + str(int(ops[key][1]))
+        if key == "diameter" or key == "block_size":
+            if (type(ops[key]) is not int) and (len(ops[key]) > 1):
+                dstr = str(int(ops[key][0])) + ", " + str(int(ops[key][1]))
             else:
                 dstr = str(int(ops[key]))
         else:

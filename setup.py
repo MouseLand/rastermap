@@ -1,10 +1,18 @@
 import setuptools
 
+install_deps = [
+        "numpy>=1.13.0", 
+        "scipy", 
+        "scikit-learn", 
+        "numba",
+        "natsort"
+        ]
+
 gui_deps = [
-        'pyqtgraph>=0.11.0rc0', 
-        'pyqt5', 
-        'pyqt5.sip',
-        'superqt',
+        "pyqtgraph>=0.11.0rc0", 
+        "pyqt5", 
+        "pyqt5.sip",
+        "superqt",
         ]
 
 with open("README.md", "r") as fh:
@@ -20,9 +28,9 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/MouseLand/rastermap",
     packages=setuptools.find_packages(),
-	install_requires = ['numpy>=1.13.0', 'scipy', 'scikit-learn', 'numba','natsort'],
+	install_requires = install_deps,
     extras_require = {
-      'gui': gui_deps
+      "gui": gui_deps
     },
     include_package_data=True,
     classifiers=(

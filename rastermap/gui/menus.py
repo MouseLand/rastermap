@@ -4,33 +4,34 @@ import pyqtgraph as pg
 import numpy as np
 from . import io, run, gui, views
 
+
 # ------ MENU BAR -----------------
-def mainmenu(parent): 
+def mainmenu(parent):
     # make mainmenu!
     main_menu = parent.menuBar()
-    
+
     file_menu = main_menu.addMenu("&File")
-    
-    loadMat =  QAction("&Load data matrix", parent)
+
+    loadMat = QAction("&Load data matrix", parent)
     loadMat.setShortcut("Ctrl+L")
     loadMat.triggered.connect(lambda: io.load_mat(parent, name=None))
     parent.addAction(loadMat)
     file_menu.addAction(loadMat)
-    
+
     parent.loadXY = QAction("&Load xy(z) positions of neurons", parent)
     parent.loadXY.setShortcut("Ctrl+X")
     parent.loadXY.triggered.connect(lambda: io.load_neuron_pos(parent))
     parent.addAction(parent.loadXY)
-    file_menu.addAction(parent.loadXY)  
+    file_menu.addAction(parent.loadXY)
 
     # load Z-stack
     parent.loadProc = QAction("&Load z-stack (mean images)", parent)
     parent.loadProc.setShortcut("Ctrl+Z")
     parent.loadProc.triggered.connect(lambda: io.load_zstack(parent, name=None))
     parent.addAction(parent.loadProc)
-    file_menu.addAction(parent.loadProc) 
-    
-    parent.loadNd =  QAction("Load &n-d variable (times or cont.)", parent)
+    file_menu.addAction(parent.loadProc)
+
+    parent.loadNd = QAction("Load &n-d variable (times or cont.)", parent)
     parent.loadNd.setShortcut("Ctrl+N")
     parent.loadNd.triggered.connect(lambda: io.get_behav_data(parent))
     parent.loadNd.setEnabled(False)
@@ -42,8 +43,8 @@ def mainmenu(parent):
     parent.loadProc.setShortcut("Ctrl+P")
     parent.loadProc.triggered.connect(lambda: io.load_proc(parent, name=None))
     parent.addAction(parent.loadProc)
-    file_menu.addAction(parent.loadProc)    
-    
+    file_menu.addAction(parent.loadProc)
+
     # export figure
     exportFig = QAction("Export as image (svg)", parent)
     exportFig.triggered.connect(lambda: export_fig(parent))
@@ -73,7 +74,8 @@ def mainmenu(parent):
     parent.saveProc.setShortcut("Ctrl+S")
     parent.saveProc.triggered.connect(lambda: io.save_proc(parent))
     parent.addAction(parent.saveProc)
-    save_menu.addAction(parent.saveProc) 
+    save_menu.addAction(parent.saveProc)
+
 
 def export_fig(parent):
     parent.win.scene().contextMenuItem = parent.p0
