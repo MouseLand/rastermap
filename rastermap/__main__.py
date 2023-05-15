@@ -57,8 +57,8 @@ if __name__ == "__main__":
         proc = {
             "embedding": model.embedding,
             "isort": model.isort,
-            "U": model.U,
-            "V": model.V,
+            "Usv": model.Usv,
+            "Vsv": model.Vsv,
             "ops": ops,
             "filename": args.S,
             "train_time": train_time

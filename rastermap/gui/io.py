@@ -1,4 +1,4 @@
-import os, glob
+import os
 import numpy as np
 from PyQt5 import QtGui, QtCore, QtWidgets
 from PyQt5.QtWidgets import QFileDialog, QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox
@@ -6,7 +6,7 @@ import pyqtgraph as pg
 from scipy.stats import zscore
 import scipy.io as sio
 from . import guiparts
-
+from ..io import _load_iscell, _load_stat, load_activity
 
 def load_mat(parent, name=None):
     """ load data matrix of neurons by time (*.npy or *.mat)
@@ -14,81 +14,32 @@ def load_mat(parent, name=None):
     Note: can only load mat files containing one key assigned to data matrix
     
     """
-    #name = "C:/Users/carse/DATA/gt1/suite2p/plane0/spks.npy"
     try:
         if name is None:
             name = QFileDialog.getOpenFileName(parent, "Open *.npy or *.mat",
-                                               filter="*.npy *.mat")
+                                               filter="*.npy *.npz *.mat")
             parent.fname = name[0]
             parent.filebase = name[0]
         else:
             parent.fname = name
             parent.filebase = name
-        ext = os.path.splitext(parent.fname)[-1]
-        parent.update_status_bar("Loading " + parent.fname)
-        if ext == ".mat":
-            try:
-                X = sio.loadmat(parent.fname)
-                if isinstance(X, dict):
-                    for i, key in enumerate(X.keys()):
-                        if key not in ["__header__", "__version__", "__globals__"]:
-                            X = X[key]
-            except NotImplementedError:
-                try:
-                    import mat73
-                except ImportError:
-                    print("please 'pip install mat73'")
-                X = mat73.loadmat(parent.fname)
-                if isinstance(X, dict):
-                    for i, key in enumerate(X.keys()):
-                        if key not in ["__header__", "__version__", "__globals__"]:
-                            X = X[key]
-        elif ext == ".npy":
-            X = np.load(parent.fname)  # allow_pickle=True
-        else:
-            raise Exception("Invalid file type")
+
+        X, Usv, Vsv = load_activity(parent.fname)
+        
+        print(f"z-scoring activity matrix")
+        parent.sp = zscore(X, axis=1)
+        del X
+
+        _load_iscell_stat(parent)
+
+        parent.embedding = np.arange(0, parent.sp.shape[0]).astype(np.int64)[:, np.newaxis]
+        parent.sorting = np.arange(0, parent.sp.shape[0]).astype(np.int64)
+        _load_sp(parent)
+
     except Exception as e:
-        parent.update_status_bar(e)
+        print(e)
         X = None
         return
-
-    if X is None:
-        return
-    if X.ndim == 1:
-        parent.update_status_bar(
-            "ERROR: 1D array provided, but rastermap requires 2D array")
-        return
-    elif X.ndim > 3:
-        parent.update_status_bar(
-            "ERROR: nD array provided (n>3), but rastermap requires 2D array")
-        return
-    elif X.ndim == 3:
-        parent.update_status_bar(
-            "WARNING: 3D array provided (n>3), rastermap requires 2D array, will flatten to 2D"
-        )
-        return
-
-    if X.shape[0] < 10:
-        parent.update_status_bar("ERROR: matrix with fewer than 10 neurons provided")
-
-    parent.update_status_bar(
-        f"activity loaded: {X.shape[0]} neurons by {X.shape[1]} timepoints")
-
-    if len(X.shape) == 3:
-        parent.update_status_bar(
-            f"activity matrix has third dimension of size {X.shape[-1]}, flattening matrix to size ({X.shape[0]}, {X.shape[1] * X.shape[-1]}"
-        )
-        X = X.reshape(X.shape[0], -1)
-    parent.update_status_bar(f"z-scoring activity matrix")
-    parent.sp = zscore(X, axis=1)
-    del X
-
-    _load_iscell_stat(parent)
-
-    parent.embedding = np.arange(0, parent.sp.shape[0]).astype(np.int64)[:, np.newaxis]
-    parent.sorting = np.arange(0, parent.sp.shape[0]).astype(np.int64)
-    _load_sp(parent)
-
 
 def _load_sp(parent):
     if parent.sp.shape[0] < 100:
@@ -97,7 +48,7 @@ def _load_sp(parent):
         smooth = 5
     else:
         smooth = 10
-    parent.update_status_bar(f"setting neuron bin size to {smooth} for visualization")
+    print(f"setting neuron bin size to {smooth} for visualization")
     parent.smooth.setText(str(smooth))
 
     parent.loaded = True
@@ -109,27 +60,6 @@ def _load_sp(parent):
     parent.runRmap.setEnabled(True)
 
 
-def _load_iscell_stat(parent):
-    iscell, file_iscell = _load_iscell(parent)
-    xy, file_stat = _load_stat(parent)
-
-    if iscell is not None:
-        if len(iscell) == parent.sp.shape[0]:
-            parent.sp = parent.sp[iscell, :]
-        parent.iscell = iscell
-        parent.file_iscell = file_iscell
-        parent.update_status_bar(
-            f"using iscell.npy in folder, {parent.sp.shape[0]} neurons labeled as cells"
-        )
-
-    if xy is not None:
-        if iscell is not None and len(xy) == len(iscell):
-            xy = xy[iscell]
-        if len(xy) == parent.sp.shape[0]:
-            parent.neuron_pos = xy
-            parent.update_status_bar(
-                f"using stat.npy in folder for xy positions of neurons")
-            parent.file_stat = file_stat
 
 
 def get_behav_data(parent):
@@ -186,29 +116,6 @@ def get_behav_data(parent):
     dialog.exec_()
 
 
-def _load_iscell(parent):
-    basename, filename = os.path.split(parent.filebase)
-    try:
-        file_iscell = os.path.join(basename, "iscell.npy")
-        iscell = np.load(file_iscell)
-        probcell = iscell[:, 1]
-        iscell = iscell[:, 0].astype("bool")
-    except (ValueError, OSError, RuntimeError, TypeError, NameError):
-        iscell = None
-        file_iscell = None
-    return iscell, file_iscell
-
-
-def _load_stat(parent):
-    basename, filename = os.path.split(parent.filebase)
-    try:
-        file_stat = os.path.join(basename, "stat.npy")
-        stat = np.load(file_stat, allow_pickle=True)
-        xy = np.array([s["med"] for s in stat])
-    except (ValueError, OSError, RuntimeError, TypeError, NameError):
-        xy = None
-        file_stat = None
-    return xy, file_stat
 
 
 def load_behav_comps_file(parent, button):
@@ -219,7 +126,7 @@ def load_behav_comps_file(parent, button):
             beh = np.load(name, allow_pickle=True)  # Load file (behav_comps x time)
             if beh.ndim == 1 and beh.shape[0] == parent.behav_data.shape[0]:
                 parent.behav_labels = beh
-                parent.update_status_bar("Behav labels file loaded")
+                print("Behav labels file loaded")
                 button.setText("Uploaded!")
                 parent.heatmap_checkBox.setEnabled(True)
             else:
@@ -252,7 +159,7 @@ def load_behav_file(parent, button):
             else:  # load matrix w/o labels and set default labels
                 beh = beh[np.newaxis, :] if beh.ndim == 1 else beh
                 if beh.ndim == 3:
-                    parent.update_status_bar(
+                    print(
                         "WARNING: 3D array provided (n>3), rastermap requires 2D array, will flatten to 2D"
                     )
                     beh = beh.reshape(beh.shape[0], -1)
@@ -269,7 +176,7 @@ def load_behav_file(parent, button):
         parent.get_behav_corr()
         parent.plot_behav_data()
     except Exception as e:
-        parent.update_status_bar(f"ERROR: {e}")
+        print(f"ERROR: {e}")
         return
 
 
@@ -330,7 +237,7 @@ def load_neuron_pos(parent):
                 parent, "iscell") and parent.iscell is not None:
             data = np.array(data)[parent.iscell]
         elif len(data) != parent.sp.shape[0]:
-            parent.update_status_bar("ERROR: npy array is not the same length as data ")
+            print("ERROR: npy array is not the same length as data ")
 
         if isinstance(data[0], np.ndarray):
             parent.neuron_pos = data
@@ -341,7 +248,7 @@ def load_neuron_pos(parent):
         parent.plot_neuron_pos(init=True)
 
     except Exception as e:
-        parent.update_status_bar("ERROR: this is not a *.npy array :( ")
+        print("ERROR: this is not a *.npy array :( ")
 
 
 def load_zstack(parent, name=None):
@@ -356,12 +263,34 @@ def load_zstack(parent, name=None):
         elif isinstance(data[0], dict):
             parent.zstack = np.array(data["meanImg"])
         if parent.zstack.ndim != 3:
-            parent.update_status_bar(
+            print(
                 "ERROR: zstack must be a 3D array with Z axis last")
 
     except Exception as e:
-        parent.update_status_bar("ERROR: this is not a *.npy array :( ")
+        print("ERROR: this is not a *.npy array :( ")
 
+
+def _load_iscell_stat(parent):
+    iscell, file_iscell = _load_iscell(parent.fname)
+    xy, file_stat = _load_stat(parent.fname)
+
+    if iscell is not None:
+        if len(iscell) == parent.sp.shape[0]:
+            parent.sp = parent.sp[iscell, :]
+        parent.iscell = iscell
+        parent.file_iscell = file_iscell
+        parent.update_status_bar(
+            f"using iscell.npy in folder, {parent.sp.shape[0]} neurons labeled as cells"
+        )
+
+    if xy is not None:
+        if iscell is not None and len(xy) == len(iscell):
+            xy = xy[iscell]
+        if len(xy) == parent.sp.shape[0]:
+            parent.neuron_pos = xy
+            parent.update_status_bar(
+                f"using stat.npy in folder for xy positions of neurons")
+            parent.file_stat = file_stat
 
 def load_proc(parent, name=None):
     if name is None:
@@ -387,24 +316,20 @@ def load_proc(parent, name=None):
 
         isort = parent.proc["isort"]
         y = parent.proc["embedding"]
-        u = parent.proc["U"]
+        u = parent.proc["Usv"]
         ops = parent.proc["ops"]
         user_clusters = parent.proc.get("user_clusters", None)
     except Exception as e:
-        parent.update_status_bar(e)
+        print(e)
         X = None
 
     if X is not None:
         parent.filebase = parent.proc["filename"]
-        iscell, file_iscell = _load_iscell(parent)
-        xy, file_stat = _load_stat(parent)
-
-        parent.neuron_pos = xy
-        parent.iscell = iscell
+        
         parent.startROI = False
         parent.posROI = np.zeros((2, 2))
 
-        parent.update_status_bar(f"z-scoring activity matrix")
+        print(f"z-scoring activity matrix")
         parent.sp = zscore(X, axis=1)
         del X
 
@@ -418,7 +343,7 @@ def load_proc(parent, name=None):
         parent.ops = ops
         parent.user_clusters = user_clusters
 
-        parent.update_status_bar(f"loaded:  {parent.proc['filename']}")
+        print(f"loaded:  {parent.proc['filename']}")
         _load_iscell_stat(parent)
         _load_sp(parent)
 
@@ -462,16 +387,16 @@ def save_proc(parent):  # Save embedding output
                     "save_path": parent.save_path,
                     "isort": parent.sorting,
                     "embedding": parent.embedding,
-                    "U": parent.U,
+                    "Usv": parent.U,
                     "user_clusters": user_clusters,
                     "ops": ops
                 }
 
                 np.save(savename, proc, allow_pickle=True)
-                parent.update_status_bar(f"processed file saved: {savename}")
+                print(f"processed file saved: {savename}")
         else:
             raise Exception("Please run embedding to save output")
     except Exception as e:
         print(e)
-        #parent.update_status_bar(e)
+        #print(e)
         return

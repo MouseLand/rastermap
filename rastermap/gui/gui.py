@@ -137,7 +137,7 @@ class MainW(QMainWindow):
         layout.setColumnStretchFactor(1, 3)
         layout.setRowStretchFactor(1, 4)
         layout.setRowStretchFactor(2, 2)
-        layout.setRowStretchFactor(3, 0.5)
+        layout.setRowStretchFactor(3, 0)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Options on top left of GUI ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # add bin size across neurons
@@ -156,6 +156,7 @@ class MainW(QMainWindow):
         self.sat_slider.setTickPosition(QtW.QSlider.TickPosition.TicksAbove)
         self.sat_slider.valueChanged.connect(self.sat_changed)
         self.sat_slider.setValue((self.sat[0], self.sat[1]))
+        self.sat_slider.setFixedWidth(130)
         sat_label = QLabel("Saturation")
         sat_label.setStyleSheet("color: white;")
 

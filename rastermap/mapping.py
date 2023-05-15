@@ -189,7 +189,13 @@ class Rastermap:
         """
         t0 = time.time()
 
-        if (Usv is None):
+        # check if Usv and Vsv already attributes
+        if hasattr(self, "Usv"):
+            Usv = self.Usv 
+        if hasattr(self, "Vsv"):
+            Vsv = self.Vsv
+
+        if Usv is None:
             ### compute svd and keep n_PCs of data
 
             # normalize X
@@ -220,16 +226,16 @@ class Rastermap:
                 else:
                     X = data
                 
-            self.n_PCs = self.U.shape[1]
+            self.n_PCs = self.Usv.shape[1]
             print("n_PCs = {0} precomputed".format(self.n_PCs))
 
-        self.U_nodes = U_nodes
-        self.Vsv = None
-        U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
         if Vsv is None:
-            self.Vsv = U.T @ X
+            U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
+            self.Vsv = U.T @ X 
         else:
             self.Vsv = Vsv
+
+        self.U_nodes = U_nodes
 
         U_nodes, Y_nodes, cc, imax = cluster_split_and_sort(
             self.Usv, V=self.Vsv, n_clusters=self.n_clusters, n_splits=self.n_splits,
@@ -244,8 +250,8 @@ class Rastermap:
         self.U_nodes = U_nodes
 
         # convert cluster centers to time traces (not used in algorithm)
-        Vnorm = (self.V**2).sum(axis=1)**0.5
-        self.X_nodes = U_nodes @ (self.V / Vnorm[:, np.newaxis])
+        Vnorm = (self.Vsv**2).sum(axis=1)**0.5
+        self.X_nodes = U_nodes @ (self.Vsv / Vnorm[:, np.newaxis])
         self.Y_nodes = Y_nodes
 
         self.n_clusters = U_nodes.shape[0]
@@ -260,7 +266,7 @@ class Rastermap:
 
         self.U_upsampled = Xrec.copy()
         if data is not None:
-            self.X_upsampled = Xrec @ (self.U.T @ X)
+            self.X_upsampled = Xrec @ ((self.Usv / Vnorm).T @ X)
         self.embedding_grid = Y
 
         isort = Y[:, 0].argsort()
