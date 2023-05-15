@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.decomposition import TruncatedSVD
 
 
 def bin1d(X, bin_size, axis=0):
@@ -27,3 +28,11 @@ def split_testtrain(n_t, frac=0.25):
     itrain[itest] = 0
 
     return itest, itrain
+
+def PCA(X, n_PCs=200, bin_size=1):
+    nmin = np.min(X.shape) - 1
+    nmin = min(nmin, n_PCs)
+    U = TruncatedSVD(n_components=nmin, random_state=0).fit_transform(
+        bin1d(X, bin_size=bin_size, axis=1)
+    )
+    return U

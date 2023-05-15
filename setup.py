@@ -1,10 +1,10 @@
 import setuptools
 
 install_deps = [
-        "numpy>=1.13.0", 
+        "numpy>=1.24.0", 
         "scipy", 
         "scikit-learn", 
-        "numba",
+        "numba>=0.57.0",
         "natsort"
         ]
 

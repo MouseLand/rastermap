@@ -1,12 +1,11 @@
 import time
 import numpy as np
 from scipy.stats import zscore
-from sklearn.decomposition import TruncatedSVD
 
 from .clustering import kmeans, travelling_salesman, cluster_split_and_sort
 from .upsampling import grid_upsampling
 from .metrics import embedding_quality
-from .utils import bin1d
+from .utils import bin1d, PCA
 
 
 def default_settings():
@@ -47,27 +46,40 @@ def highd_settings():
 
 def settings_info():
     info = {}
-    info[
-        "n_clusters"] = "number of clusters created from data before upsampling and creating embedding \n (any number above 150 will be very slow due to NP-hard sorting problem)"
+    info["n_clusters"] = (
+        """number of clusters created from data before upsampling and creating embedding \n 
+            (any number above 150 will be very slow due to NP-hard sorting problem)"""
+    )
     info["n_PCs"] = "number of PCs to use during optimization"
-    info[
-        "time_lag_window"] = "number of time points into the future to compute cross-correlation, useful for sequence finding"
-    info[
-        "locality"] = "how local should the algorithm be -- set to 1.0 for highly local + sequence finding"
+    info["time_lag_window"] = (
+        """number of time points into the future to compute cross-correlation, useful for sequence finding"""
+    )
+    info["locality"] = (
+        "how local should the algorithm be -- set to 1.0 for highly local + sequence finding"
+    )
     info["grid_upsample"] = "how much to upsample clusters"
-    info[
-        "smoothness"] = "how much to smooth over clusters when upsampling, set to number from 1 to number of clusters"
-    info[
-        "n_splits"] = "split, recluster and sort n_splits times (increases local neighborhood preservation); \n (4 with 50 clusters => 800 clusters)"
-    info[
-        "bin_size"] = "binning of data across n_samples to return embedding figure, X_embedding; \n if 0, then binning based on data size, if 1 then no binning"
-    info[
-        "scaled_kmeans"] = "run scaled_kmeans as clustering algorithm; if False, run kmeans"
-    info[
-        "symmetric"] = "if False, use only positive time lag cross-correlations for sorting (only makes a difference if time_lag_window > 0); \n keep False for sequence finding"
+    info["smoothness"] = (
+        "how much to smooth over clusters when upsampling, set to number from 1 to number of clusters"
+    )
+    info["n_splits"] = (
+        "split, recluster and sort n_splits times (increases local neighborhood preservation); \n (4 with 50 clusters => 800 clusters)"
+    )
+    info["bin_size"] = (
+        """binning of data across n_samples to return embedding figure, X_embedding; \n 
+            if 0, then binning based on data size, if 1 then no binning"""
+    )
+    info["scaled_kmeans"] = (
+        "run scaled_kmeans as clustering algorithm; if False, run kmeans"
+    )
+    info["symmetric"] = (
+        """if False, use only positive time lag cross-correlations for sorting (only makes a difference if time_lag_window > 0); 
+            \n keep False for sequence finding"""
+    )
     info["keep_norm_X"] = "keep normalized version of X saved as member of class"
-    info[
-        "sticky"] = "if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; \n otherwise neurons can move each split (which generally does not work as well)"
+    info["sticky"] = (
+        """if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; \n 
+            otherwise neurons can move each split (which generally does not work as well)"""
+    )
     info["verbose"] = "whether to output progress during optimization"
     info["verbose_sorting"] = "output progress in travelling salesman"
     return info
@@ -160,7 +172,7 @@ class Rastermap:
         self.fit(X, u)
         return self.embedding
 
-    def fit(self, data=None, u=None, v=None, U_nodes=None, itrain=None, time_bin=0,
+    def fit(self, data=None, Usv=None, Vsv=None, U_nodes=None, itrain=None, time_bin=0,
             normalize=True, compute_X_embedding=True, compute_metrics=False):
         """Fit X into an embedded space.
         Inputs
@@ -177,8 +189,8 @@ class Rastermap:
         """
         t0 = time.time()
 
-        if ((u is None)):
-            ### compute svd and keep iPC"s of data
+        if (Usv is None):
+            ### compute svd and keep n_PCs of data
 
             # normalize X
             if normalize:
@@ -187,28 +199,18 @@ class Rastermap:
             else:
                 X = data
 
-            nmin = np.min(X.shape) - 1
-            nmin = min(nmin, self.n_PCs)
-            self.n_PCs = nmin
-            if itrain is not None:
-                Vpca = TruncatedSVD(n_components=nmin, random_state=0).fit_transform(
-                    bin1d(X[:, itrain], bin_size=time_bin, axis=1))
-            else:
-                Vpca = TruncatedSVD(n_components=nmin, random_state=0).fit_transform(
-                    bin1d(X, bin_size=time_bin, axis=1))
-            U = Vpca  #/ (Vpca**2).sum(axis=0)**0.5
-            if itrain is not None:
-                self.X_test = U @ (
-                    U.T @ bin1d(X[:, ~itrain], bin_size=time_bin, axis=1))
-            self.U = Vpca
-
+            Usv = PCA(X[:, itrain] if itrain is not None else X, 
+                          n_PCs=self.n_PCs, bin_size=time_bin)            
+            self.Usv = Usv
+            self.n_PCs = Usv.shape[1]
+            
             if self.keep_norm_X:
                 self.X = X
             pc_time = time.time() - t0
             print("n_PCs = {0} computed, time {1:0.2f}".format(self.n_PCs, pc_time))
 
         else:
-            self.U = u
+            self.Usv = Usv
             pc_time = 0
             if data is not None:
                 # normalize X
@@ -217,35 +219,33 @@ class Rastermap:
                     X -= X.mean(axis=0)
                 else:
                     X = data
-                if itrain is not None:
-                    self.X_test = self.U @ (self.U.T @ X[:, ~itrain])
-
+                
             self.n_PCs = self.U.shape[1]
             print("n_PCs = {0} precomputed".format(self.n_PCs))
 
         self.U_nodes = U_nodes
-        self.V = None
-        if self.time_lag_window > 0:
-            self.V = v if v is not None else self.U.T @ X
+        self.Vsv = None
+        U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
+        if Vsv is None:
+            self.Vsv = U.T @ X
+        else:
+            self.Vsv = Vsv
 
         U_nodes, Y_nodes, cc, imax = cluster_split_and_sort(
-            self.U, V=self.V, n_clusters=self.n_clusters, n_splits=self.n_splits,
+            self.Usv, V=self.Vsv, n_clusters=self.n_clusters, n_splits=self.n_splits,
             time_lag_window=self.time_lag_window, symmetric=self.symmetric,
             locality=self.locality, scaled=self.scaled_kmeans, sticky=self.sticky,
             U_nodes=self.U_nodes, verbose=self.verbose,
             verbose_sorting=self.verbose_sorting)
         self.cc = cc
-        print("landmarks computed and embedded, time {0:0.2f}".format(time.time() - t0))
+        print(f"landmarks computed and embedded, time {time.time() - t0:0.2f}")
 
         self.embedding_clust = imax
         self.U_nodes = U_nodes
 
-        if self.time_lag_window > 0:
-            Vnorm = (self.V**2).sum(axis=1)**0.5
-            self.X_nodes = U_nodes @ (self.V / Vnorm[:, np.newaxis])
-        elif data is not None:
-            self.X_nodes = U_nodes @ (self.U.T @ X)
-
+        # convert cluster centers to time traces (not used in algorithm)
+        Vnorm = (self.V**2).sum(axis=1)**0.5
+        self.X_nodes = U_nodes @ (self.V / Vnorm[:, np.newaxis])
         self.Y_nodes = Y_nodes
 
         self.n_clusters = U_nodes.shape[0]
@@ -253,10 +253,10 @@ class Rastermap:
         n_neighbors = max(min(8, self.n_clusters - 1), self.n_clusters // 5)
         e_neighbor = max(1, min(self.smoothness, n_neighbors - 1))
 
-        Y, corr, g, Xrec = grid_upsampling(self.U, U_nodes, Y_nodes, n_X=self.n_X,
+        Y, corr, g, Xrec = grid_upsampling(self.Usv, U_nodes, Y_nodes, n_X=self.n_X,
                                            n_neighbors=n_neighbors,
                                            e_neighbor=e_neighbor)
-        print("grid upsampled, time {0:0.2f}".format(time.time() - t0))
+        print(f"grid upsampled, time {time.time() - t0:0.2f}")
 
         self.U_upsampled = Xrec.copy()
         if data is not None:
@@ -266,9 +266,14 @@ class Rastermap:
         isort = Y[:, 0].argsort()
 
         if itrain is not None and compute_metrics:
+            U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
+            self.X_test = U @ (
+                U.T @ bin1d(X[:, ~itrain], bin_size=time_bin, axis=1))
+            del U
             mnn, mnn_global, rho = embedding_quality(self.X_test, Y, wrapping=False)
             print(
-                f"METRICS: local: {mnn:0.3f}; medium: {mnn_global:0.3f}; global: {rho:0.3f}"
+                f"""METRICS: local: {mnn:0.3f}; 
+                medium: {mnn_global:0.3f}; global: {rho:0.3f}"""
             )
 
         self.isort = isort
