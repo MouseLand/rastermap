@@ -11,12 +11,24 @@ def _load_dict(dat, keys):
             Usv = dat["Usv"]
         elif key=="Vsv":
             Vsv = dat["Vsv"]
+        elif key=="U":
+            U = dat["U"]
+        elif key=="V":
+            V = dat["V"]
+        elif key=="Sv":
+            Sv = dat["Sv"]
         elif key=="X":
             X = dat["X"]
         elif key=="spks":
             X = dat["spks"]
         else:
             other_keys.append(key)
+
+    if Usv is None and U is not None and Sv is not None:
+        Usv = U * Sv
+    if Vsv is None and V is not None and Sv is not None:
+        Vsv = V * Sv
+
     if X is None and len(other_keys) > 0:
         X = dat[other_keys[0]]
 

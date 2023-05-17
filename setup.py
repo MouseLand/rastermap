@@ -5,7 +5,8 @@ install_deps = [
         "scipy", 
         "scikit-learn", 
         "numba>=0.57.0",
-        "natsort"
+        "natsort",
+        "tqdm"
         ]
 
 gui_deps = [

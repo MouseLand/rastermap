@@ -1,8 +1,6 @@
 import numpy as np
 from numba import njit, jit, float32, int32, boolean, int64, vectorize, prange
 from numba.types import Tuple
-import time
-
 
 def create_ND_basis(dims, nclust, K, flag=True):
     # recursively call this function until we fill out S
@@ -176,7 +174,7 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
     return cc, inds, seg_len, start_pos, end_pos, flipped
 
 
-def travelling_salesman(cc, n_iter=400, locality=0.0, n_skip=None, verbose=False):
+def traveling_salesman(cc, n_iter=400, locality=0.0, n_skip=None, verbose=False):
     """ matches correlation matrix cc to B@B.T basis functions """
     n_nodes = (cc.shape[0])
     if n_skip is None:
@@ -335,8 +333,6 @@ def matrix_matching(cc, BBt, cc_add, BBt_add, n_iter=400, n_skip=None, verbose=F
     cc_add = cc_add.astype(np.float32)
     BBt = BBt.astype(np.float32)
     BBt_add = BBt_add.astype(np.float32)
-
-    n_components = 1
 
     n_iter = np.int64(n_iter)
     cc, inds, seg_len = tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add,

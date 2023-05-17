@@ -1,12 +1,14 @@
 import time
 import numpy as np
+import warnings
 from scipy.stats import zscore
 
-from .clustering import kmeans, travelling_salesman, cluster_split_and_sort
-from .upsampling import grid_upsampling
+from .cluster import kmeans, scaled_kmeans, compute_cc_tdelay
+from .sort import traveling_salesman, compute_BBt, matrix_matching
+from .upsample import grid_upsampling
 from .metrics import embedding_quality
-from .utils import bin1d, PCA
-
+from .utils import bin1d
+from .svd import SVD
 
 def default_settings():
     settings = {}
@@ -18,7 +20,8 @@ def default_settings():
     settings["smoothness"] = 1
     settings["n_splits"] = 0
     settings["bin_size"] = 0
-    settings["scaled_kmeans"] = True
+    settings["time_bin"] = 0
+    settings["run_scaled_kmeans"] = True
     settings["symmetric"] = True
     settings["keep_norm_X"] = False
     settings["sticky"] = True
@@ -68,7 +71,10 @@ def settings_info():
         """binning of data across n_samples to return embedding figure, X_embedding; \n 
             if 0, then binning based on data size, if 1 then no binning"""
     )
-    info["scaled_kmeans"] = (
+    info["time_bin"] = (
+        """ binning of data in time before PCA is computed """
+    )
+    info["run_scaled_kmeans"] = (
         "run scaled_kmeans as clustering algorithm; if False, run kmeans"
     )
     info["symmetric"] = (
@@ -106,7 +112,7 @@ class Rastermap:
     locality : float, optional (default: 0.0)
         how local should the algorithm be -- set to 1.0 for highly local + sequence finding
     grid_upsample : int, optional (default: 10)
-        how much to upsample clusters
+        how much to upsample clusters, if set to 0.0 then no upsampling
     smoothness : int, optional (default: 1)
         how much to smooth over clusters when upsampling, number from 1 to number of clusters
     n_splits : int, optional (default: 0)
@@ -115,12 +121,12 @@ class Rastermap:
     bin_size : int, optional (default: 0)
         binning of data across n_samples to return embedding figure, X_embedding; 
         if 0, then binning based on data size, if 1 then no binning
-    scaled_kmeans : bool, optional (default: True)
+    run_scaled_kmeans : bool, optional (default: True)
         run scaled_kmeans as clustering algorithm; if False, run kmeans
     symmetric : bool, optional (default: False)
         if False, use only positive time lag cross-correlations for sorting (only makes a difference if time_lag_window > 0); 
         keep False for sequence finding
-    keep_norm_X : bool, optional (default: False)
+    keep_norm_X : bool, optional (default: True)
         keep normalized version of X saved as member of class
     sticky : bool, optional (default: True)
         if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; 
@@ -132,23 +138,25 @@ class Rastermap:
     """
 
     def __init__(self, n_clusters=100, n_PCs=200, time_lag_window=0.0, locality=0.0,
-                 smoothness=1, grid_upsample=10, bin_size=0, sticky=True, n_splits=0,
-                 scaled_kmeans=True, symmetric=False, keep_norm_X=False, verbose=True,
+                 smoothness=1, grid_upsample=10, bin_size=0, 
+                 time_bin=0, sticky=True, n_splits=0,
+                 run_scaled_kmeans=True, symmetric=False, keep_norm_X=True, verbose=True,
                  verbose_sorting=False):
 
-        self.n_components = 1  ### ONLY IN 1D
-        self.n_clusters = n_clusters
         self.n_PCs = n_PCs
         self.n_splits = n_splits
+        self.n_clusters = n_clusters
+        self.run_scaled_kmeans = run_scaled_kmeans
+        self.sticky = sticky
+        
         self.time_lag_window = time_lag_window
         self.symmetric = symmetric
         self.locality = locality
         self.smoothness = smoothness
         self.grid_upsample = grid_upsample
-        self.bin_size = bin_size
-        self.scaled_kmeans = scaled_kmeans
-        self.sticky = sticky
-
+        self.time_bin = time_bin
+        self.bin_size = 0
+        
         self.keep_norm_X = keep_norm_X
         self.verbose = verbose
         self.verbose_sorting = verbose_sorting
@@ -172,8 +180,9 @@ class Rastermap:
         self.fit(X, u)
         return self.embedding
 
-    def fit(self, data=None, Usv=None, Vsv=None, U_nodes=None, itrain=None, time_bin=0,
-            normalize=True, compute_X_embedding=True, compute_metrics=False):
+    def fit(self, data=None, Usv=None, Vsv=None, U_nodes=None, itrain=None,
+            normalize=True, mean_time=False, compute_X_embedding=True, 
+            compute_metrics=False):
         """Fit X into an embedded space.
         Inputs
         ----------
@@ -189,92 +198,160 @@ class Rastermap:
         """
         t0 = time.time()
 
-        # check if Usv and Vsv already attributes
-        if hasattr(self, "Usv"):
-            Usv = self.Usv 
-        if hasattr(self, "Vsv"):
-            Vsv = self.Vsv
-
-        if Usv is None:
-            ### compute svd and keep n_PCs of data
-
-            # normalize X
+        # normalize data
+        if data is not None:
             if normalize:
-                X = zscore(data, axis=1)
-                X -= X.mean(axis=0)
+                if hasattr(self, "X"):
+                    warnings.warn("not renormalizing, using previous normalization")
+                    X = self.X 
+                else:
+                    X = zscore(data, axis=1)
+                    if mean_time:
+                        X -= X.mean(axis=0)
+                    if self.keep_norm_X:
+                        self.X = X
             else:
                 X = data
+        elif hasattr(self, "X"):
+            X = self.X
+            if normalize:
+                warnings.warn("not renormalizing, using previous normalization")
+        
+        ### ------------- PCA ------------------------------------------------------ ###        
+        if not hasattr(self, "Usv"):
+            if Usv is None:
+                tic = time.time()
+                Usv = SVD(X[:, itrain] if itrain is not None else X, 
+                            n_components=self.n_PCs, bin_size=self.time_bin)            
+                self.Usv = Usv
+                self.n_PCs = Usv.shape[1]
+                pc_time = time.time() - tic
+                print(f"n_PCs = {self.n_PCs} computed in {pc_time:0.2f}sec")    
+            elif Usv is not None:
+                self.Usv = Usv
+                pc_time = 0
+                self.n_PCs = self.Usv.shape[1]
+        if not hasattr(self, "Vsv"):
+            if Vsv is None:
+                U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
+                self.Vsv = U.T @ X 
+            elif Vsv is not None:
+                self.Vsv = Vsv
 
-            Usv = PCA(X[:, itrain] if itrain is not None else X, 
-                          n_PCs=self.n_PCs, bin_size=time_bin)            
-            self.Usv = Usv
-            self.n_PCs = Usv.shape[1]
-            
-            if self.keep_norm_X:
-                self.X = X
-            pc_time = time.time() - t0
-            print("n_PCs = {0} computed, time {1:0.2f}".format(self.n_PCs, pc_time))
-
+        ### ------------- clustering ----------------------------------------------- ###
+        if U_nodes is None and Usv.shape[0] <= 150:
+            # number of neurons / voxels <= 150, skip clustering
+            warnings.warn("""data has <= 150 neurons / voxels, \n
+                            going to skip clustering and sort neurons / voxels""")
+            U_nodes = Usv
+            self.grid_upsample = False
+        elif not hasattr(self, "U_nodes") and U_nodes is not None:
+            # use user input for clusters
+            self.U_nodes = U_nodes
+        elif hasattr(self, "U_nodes") and self.U_nodes is not None:
+            # skip clustering as it was run before
+            if self.n_splits==1:
+                warnings.warn("""clusters already computed, skipping clustering""")
+            else:
+                raise ValueError("""cannot rerun if n_splits > 0\n 
+                                    need to set model.U_nodes = None first or \n 
+                                    reset model = Rastermap(...) """)
         else:
-            self.Usv = Usv
-            pc_time = 0
-            if data is not None:
-                # normalize X
-                if normalize:
-                    X = zscore(data, axis=1)
-                    X -= X.mean(axis=0)
-                else:
-                    X = data
-                
-            self.n_PCs = self.Usv.shape[1]
-            print("n_PCs = {0} precomputed".format(self.n_PCs))
+            # run clustering
+            if self.run_scaled_kmeans:
+                U_nodes, imax = scaled_kmeans(Usv, n_clusters=self.n_clusters)
+            else:
+                U_nodes, imax = kmeans(Usv, n_clusters=self.n_clusters)
+            print(f"clusters computed, time {time.time() - t0:0.2f}")
 
-        if Vsv is None:
-            U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
-            self.Vsv = U.T @ X 
+        # compute correlation matrix across clusters
+        if self.time_lag_window > 0:
+            cc = compute_cc_tdelay(Vsv, U_nodes, 
+                                time_lag_window=self.time_lag_window,
+                                symmetric=self.symmetric)
         else:
-            self.Vsv = Vsv
+            cc = U_nodes @ U_nodes.T
 
-        self.U_nodes = U_nodes
-
-        U_nodes, Y_nodes, cc, imax = cluster_split_and_sort(
-            self.Usv, V=self.Vsv, n_clusters=self.n_clusters, n_splits=self.n_splits,
-            time_lag_window=self.time_lag_window, symmetric=self.symmetric,
-            locality=self.locality, scaled=self.scaled_kmeans, sticky=self.sticky,
-            U_nodes=self.U_nodes, verbose=self.verbose,
-            verbose_sorting=self.verbose_sorting)
+        ### ---------------- sorting ----------------------------------------------- ###
+        cc, inds = traveling_salesman(cc, verbose=self.verbose_sorting, 
+                                       locality=self.locality, n_skip=None)[:2]
+        U_nodes = U_nodes[inds]
+        ineurons = inds[imax]
         self.cc = cc
-        print(f"landmarks computed and embedded, time {time.time() - t0:0.2f}")
+        Y_nodes = np.arange(0, U_nodes.shape[0])[:, np.newaxis]
 
-        self.embedding_clust = imax
+        # split and recluster and sort
+        if self.n_splits > 0:
+            nc = 25
+            for k in range(self.n_splits):
+                U_nodes_new = np.zeros((0, self.n_PCs))
+                n_nodes = U_nodes.shape[0]
+                if not self.sticky and k > 0:
+                    ineurons = (U @ U_nodes.T).argmax(axis=1)
+                ineurons_new = -1 * np.ones(U.shape[0], np.int64)
+                for i in range(n_nodes // nc):
+                    ii = np.arange(n_nodes)
+                    node_set = np.logical_and(ii >= i * nc, ii < (i + 1) * nc)
+                    in_set = np.logical_and(ineurons >= i * nc, ineurons < (i + 1) * nc)
+                    U_nodes0, ineurons_set = kmeans(U[in_set], n_clusters=2 * nc)
+                    cc = U_nodes0 @ U_nodes0.T
+                    cc_add = U_nodes0 @ U_nodes[~node_set].T
+                    ifrac = node_set.mean()
+                    x = np.linspace(i * nc / n_nodes, 
+                                    (i + 1) * nc / n_nodes, 2 * nc + 1)[:-1]
+                    y = np.linspace(0, 1, n_nodes + 1)[:-1][~node_set]
+                    BBt = compute_BBt(x, x, locality=self.locality)
+                    BBt -= np.diag(np.diag(BBt))
+                    BBt_add = compute_BBt(x, y, locality=self.locality)
+                    cc_out, inds, seg_len = matrix_matching(cc, BBt, cc_add, BBt_add,
+                                                            verbose=False)  
+                    U_nodes0 = U_nodes0[inds]
+                    ineurons_new[in_set] = (2 * nc * i + # offset based on partition
+                                            (U[in_set] @ U_nodes0.T).argmax(axis=1))
+                    U_nodes_new = np.vstack((U_nodes_new, U_nodes0))
+                n_nodes = U_nodes_new.shape[0]
+                U_nodes = U_nodes_new.copy()
+                ineurons = ineurons_new.copy()
+            if not self.sticky:
+                ineurons = (Usv @ U_nodes.T).argmax(axis=1)
+
+        print(f"clusters sorted, time {time.time() - t0:0.2f}")
+        
+        ### ---------------- upsample ---------------------------------------------- ###
+        self.n_clusters = U_nodes.shape[0]
+        if self.grid_upsample > 0:
+            self.n_X = int(self.n_clusters * max(2, self.grid_upsample))
+            n_neighbors = max(min(8, self.n_clusters - 1), self.n_clusters // 5)
+            e_neighbor = max(1, min(self.smoothness, n_neighbors - 1))
+
+            Y, corr, g, Xrec = grid_upsampling(self.Usv, U_nodes, Y_nodes, n_X=self.n_X,
+                                            n_neighbors=n_neighbors,
+                                            e_neighbor=e_neighbor)
+            print(f"clusters upsampled, time {time.time() - t0:0.2f}")
+        else:
+            Y = Y_nodes
+            Xrec = U_nodes
+        
+        self.embedding_clust = ineurons
         self.U_nodes = U_nodes
+        self.Y_nodes = Y_nodes
+        self.U_upsampled = Xrec.copy()
+        self.embedding = Y
+        self.isort = Y[:, 0].argsort()
 
         # convert cluster centers to time traces (not used in algorithm)
         Vnorm = (self.Vsv**2).sum(axis=1)**0.5
         self.X_nodes = U_nodes @ (self.Vsv / Vnorm[:, np.newaxis])
         self.Y_nodes = Y_nodes
 
-        self.n_clusters = U_nodes.shape[0]
-        self.n_X = int(self.n_clusters * max(2, self.grid_upsample))
-        n_neighbors = max(min(8, self.n_clusters - 1), self.n_clusters // 5)
-        e_neighbor = max(1, min(self.smoothness, n_neighbors - 1))
-
-        Y, corr, g, Xrec = grid_upsampling(self.Usv, U_nodes, Y_nodes, n_X=self.n_X,
-                                           n_neighbors=n_neighbors,
-                                           e_neighbor=e_neighbor)
-        print(f"grid upsampled, time {time.time() - t0:0.2f}")
-
-        self.U_upsampled = Xrec.copy()
         if data is not None:
             self.X_upsampled = Xrec @ ((self.Usv / Vnorm).T @ X)
-        self.embedding_grid = Y
-
-        isort = Y[:, 0].argsort()
-
+        
+        # compute metrics
         if itrain is not None and compute_metrics:
             U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
             self.X_test = U @ (
-                U.T @ bin1d(X[:, ~itrain], bin_size=time_bin, axis=1))
+                U.T @ bin1d(X[:, ~itrain], bin_size=self.time_bin, axis=1))
             del U
             mnn, mnn_global, rho = embedding_quality(self.X_test, Y, wrapping=False)
             print(
@@ -282,9 +359,7 @@ class Rastermap:
                 medium: {mnn_global:0.3f}; global: {rho:0.3f}"""
             )
 
-        self.isort = isort
-        self.embedding = Y
-
+        ### ----------- bin across embedding --------------------------------------- ###
         if data is not None and compute_X_embedding:
             if X.shape[0] < self.bin_size or (self.bin_size == 50 and
                                               X.shape[0] < 1000):
@@ -292,21 +367,9 @@ class Rastermap:
             else:
                 bin_size = self.bin_size
 
-            self.X_embedding = zscore(bin1d(X[isort], bin_size), axis=1)
+            self.X_embedding = zscore(bin1d(X[self.isort], bin_size), axis=1)
 
         self.pc_time = pc_time
         self.map_time = time.time() - t0 - pc_time
 
         return self
-
-
-def embedding_landmarks(X, n_clusters=50, n_components=1, travelling=True, alpha=1):
-    X_nodes, imax = kmeans(X, n_clusters=n_clusters)
-    if n_components == 1 and travelling:
-        cc = X_nodes @ X_nodes.T
-        cc, inds, seg_len = travelling_salesman(cc, verbose=False, alpha=alpha)
-        Y_nodes = np.arange(len(inds))[:, np.newaxis]
-        X_nodes = X_nodes[inds]
-    else:
-        Y_nodes = embed_clusters(X_nodes, n_components=n_components)
-    return X_nodes, Y_nodes, imax

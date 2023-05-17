@@ -1,0 +1,1 @@
+from rastermap.rastermap import Rastermap, default_settings, settings_info

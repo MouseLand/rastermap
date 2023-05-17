@@ -2,6 +2,7 @@ from scipy.stats import zscore
 import numpy as np
 import argparse
 import os
+from rastermap import Rastermap
 
 try:
     from rastermap.gui import gui
@@ -27,7 +28,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if len(args.ops) > 0 and len(args.S) > 0:
-        from rastermap.mapping import Rastermap
         S = np.load(args.S)
         ops = np.load(args.ops, allow_pickle=True).item()
         if len(args.iscell) > 0:

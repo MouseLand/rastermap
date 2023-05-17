@@ -20,13 +20,13 @@ class RunWindow(QDialog):
         print(
             ">>> importing rastermap functions (will be slow if you haven't run rastermap before) <<<"
         )
-        from rastermap.mapping import default_settings, settings_info, Rastermap
+        from rastermap import default_settings, settings_info, Rastermap
         # default ops
         self.ops = default_settings()
         info = settings_info()
         keys = [
             "n_clusters", "n_PCs", "time_lag_window", "locality", "grid_upsample",
-            "bin_size", "n_splits", "scaled_kmeans"
+            "time_bin", "n_splits", "run_scaled_kmeans"
         ]
         tooltips = [info[key] for key in keys]
         bigfont = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
