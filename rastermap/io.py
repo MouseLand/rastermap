@@ -32,6 +32,14 @@ def _load_dict(dat, keys):
     if X is None and len(other_keys) > 0:
         X = dat[other_keys[0]]
 
+    if Usv is not None and Vsv is not None:
+        if Usv.shape[-1] != Vsv.shape[-1]:
+            raise ValueError("Usv and Vsv must have the same number of components")
+        if Usv.ndim > 3:
+            raise ValueError("Usv cannot have more than 3 dimensions")
+        if Vsv.ndim != 2:
+            raise ValueError("Vsv must have 2 dimensions")
+
     return X, Usv, Vsv
 
 def load_activity(filename):
@@ -56,7 +64,7 @@ def load_activity(filename):
                 for i, key in enumerate(X.keys()):
                     if key not in ["__header__", "__version__", "__globals__"]:
                         keys.append(key)
-                X, Usv, Vsv = _load_dict(dat, keys)
+                X, Usv, Vsv = _load_dict(X, keys)
     elif ext == ".npy":
         X = np.load(filename, allow_pickle=True)
         if isinstance(X, dict):
@@ -64,7 +72,7 @@ def load_activity(filename):
             keys = dat.keys()
             X, Usv, Vsv = _load_dict(dat, keys)
     elif ext == ".npz":
-        X = np.load(filename, allow_pickle=True)
+        dat = np.load(filename, allow_pickle=True)
         keys = dat.files
         X, Usv, Vsv = _load_dict(dat, keys)    
     else:
@@ -89,9 +97,6 @@ def load_activity(filename):
             raise ValueError(
                 "ERROR: matrix with fewer than 10 neurons provided"
             )
-
-        print(
-            f"activity loaded: {X.shape[0]} neurons by {X.shape[1]} timepoints")
 
         if len(X.shape) == 3:
             print(

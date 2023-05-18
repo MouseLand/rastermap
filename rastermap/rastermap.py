@@ -198,6 +198,14 @@ class Rastermap:
         """
         t0 = time.time()
 
+        igood = ~np.isnan(data[:,0]) if data is not None else ~np.isnan(Usv[:,0])
+        stdx = data.std(axis=1) if data is not None else Usv.std(axis=1)
+        igood = np.logical_and(igood, stdx > 0)
+        stdx[stdx==0] = 1e-3
+        n_samples = igood.sum() 
+        n_time = data.shape[1] if data is not None else Vsv.shape[0]
+        print(f"sorting activity: {n_samples} samples by {n_time} timepoints")
+        
         # normalize data
         if data is not None:
             if normalize:
@@ -205,7 +213,9 @@ class Rastermap:
                     warnings.warn("not renormalizing, using previous normalization")
                     X = self.X 
                 else:
-                    X = zscore(data, axis=1)
+                    X = data.copy() 
+                    X -= data.mean(axis=1)
+                    X /= stdx
                     if mean_time:
                         X -= X.mean(axis=0)
                     if self.keep_norm_X:
@@ -221,7 +231,7 @@ class Rastermap:
         if not hasattr(self, "Usv"):
             if Usv is None:
                 tic = time.time()
-                Usv = SVD(X[:, itrain] if itrain is not None else X, 
+                Usv = SVD(X[:, itrain] if itrain is not None else X[igood], 
                             n_components=self.n_PCs, bin_size=self.time_bin)            
                 self.Usv = Usv
                 self.n_PCs = Usv.shape[1]
@@ -231,19 +241,20 @@ class Rastermap:
                 self.Usv = Usv
                 pc_time = 0
                 self.n_PCs = self.Usv.shape[1]
+        self.sv = (self.Usv**2).sum(axis=0)**0.5
         if not hasattr(self, "Vsv"):
             if Vsv is None:
-                U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
-                self.Vsv = U.T @ X 
+                U = self.Usv.copy() / self.sv
+                self.Vsv = X.T @ U 
             elif Vsv is not None:
                 self.Vsv = Vsv
 
         ### ------------- clustering ----------------------------------------------- ###
-        if U_nodes is None and Usv.shape[0] <= 150:
+        if U_nodes is None and self.Usv.shape[0] <= 150:
             # number of neurons / voxels <= 150, skip clustering
             warnings.warn("""data has <= 150 neurons / voxels, \n
                             going to skip clustering and sort neurons / voxels""")
-            U_nodes = Usv
+            U_nodes = self.Usv[igood]
             self.grid_upsample = False
         elif not hasattr(self, "U_nodes") and U_nodes is not None:
             # use user input for clusters
@@ -259,16 +270,16 @@ class Rastermap:
         else:
             # run clustering
             if self.run_scaled_kmeans:
-                U_nodes, imax = scaled_kmeans(Usv, n_clusters=self.n_clusters)
+                U_nodes, imax = scaled_kmeans(self.Usv[igood], n_clusters=self.n_clusters)
             else:
-                U_nodes, imax = kmeans(Usv, n_clusters=self.n_clusters)
+                U_nodes, imax = kmeans(self.Usv[igood], n_clusters=self.n_clusters)
             print(f"clusters computed, time {time.time() - t0:0.2f}")
 
         # compute correlation matrix across clusters
         if self.time_lag_window > 0:
-            cc = compute_cc_tdelay(Vsv, U_nodes, 
-                                time_lag_window=self.time_lag_window,
-                                symmetric=self.symmetric)
+            cc = compute_cc_tdelay(self.Vsv / self.sv, U_nodes, 
+                                   time_lag_window=self.time_lag_window,
+                                   symmetric=self.symmetric)
         else:
             cc = U_nodes @ U_nodes.T
 
@@ -313,7 +324,7 @@ class Rastermap:
                 U_nodes = U_nodes_new.copy()
                 ineurons = ineurons_new.copy()
             if not self.sticky:
-                ineurons = (Usv @ U_nodes.T).argmax(axis=1)
+                ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
 
         print(f"clusters sorted, time {time.time() - t0:0.2f}")
         
@@ -324,7 +335,7 @@ class Rastermap:
             n_neighbors = max(min(8, self.n_clusters - 1), self.n_clusters // 5)
             e_neighbor = max(1, min(self.smoothness, n_neighbors - 1))
 
-            Y, corr, g, Xrec = grid_upsampling(self.Usv, U_nodes, Y_nodes, n_X=self.n_X,
+            Y, corr, g, Xrec = grid_upsampling(self.Usv[igood], U_nodes, Y_nodes, n_X=self.n_X,
                                             n_neighbors=n_neighbors,
                                             e_neighbor=e_neighbor)
             print(f"clusters upsampled, time {time.time() - t0:0.2f}")
@@ -341,17 +352,15 @@ class Rastermap:
 
         # convert cluster centers to time traces (not used in algorithm)
         Vnorm = (self.Vsv**2).sum(axis=1)**0.5
-        self.X_nodes = U_nodes @ (self.Vsv / Vnorm[:, np.newaxis])
-        self.Y_nodes = Y_nodes
-
+        self.X_nodes = U_nodes @ (self.Vsv / Vnorm[:, np.newaxis]).T
         if data is not None:
-            self.X_upsampled = Xrec @ ((self.Usv / Vnorm).T @ X)
+            self.X_upsampled = Xrec @ self.Vsv.T
         
         # compute metrics
         if itrain is not None and compute_metrics:
             U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
             self.X_test = U @ (
-                U.T @ bin1d(X[:, ~itrain], bin_size=self.time_bin, axis=1))
+                U.T @ bin1d(X[igood][:, ~itrain], bin_size=self.time_bin, axis=1))
             del U
             mnn, mnn_global, rho = embedding_quality(self.X_test, Y, wrapping=False)
             print(
@@ -361,14 +370,17 @@ class Rastermap:
 
         ### ----------- bin across embedding --------------------------------------- ###
         if data is not None and compute_X_embedding:
-            if X.shape[0] < self.bin_size or (self.bin_size == 50 and
-                                              X.shape[0] < 1000):
-                bin_size = X.shape[0] // 20
+            if n_samples < self.bin_size or (self.bin_size == 50 and
+                                              n_samples < 1000):
+                bin_size = n_samples // 20
             else:
                 bin_size = self.bin_size
 
-            self.X_embedding = zscore(bin1d(X[self.isort], bin_size), axis=1)
+            self.X_embedding = zscore(bin1d(X[igood][self.isort], bin_size), axis=1)
 
+        self.igood = igood
+        self.embedding_full = np.nan * np.zeros((len(self.igood),1))
+        self.embedding_full[igood] = self.embedding
         self.pc_time = pc_time
         self.map_time = time.time() - t0 - pc_time
 

@@ -107,7 +107,6 @@ def scaled_kmeans(X, n_clusters=100, n_iter=50, init="kmeans++", random_state=0)
 
     """
     n_samples, n_features = X.shape
-
     # initialize with kmeans++
     if init == "kmeans++":
         np.random.seed(random_state)
@@ -116,23 +115,24 @@ def scaled_kmeans(X, n_clusters=100, n_iter=50, init="kmeans++", random_state=0)
         np.random.seed(random_state)
         X_nodes = np.random.randn(n_clusters, n_features) * (X**2).sum(axis=0)**0.5
     X_nodes = X_nodes / (1e-4 + (X_nodes**2).sum(axis=1)[:, np.newaxis])**.5
-
+    
     # iterate and reassign neurons
     for j in range(n_iter):
         cc = X @ X_nodes.T
-        imax = np.argmax(cc, 1)
+        imax = np.argmax(cc, axis=1)
         cc = cc * (cc > np.max(cc, 1)[:, np.newaxis] - 1e-6)
         X_nodes = cc.T @ X
         X_nodes = X_nodes / (1e-10 + (X_nodes**2).sum(axis=1)[:, np.newaxis])**.5
     X_nodes_norm = (X_nodes**2).sum(axis=1)**0.5
     X_nodes = X_nodes[X_nodes_norm > 0]
     X_nodes = X_nodes[X_nodes[:, 0].argsort()]
-    cc = X @ X_nodes.T
-    imax = cc.argmax(axis=1)
-
+    
     if X_nodes.shape[0] < n_clusters and init == "kmeans++":
         X_nodes, imax = scaled_kmeans(X, n_clusters=n_clusters, n_iter=n_iter,
                                       init="random", random_state=random_state)
+    else:
+        cc = X @ X_nodes.T
+        imax = cc.argmax(axis=1)
 
     if X_nodes.shape[0] < n_clusters and init != "kmeans++":
         warnings.warn(
@@ -140,7 +140,6 @@ def scaled_kmeans(X, n_clusters=100, n_iter=50, init="kmeans++", random_state=0)
         )
 
     return X_nodes, imax
-
 
 def kmeans(X, n_clusters=100, random_state=0):
     np.random.seed(random_state)
@@ -157,10 +156,9 @@ def kmeans(X, n_clusters=100, random_state=0):
     imax = cc.argmax(axis=1)
     return X_nodes, imax
 
-def compute_cc_tdelay(Vsv, U_nodes, time_lag_window=5, symmetric=False):
+def compute_cc_tdelay(V, U_nodes, time_lag_window=5, symmetric=False):
     """ compute correlation matrix of clusters at time offsets and take max """
-    Vnorm = (Vsv**2).sum(axis=1)**0.5
-    X_nodes = U_nodes @ (Vsv / Vnorm[:, np.newaxis])
+    X_nodes = U_nodes @ V.T
     X_nodes = zscore(X_nodes, axis=1)
     n_nodes, nt = X_nodes.shape
 

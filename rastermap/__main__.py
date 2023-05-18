@@ -3,6 +3,7 @@ import numpy as np
 import argparse
 import os
 from rastermap import Rastermap
+from rastermap.io import load_activity
 
 try:
     from rastermap.gui import gui
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if len(args.ops) > 0 and len(args.S) > 0:
-        S = np.load(args.S)
+        X, Usv, Vsv = load_activity(args.S)
         ops = np.load(args.ops, allow_pickle=True).item()
         if len(args.iscell) > 0:
             iscell = np.load(args.iscell)
@@ -36,29 +37,33 @@ if __name__ == "__main__":
                 iscell = iscell[:, 0].astype("bool")
             else:
                 iscell = iscell.astype("bool")
-            if iscell.size == S.shape[0]:
-                S = S[iscell, :]
+            if iscell.size == X.shape[0]:
+                X = X[iscell, :]
                 print("iscell found and used to select neurons")
-        print("size of rastermap matrix")
-        print(S.shape)
-        if len(S.shape) > 2:
-            S = S.mean(axis=-1)
-        S = zscore(S, axis=1)
+        
+        if Usv.ndim==3:
+            Usv = Usv.reshape(-1, Usv.shape[-1])
+        
         model = Rastermap(**ops)
+        train_time = np.ones(X.shape[1] if X is not None 
+                             else Vsv.shape[0], "bool")
+        if X is not None:
+            if ("end_time" in ops and ops["end_time"] == -1) or "end_time" not in ops:
+                ops["end_time"] = S.shape[1]
+                ops["start_time"] = 0
+            else:
+                train_time = np.zeros(X.shape[1], "bool")
+                train_time[np.arange(ops["start_time"], ops["end_time"]).astype(int)] = 1
+                X = X[:, train_time]
 
-        if ("end_time" in ops and ops["end_time"] == -1) or "end_time" not in ops:
-            ops["end_time"] = S.shape[1]
-            ops["start_time"] = 0
-        train_time = np.zeros((S.shape[1],)).astype(bool)
-        print(train_time.shape)
-        train_time[np.arange(ops["start_time"], ops["end_time"]).astype(int)] = 1
-        model.fit(S[:, train_time])
+        model.fit(data=X, Usv=Usv, Vsv=Vsv)
 
         proc = {
             "embedding": model.embedding,
             "isort": model.isort,
             "Usv": model.Usv,
             "Vsv": model.Vsv,
+            "sv": model.sv,
             "ops": ops,
             "filename": args.S,
             "train_time": train_time

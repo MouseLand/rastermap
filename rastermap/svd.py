@@ -41,7 +41,7 @@ def SVD(X, n_components=250, bin_size=1):
 
 def subsampled_SVD(X, n_components=500, n_mean=1000, 
                    n_svd=15000, batch_size=1000, exclude=2):
-
+    """ X is frames by voxels / pixels """
     avgframe, stdframe = subsampled_mean(X)
     if exclude > 0:
         smin, smax = np.percentile(stdframe,1), np.percentile(stdframe,99)

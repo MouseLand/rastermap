@@ -23,7 +23,7 @@ class MainW(QMainWindow):
     def __init__(self, filename=None, proc=False):
         super(MainW, self).__init__()
         pg.setConfigOptions(imageAxisOrder="row-major")
-        self.setGeometry(25, 25, 1800, 1000)
+        self.setGeometry(25, 25, 1600, 800)
         self.setWindowTitle("Rastermap - neural data visualization")
         icon_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                  "logo.png")
@@ -59,14 +59,7 @@ class MainW(QMainWindow):
         self.l0.addWidget(self.win, 0, 0, 22, 14)
         layout = self.win.ci.layout
 
-        # Neural activity/spike dataset set as self.sps
-        sp = np.zeros((100, 100), np.float32)
-        self.sp = sp
-        self.sp_smoothed = self.sp.copy()
-        nt = sp.shape[1]
-        self.ntime = nt
-        nn = sp.shape[0]
-
+        
         # viewbox placeholder for buttons
         self.p0 = self.win.addViewBox(lockAspect=True, row=0, col=0)
         self.p0.setMenuEnabled(False)
@@ -76,14 +69,11 @@ class MainW(QMainWindow):
         self.p1.setMouseEnabled(x=False, y=False)
         self.img = pg.ImageItem(autoDownsample=True)
         self.p1.addItem(self.img)
-        self.p1.setXRange(0, nt)
-        self.p1.setYRange(0, nn)
         self.p1.setLabel("left", "binned neurons")
         self.p1.setLabel("bottom", "time")
         self.p1.invertY(True)
 
         # Plot a zoomed in region from full view (changes across time axis)
-        self.selected = slice(0, nn)
         self.p2 = self.win.addPlot(title="ZOOM IN", row=1, col=0, colspan=2, rowspan=1)
         self.p2.setMenuEnabled(False)
         self.imgROI = pg.ImageItem(autoDownsample=True)
@@ -179,6 +169,8 @@ class MainW(QMainWindow):
 
         # Status bar
         self.statusBar = QStatusBar()
+        self.statusBar.setStyleSheet("color: white;")
+        #self.l0.addWidget(self.statusBar, 23,0,1,14)
 
         # Default variables
         self.tpos = -0.5
@@ -211,8 +203,8 @@ class MainW(QMainWindow):
 
     def init_time_roi(self):
         self.TimeROI = guiparts.TimeROI(parent=self, color=[0, 0, 255, 25],
-                                        bounds=[0, self.ntime])
-        self.xrange = slice(0, min(500, ((self.ntime // 10) // 4) * 4))
+                                        bounds=[0, self.n_time])
+        self.xrange = slice(0, min(500, ((self.n_time // 10) // 4) * 4))
         self.TimeROI.setRegion([self.xrange.start, self.xrange.stop - 1])
         self.TimeROI.sigRegionChangeFinished.connect(self.TimeROI.time_set)
         self.p1.addItem(self.TimeROI)
@@ -242,6 +234,15 @@ class MainW(QMainWindow):
         self.p5.clear()
 
     def reset_variables(self):
+        # Neural activity/spike dataset set as self.sps
+        nn = 100
+        sp = np.zeros((nn, 100), np.float32)
+        self.sp = sp
+        self.sp_smoothed = self.sp.copy()
+        self.n_time = self.sp.shape[1]
+        self.smooth_limit = None
+        self.selected = slice(0, nn)
+        
         for i in range(len(self.cluster_rois)):
             self.p2.removeItem(self.cluster_rois[i])
         for i in range(nclust_max + 1):
@@ -312,23 +313,24 @@ class MainW(QMainWindow):
             #self.statusBar.showMessage(message)
         self.show()
 
-    def wheelEvent(self, event):
-        if event.type() == QEvent.Wheel:
-            print(event)
-            items = self.win.scene().items(event.scenePos())
-            #for x in items:
-            #if x==self.p1 or x==self.p2 or x==self.p3 or x==self.p4:
-            #self.changed.emit(event.angleDelta().y() > 0)
-            #        print(event)
-            #s = 0.9
-            #zoom = (s, s) if in_or_out == "in" else (1/s, 1/s)
-            #self.plot.vb.scaleBy(zoom)
+    #def wheelEvent(self, event):
+    #    return
+        #if event.type() == QEvent.Wheel:
+        #print(event)
+        #items = self.win.scene().items(event.scenePos())
+        #for x in items:
+        #if x==self.p1 or x==self.p2 or x==self.p3 or x==self.p4:
+        #self.changed.emit(event.angleDelta().y() > 0)
+        #        print(event)
+        #s = 0.9
+        #zoom = (s, s) if in_or_out == "in" else (1/s, 1/s)
+        #self.plot.vb.scaleBy(zoom)
 
     def plot_clicked(self, event):
         items = self.win.scene().items(event.scenePos())
         for x in items:
             if x == self.p1 and event.button() == 1 and event.double():
-                self.TimeROI.setRegion([0, self.ntime])
+                self.TimeROI.setRegion([0, self.n_time])
             elif x == self.p2 and event.button() == QtCore.Qt.RightButton:
                 pos = self.p2.vb.mapSceneToView(event.scenePos())
                 x, y = pos.x(), pos.y()
@@ -372,15 +374,15 @@ class MainW(QMainWindow):
             if event.key() == QtCore.Qt.Key_Left or event.key() == QtCore.Qt.Key_Right:
                 if event.modifiers() != QtCore.Qt.ShiftModifier:
                     move_time = True if (xrange.stop -
-                                         xrange.start < self.ntime) else False
+                                         xrange.start < self.n_time) else False
                     if move_time:
                         ### move in time in increments of 1/2 size of window
                         if xrange.start > 0 and event.key() == QtCore.Qt.Key_Left:
                             x0 = max(0, xrange.start - twin // 2)
                             x1 = x0 + (xrange.stop - xrange.start)
-                        elif xrange.stop < self.ntime and event.key(
+                        elif xrange.stop < self.n_time and event.key(
                         ) == QtCore.Qt.Key_Right:
-                            x1 = min(self.ntime, xrange.stop + twin // 2)
+                            x1 = min(self.n_time, xrange.stop + twin // 2)
                             x0 = x1 - (xrange.stop - xrange.start)
                         else:
                             move_time = False
@@ -390,10 +392,10 @@ class MainW(QMainWindow):
                     if twin > tbin and event.key() == QtCore.Qt.Key_Left:  # zoom in
                         x0 = xrange.start + tbin // 2
                         x1 = max(x0 + tbin, xrange.stop - tbin // 2)
-                    elif twin < self.ntime and event.key(
+                    elif twin < self.n_time and event.key(
                     ) == QtCore.Qt.Key_Right:  # zoom out
                         x0 = max(0, xrange.start - tbin // 2)
-                        x1 = min(self.ntime, x0 + (xrange.stop - xrange.start) + tbin)
+                        x1 = min(self.n_time, x0 + (xrange.stop - xrange.start) + tbin)
                     else:
                         move_time = False
                 if move_time:
@@ -411,14 +413,14 @@ class MainW(QMainWindow):
                 self.plot_roi_trace(roi_id)
             self.p3.setXRange(self.xrange.start, self.xrange.stop - 1)
             self.p3.setLimits(xMin=self.xrange.start, xMax=self.xrange.stop - 1)
-            if self.behav_data and 1:
+            if self.behav_data is not None:
                 self.plot_behav_data()
-            elif self.behav_binary_data:
+            elif self.behav_binary_data is not None:
                 self.plot_behav_binary_data()
             self.p3.show()
 
     def plot_roi_trace(self, roi_id):
-        x = np.arange(0, self.ntime)
+        x = np.arange(0, self.n_time)
         kspace = 0.5
         selected = self.cluster_slices[roi_id]
         y = self.sp_smoothed[selected].mean(axis=0)
@@ -429,12 +431,22 @@ class MainW(QMainWindow):
 
     def smooth_activity(self):
         N = int(self.smooth.text())
+        if self.smooth_limit is not None and N < self.smooth_limit:
+            self.update_status_bar("cannot show matrix > 10GB, increasing smoothing")
+            N = self.smooth_limit 
+            self.smooth.setText(str(N))
+
         self.smooth_bin = N
-        NN = self.sp.shape[0]
+        NN = self.n_samples
         nn = int(np.floor(NN / N))
         if N > 1:
-            self.sp_smoothed = np.reshape(self.sp[self.sorting][:nn * N].copy(),
-                                          (nn, N, -1)).mean(axis=1)
+            if self.sp is not None:
+                self.sp_smoothed = np.reshape(self.sp[self.sorting][:nn * N],
+                                              (nn, N, -1)).mean(axis=1)
+            else:
+                Usv_ds = np.reshape(self.Usv[self.sorting][:nn * N],
+                                              (nn, N, -1)).mean(axis=1)
+                self.sp_smoothed = (Usv_ds / self.sv) @ self.Vsv.T
             self.sp_smoothed = zscore(self.sp_smoothed, axis=1)
             self.sp_smoothed = np.maximum(-4, np.minimum(8, self.sp_smoothed)) + 4
             self.sp_smoothed /= 12
@@ -469,7 +481,6 @@ class MainW(QMainWindow):
 
     def plot_activity(self, init=False):
         if self.loaded:
-            self.nneurons, self.ntime = self.sp.shape
             self.smooth_activity()
             nn, nt = self.sp_smoothed.shape
             self.img.setImage(self.sp_smoothed)
@@ -544,7 +555,7 @@ class MainW(QMainWindow):
 
     def get_behav_corr(self):
         beh = self.behav_data
-        self.behav_corr_all = (self.sp_smoothed @ beh.T) / self.ntime
+        self.behav_corr_all = (self.sp_smoothed @ beh.T) / self.n_time
 
     def neurons_selected(self, selected=None):
         selected = selected if selected is not None else self.selected

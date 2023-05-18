@@ -8,6 +8,44 @@ import scipy.io as sio
 from . import guiparts
 from ..io import _load_iscell, _load_stat, load_activity
 
+def _load_activity_gui(parent, X, Usv, Vsv):
+        
+    if X is not None:
+        parent.update_status_bar(
+            f"activity loaded: {X.shape[0]} samples by {X.shape[1]} timepoints")
+        parent.update_status_bar(f"z-scoring activity matrix")
+        parent.sp = zscore(X, axis=1)
+        _load_iscell_stat(parent)
+        del X
+    elif Usv is not None:
+        Usv = Usv.astype("float32")
+        Vsv = Vsv.astype("float32")
+        parent.sp = None
+        parent.Usv = Usv 
+        parent.Vsv = Vsv
+        parent.sv = (Vsv**2).sum(axis=0)**0.5
+        if parent.Usv.ndim==3:
+            igood = ~np.isnan(Usv[:,:,0])
+            xy = np.array(np.nonzero(igood)).T
+            parent.Usv = parent.Usv[xy[:,0], xy[:,1]]
+            parent.neuron_pos = xy
+            parent.update_status_bar(
+                f"using voxel positions for xy")
+        parent.update_status_bar(
+            f"PCs of activity loaded: {Usv.shape[0]} samples by {Vsv.shape[0]} timepoints")
+        
+    else:
+        raise ValueError("file missing keys / data")
+
+    parent.n_samples = (parent.sp.shape[0] if parent.sp is not None 
+                        else parent.Usv.shape[0])
+    parent.n_time = (parent.sp.shape[1] if parent.sp is not None 
+                        else parent.Vsv.shape[0])
+    parent.embedding = np.arange(0, parent.n_samples).astype(np.int64)[:, np.newaxis]
+    parent.sorting = np.arange(0, parent.n_samples).astype(np.int64)
+    _load_sp(parent)
+
+
 def load_mat(parent, name=None):
     """ load data matrix of neurons by time (*.npy or *.mat)
     
@@ -23,32 +61,31 @@ def load_mat(parent, name=None):
         else:
             parent.fname = name
             parent.filebase = name
-
-        X, Usv, Vsv = load_activity(parent.fname)
         
-        print(f"z-scoring activity matrix")
-        parent.sp = zscore(X, axis=1)
-        del X
-
-        _load_iscell_stat(parent)
-
-        parent.embedding = np.arange(0, parent.sp.shape[0]).astype(np.int64)[:, np.newaxis]
-        parent.sorting = np.arange(0, parent.sp.shape[0]).astype(np.int64)
-        _load_sp(parent)
-
+        X, Usv, Vsv = load_activity(parent.fname)
+        _load_activity_gui(parent, X, Usv, Vsv)
+        
     except Exception as e:
         print(e)
         X = None
         return
 
 def _load_sp(parent):
-    if parent.sp.shape[0] < 100:
+    if parent.n_samples < 100:
         smooth = 1
-    elif parent.sp.shape[0] < 1000:
+    elif parent.n_samples < 1000:
         smooth = 5
     else:
-        smooth = 10
-    print(f"setting neuron bin size to {smooth} for visualization")
+        smooth = int(parent.n_samples / 200)
+    if parent.sp is None:
+        # limit size of displayed matrix to 10GB
+        n_time = parent.Vsv.shape[0]
+        n_max = 10e9 / (n_time * 4)
+        parent.smooth_limit = int(np.ceil(parent.n_samples / n_max))
+    else:
+        parent.smooth_limit = None
+
+    print(f"setting bin size to {smooth} for visualization")
     parent.smooth.setText(str(smooth))
 
     parent.loaded = True
@@ -58,9 +95,6 @@ def _load_sp(parent):
     parent.loadNd.setEnabled(True)
     parent.loadXY.setEnabled(True)
     parent.runRmap.setEnabled(True)
-
-
-
 
 def get_behav_data(parent):
     dialog = QtWidgets.QDialog()
@@ -115,9 +149,6 @@ def get_behav_data(parent):
     dialog.adjustSize()
     dialog.exec_()
 
-
-
-
 def load_behav_comps_file(parent, button):
     name = QFileDialog.getOpenFileName(parent, "Open *.npy", filter="*.npy")
     name = name[0]
@@ -163,13 +194,13 @@ def load_behav_file(parent, button):
                         "WARNING: 3D array provided (n>3), rastermap requires 2D array, will flatten to 2D"
                     )
                     beh = beh.reshape(beh.shape[0], -1)
-                beh = beh.T.copy() if beh.shape[0] == parent.sp.shape[1] else beh
-                if beh.shape[1] == parent.sp.shape[1]:
+                beh = beh.T.copy() if beh.shape[0] == parent.n_time else beh
+                if beh.shape[1] == parent.n_time:
                     parent.behav_data = beh
                 else:
                     raise Exception(
                         "File contains incorrect dataset. Dimensions mismatch",
-                        beh.shape[1], "not same as", parent.sp.shape[1])
+                        beh.shape[1], "not same as", parent.n_time)
             del beh
         button.setText("Uploaded!")
         parent.behav_data = zscore(parent.behav_data, axis=1)
@@ -184,7 +215,7 @@ def _load_behav_dict(parent, beh):
     binary = False
     for i, key in enumerate(beh.keys()):
         if key not in ["__header__", "__version__", "__globals__"]:
-            if np.array(beh[key]).size == parent.sp.shape[1]:
+            if np.array(beh[key]).size == parent.n_time:
                 if j == 0:
                     parent.behav_labels = []
                 parent.behav_labels.append(key)
@@ -197,7 +228,7 @@ def _load_behav_dict(parent, beh):
             j += 1
     if j > 0:
         if not binary:
-            parent.behav_data = np.zeros((len(parent.behav_labels), parent.sp.shape[1]))
+            parent.behav_data = np.zeros((len(parent.behav_labels), parent.n_time))
             for j, key in enumerate(parent.behav_labels):
                 parent.behav_data[j] = beh[key]
             parent.behav_data = np.array(parent.behav_data)
@@ -207,12 +238,12 @@ def _load_behav_dict(parent, beh):
             parent.plot_behav_data()
         else:
             parent.behav_binary_data = np.zeros(
-                (len(parent.behav_binary_labels), parent.sp.shape[1]))
+                (len(parent.behav_binary_labels), parent.n_time))
             parent.behav_bin_legend = pg.LegendItem(
                 labelTextSize="12pt", horSpacing=30,
                 colCount=len(parent.behav_binary_labels))
             for i, key in enumerate(parent.behav_binary_labels):
-                dat = np.zeros(parent.sp.shape[1])
+                dat = np.zeros(parent.n_time)
                 dat[beh[key]] = 1  # Convert to binary for stim/lick time
                 parent.behav_binary_data[i] = dat
                 parent.behav_bin_plot_list.append(
@@ -295,7 +326,7 @@ def _load_iscell_stat(parent):
 def load_proc(parent, name=None):
     if name is None:
         name = QFileDialog.getOpenFileName(parent, "Open processed file",
-                                           filter="*.npy")
+                                           filter="*.npy")[0]
     try:
         proc = np.load(name, allow_pickle=True).item()
         parent.proc = proc
@@ -305,10 +336,8 @@ def load_proc(parent, name=None):
 
         # check if file exists in original location or in current folder
         if os.path.exists(parent.proc["filename"]):
-            X = np.load(parent.proc["filename"])
             parent.fname = parent.proc["filename"]
         elif os.path.exists(os.path.join(foldername, filename)):
-            X = np.load(os.path.join(foldername, filename))
             parent.fname = os.path.join(foldername, filename)
         else:
             print(f"ERROR: {parent.proc['filename']} not found")
@@ -316,44 +345,44 @@ def load_proc(parent, name=None):
 
         isort = parent.proc["isort"]
         y = parent.proc["embedding"]
-        u = parent.proc["Usv"]
+        Usv = parent.proc["Usv"]
+        Vsv = parent.proc["Vsv"]
+        sv = parent.proc["sv"]
         ops = parent.proc["ops"]
         user_clusters = parent.proc.get("user_clusters", None)
-    except Exception as e:
-        print(e)
-        X = None
-
-    if X is not None:
-        parent.filebase = parent.proc["filename"]
         
-        parent.startROI = False
-        parent.posROI = np.zeros((2, 2))
+        X, Usv, Vsv = load_activity(parent.fname)
+        _load_activity_gui(parent, X, Usv, Vsv)
+        
+    except Exception as e:
+        raise e
 
-        print(f"z-scoring activity matrix")
-        parent.sp = zscore(X, axis=1)
-        del X
+    parent.startROI = False
+    parent.posROI = np.zeros((2, 2))
 
-        if user_clusters is not None:
-            parent.smooth_bin = user_clusters[0]["binsize"]
-            parent.smooth.setText(str(int(parent.smooth_bin)))
+    if user_clusters is not None:
+        parent.smooth_bin = user_clusters[0]["binsize"]
+        parent.smooth.setText(str(int(parent.smooth_bin)))
 
-        parent.embedding = y
-        parent.sorting = isort
-        parent.U = u
-        parent.ops = ops
-        parent.user_clusters = user_clusters
+    parent.embedding = y
+    parent.sorting = isort
+    parent.Usv = Usv if parent.Usv is None else parent.Usv
+    parent.Vsv = Vsv if parent.Vsv is None else parent.Vsv
+    parent.sv = sv if parent.sv is None else parent.sv
+    parent.ops = ops
+    parent.user_clusters = user_clusters
 
-        print(f"loaded:  {parent.proc['filename']}")
-        _load_iscell_stat(parent)
-        _load_sp(parent)
+    print(f"loaded:  {parent.proc['filename']}")
+    _load_iscell_stat(parent)
+    _load_sp(parent)
 
-        if user_clusters is not None:
-            for uc in user_clusters:
-                parent.selected = uc["slice"]
-                parent.add_cluster()
-        parent.user_clusters = None  # remove after loading
+    if user_clusters is not None:
+        for uc in user_clusters:
+            parent.selected = uc["slice"]
+            parent.add_cluster()
+    parent.user_clusters = None  # remove after loading
 
-        parent.show()
+    parent.show()
 
 
 def save_proc(parent):  # Save embedding output
