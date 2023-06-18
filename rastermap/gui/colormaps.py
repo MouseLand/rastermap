@@ -1,3 +1,6 @@
+"""
+Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer and Marius Pachitariu.
+"""
 import numpy as np
 
 viridis = np.array([[68.08602, 1.24287, 84.000825, 255.0],

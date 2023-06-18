@@ -1,3 +1,6 @@
+"""
+Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer and Marius Pachitariu.
+"""
 import numpy as np
 import warnings
 from sklearn.cluster import KMeans
@@ -36,7 +39,10 @@ def _scaled_kmeans_init(X, n_clusters=100, n_local_trials=None):
     """
     n_samples, n_features = X.shape
     X_nodes = np.empty((n_clusters, n_features), dtype=X.dtype)
-    n_local_trials = min(2 + 10 * int(np.log(n_clusters)), n_samples - 1)
+    if n_local_trials is None:
+        n_local_trials = min(2 + 10 * int(np.log(n_clusters)), n_samples - 1)
+    else:
+        n_local_trials = min(n_samples-1, n_local_trials)
 
     # Pick first center randomly
     center_id = np.random.randint(n_samples)
@@ -127,7 +133,10 @@ def scaled_kmeans(X, n_clusters=100, n_iter=50, init="kmeans++", random_state=0)
     X_nodes = X_nodes[X_nodes_norm > 0]
     X_nodes = X_nodes[X_nodes[:, 0].argsort()]
     
-    if X_nodes.shape[0] < n_clusters and init == "kmeans++":
+    if X_nodes.shape[0] < n_clusters // 2 and init == "kmeans++":
+        warnings.warn(
+            "found fewer than half the n_clusters that the user specified, rerunning with random initialization"
+        )
         X_nodes, imax = scaled_kmeans(X, n_clusters=n_clusters, n_iter=n_iter,
                                       init="random", random_state=random_state)
     else:

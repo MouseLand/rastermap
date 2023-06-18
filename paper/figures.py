@@ -1,3 +1,6 @@
+"""
+Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer and Marius Pachitariu.
+"""
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle

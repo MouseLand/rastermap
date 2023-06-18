@@ -1,3 +1,6 @@
+"""
+Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer and Marius Pachitariu.
+"""
 import numpy as np
 from numba import njit, jit, float32, int32, boolean, int64, vectorize, prange
 from numba.types import Tuple
@@ -357,7 +360,7 @@ def compute_BBt(xi, yi, locality=0):
         BBt0 = compute_BBt(xi, xi, locality=0)
         BBt_norm = BBt0.sum()
         BBt_mask_norm = compute_BBt_mask(xi, xi).sum()
-    eps = 1e-10
+    eps = 1e-3
     ds = np.abs(xi[:, np.newaxis] - yi)
     ds[ds == 0] = 1 - eps
     BBt = -np.log(eps + ds)

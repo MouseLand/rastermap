@@ -1,3 +1,6 @@
+"""
+Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer and Marius Pachitariu.
+"""
 import time
 import numpy as np
 import warnings
@@ -6,7 +9,6 @@ from scipy.stats import zscore
 from .cluster import kmeans, scaled_kmeans, compute_cc_tdelay
 from .sort import traveling_salesman, compute_BBt, matrix_matching
 from .upsample import grid_upsampling
-from .metrics import embedding_quality
 from .utils import bin1d
 from .svd import SVD
 
@@ -182,7 +184,7 @@ class Rastermap:
 
     def fit(self, data=None, Usv=None, Vsv=None, U_nodes=None, itrain=None,
             normalize=True, mean_time=False, compute_X_embedding=True, 
-            compute_metrics=False):
+            bin_size=0):
         """Fit X into an embedded space.
         Inputs
         ----------
@@ -198,41 +200,61 @@ class Rastermap:
         """
         t0 = time.time()
 
-        igood = ~np.isnan(data[:,0]) if data is not None else ~np.isnan(Usv[:,0])
-        stdx = data.std(axis=1) if data is not None else Usv.std(axis=1)
-        igood = np.logical_and(igood, stdx > 0)
-        stdx[stdx==0] = 1e-3
-        n_samples = igood.sum() 
-        n_time = data.shape[1] if data is not None else Vsv.shape[0]
-        print(f"sorting activity: {n_samples} samples by {n_time} timepoints")
         
         # normalize data
+        igood = ~np.isnan(data[:,0]) if data is not None else ~np.isnan(Usv[:,0])
+        stdx = None
         if data is not None:
             if normalize:
                 if hasattr(self, "X"):
                     warnings.warn("not renormalizing, using previous normalization")
                     X = self.X 
                 else:
+                    print("normalizing data")
                     X = data.copy() 
-                    X -= data.mean(axis=1)
-                    X /= stdx
+                    if self.time_bin > 1:
+                        print(f"binning in time with time_bin = {self.time_bin}")
+                        X = bin1d(X, bin_size=self.time_bin, axis=1)
+                    X -= X.mean(axis=1)[:,np.newaxis]
+                    stdx = X.std(axis=1)
+                    X /= stdx[:,np.newaxis]
                     if mean_time:
-                        X -= X.mean(axis=0)
+                        #X -= np.nanmean(X, axis=0)
+                        X_mean = np.nanmean(X, axis=0)
+                        X_mean /= (X_mean**2).sum()**0.5
+                        X_one = np.ones_like(X_mean)
+                        X_one /= (X_one**2).sum()**0.5
+                        V_mean = SVD(np.stack((X_mean, X_one), axis=1), 
+                                     n_components=2)
+                        proj_mean = X @ V_mean
+                        X -= proj_mean @ V_mean.T
                     if self.keep_norm_X:
                         self.X = X
             else:
-                X = data
+                if self.time_bin > 1:
+                    X = bin1d(data.copy(), bin_size=self.time_bin, axis=1)
+                else:
+                    X = data
         elif hasattr(self, "X"):
             X = self.X
             if normalize:
                 warnings.warn("not renormalizing, using previous normalization")
+
+        stdx = X.std(axis=1) if stdx is None else stdx
+        igood = np.logical_and(igood, stdx > 0)
+        n_samples = igood.sum() 
+        n_time = data.shape[1] if data is not None else Vsv.shape[0]
+        print(f"sorting activity: {n_samples} valid samples by {n_time} timepoints")
         
+
         ### ------------- PCA ------------------------------------------------------ ###        
         if not hasattr(self, "Usv"):
             if Usv is None:
                 tic = time.time()
-                Usv = SVD(X[:, itrain] if itrain is not None else X[igood], 
-                            n_components=self.n_PCs, bin_size=self.time_bin)            
+                Usv_valid = SVD(X[igood][:, itrain] if itrain is not None else X, 
+                               n_components=self.n_PCs)            
+                Usv = np.nan * np.zeros((len(igood), Usv_valid.shape[1]), "float32")
+                Usv[igood] = Usv_valid
                 self.Usv = Usv
                 self.n_PCs = Usv.shape[1]
                 pc_time = time.time() - tic
@@ -241,7 +263,7 @@ class Rastermap:
                 self.Usv = Usv
                 pc_time = 0
                 self.n_PCs = self.Usv.shape[1]
-        self.sv = (self.Usv**2).sum(axis=0)**0.5
+        self.sv = np.nansum((self.Usv**2), axis=0)**0.5
         if not hasattr(self, "Vsv"):
             if Vsv is None:
                 U = self.Usv.copy() / self.sv
@@ -250,18 +272,30 @@ class Rastermap:
                 self.Vsv = Vsv
 
         ### ------------- clustering ----------------------------------------------- ###
-        if U_nodes is None and self.Usv.shape[0] <= 150:
-            # number of neurons / voxels <= 150, skip clustering
-            warnings.warn("""data has <= 150 neurons / voxels, \n
-                            going to skip clustering and sort neurons / voxels""")
-            U_nodes = self.Usv[igood]
-            self.grid_upsample = False
+        if ((U_nodes is None and self.Usv.shape[0] <= 50) or 
+            (self.Usv.shape[0] <= 200 and self.n_clusters is None)):
+            # number of neurons / voxels <= 50, skip clustering
+            if U_nodes is None and self.Usv.shape[0] <= 50:
+                warnings.warn("""data has <= 50 samples, \n
+                                going to skip clustering and sort samples""")
+            elif (self.Usv.shape[0] <= 200 and self.n_clusters is None):
+                print("skipping clustering, n_clusters is None")
+            U_nodes = self.Usv[igood].copy()
+            imax = np.arange(0, U_nodes.shape[0])
+        elif self.n_clusters is None:
+            raise ValueError("n_clusters set to None")
+        elif self.n_clusters >= 200:
+            raise ValueError("n_clusters cannot be greater than 200")
         elif not hasattr(self, "U_nodes") and U_nodes is not None:
             # use user input for clusters
-            self.U_nodes = U_nodes
+            print("using cluster input from user")
+            cu = self.Usv[igood] @ U_nodes.T
+            imax = cu.argmax(axis=1)
         elif hasattr(self, "U_nodes") and self.U_nodes is not None:
             # skip clustering as it was run before
             if self.n_splits==1:
+                U_nodes = self.U_nodes
+                imax = self.embedding_clust
                 warnings.warn("""clusters already computed, skipping clustering""")
             else:
                 raise ValueError("""cannot rerun if n_splits > 0\n 
@@ -269,11 +303,12 @@ class Rastermap:
                                     reset model = Rastermap(...) """)
         else:
             # run clustering
+            self.n_clusters = min(self.Usv.shape[0]//2, self.n_clusters)
             if self.run_scaled_kmeans:
                 U_nodes, imax = scaled_kmeans(self.Usv[igood], n_clusters=self.n_clusters)
             else:
                 U_nodes, imax = kmeans(self.Usv[igood], n_clusters=self.n_clusters)
-            print(f"clusters computed, time {time.time() - t0:0.2f}")
+            print(f"{U_nodes.shape[0]} clusters computed, time {time.time() - t0:0.2f}")
 
         # compute correlation matrix across clusters
         if self.time_lag_window > 0:
@@ -340,15 +375,15 @@ class Rastermap:
                                             e_neighbor=e_neighbor)
             print(f"clusters upsampled, time {time.time() - t0:0.2f}")
         else:
-            Y = Y_nodes
+            Y = ineurons.argsort()[:,np.newaxis]
             Xrec = U_nodes
         
         self.embedding_clust = ineurons
         self.U_nodes = U_nodes
         self.Y_nodes = Y_nodes
         self.U_upsampled = Xrec.copy()
-        self.embedding = Y
-        self.isort = Y[:, 0].argsort()
+        self.embedding_valid = Y
+        self.isort_valid = Y[:, 0].argsort()
 
         # convert cluster centers to time traces (not used in algorithm)
         Vnorm = (self.Vsv**2).sum(axis=1)**0.5
@@ -356,31 +391,18 @@ class Rastermap:
         if data is not None:
             self.X_upsampled = Xrec @ self.Vsv.T
         
-        # compute metrics
-        if itrain is not None and compute_metrics:
-            U = self.Usv.copy() / (self.Usv**2).sum(axis=0)**0.5
-            self.X_test = U @ (
-                U.T @ bin1d(X[igood][:, ~itrain], bin_size=self.time_bin, axis=1))
-            del U
-            mnn, mnn_global, rho = embedding_quality(self.X_test, Y, wrapping=False)
-            print(
-                f"""METRICS: local: {mnn:0.3f}; 
-                medium: {mnn_global:0.3f}; global: {rho:0.3f}"""
-            )
-
+        self.igood = igood
+        self.embedding = np.nan * np.zeros((len(self.igood),1))
+        self.embedding[igood] = self.embedding_valid
+        self.isort = self.embedding[:,0].argsort()
+        
         ### ----------- bin across embedding --------------------------------------- ###
         if data is not None and compute_X_embedding:
-            if n_samples < self.bin_size or (self.bin_size == 50 and
-                                              n_samples < 1000):
-                bin_size = n_samples // 20
-            else:
-                bin_size = self.bin_size
-
+            if (bin_size==0 or n_samples < bin_size or 
+                (bin_size == 50 and n_samples < 1000)):
+                bin_size = max(1, n_samples // 200)
             self.X_embedding = zscore(bin1d(X[igood][self.isort], bin_size), axis=1)
 
-        self.igood = igood
-        self.embedding_full = np.nan * np.zeros((len(self.igood),1))
-        self.embedding_full[igood] = self.embedding
         self.pc_time = pc_time
         self.map_time = time.time() - t0 - pc_time
 

@@ -1,3 +1,6 @@
+"""
+Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer and Marius Pachitariu.
+"""
 from sklearn.decomposition import TruncatedSVD
 import numpy as np
 from tqdm import trange 
@@ -22,22 +25,35 @@ def subsampled_mean(X, n_mean=1000):
 
     return avgframe, stdframe
 
-def SVD(X, n_components=250, bin_size=1):
-    Xb = bin1d(X, bin_size=bin_size, axis=1)
-    nmin = np.min(Xb.shape) - 1
+def SVD(X, n_components=250, return_USV=False):
+    nmin = np.min(X.shape)
     nmin = min(nmin, n_components)
     
-    if Xb.shape[-1] >= Xb.shape[0]:
+    if X.shape[-1] >= X.shape[0]:
         cov = X @ X.T
     else:
         cov = X.T @ X
+    
     U = TruncatedSVD(n_components=nmin, 
                         random_state=0).fit_transform(cov)
     if X.shape[-1] < X.shape[0]:
-        V = X @ (U / (U**2).sum(axis=0)**0.5)
-        return V 
+        ev = (U**2).sum(axis=0)**0.5
+        U /= ev
+        sv = ev**0.5
+        V = (X @ U) / sv
+        if return_USV:
+            return V, sv, U
+        else:
+            return V
     else:
-        return U
+        if return_USV:
+            ev = (U**2).sum(axis=0)**0.5
+            U /= ev
+            sv = ev**0.5
+            V = (X.T @ U) / sv
+            return U, sv, V
+        else:
+            return U
 
 def subsampled_SVD(X, n_components=500, n_mean=1000, 
                    n_svd=15000, batch_size=1000, exclude=2):
