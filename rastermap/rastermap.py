@@ -141,19 +141,22 @@ class Rastermap:
 
     def __init__(self, n_clusters=100, n_PCs=200, time_lag_window=0.0, locality=0.0,
                  smoothness=1, grid_upsample=10, bin_size=0, 
-                 time_bin=0, sticky=True, n_splits=0,
-                 run_scaled_kmeans=True, symmetric=False, keep_norm_X=True, verbose=True,
+                 time_bin=0, sticky=True, n_splits=0, nc_splits=None, circular=False,
+                 run_scaled_kmeans=True, symmetric=False, 
+                 keep_norm_X=True, verbose=True,
                  verbose_sorting=False):
 
         self.n_PCs = n_PCs
         self.n_splits = n_splits
         self.n_clusters = n_clusters
+        self.nc_splits = nc_splits
         self.run_scaled_kmeans = run_scaled_kmeans
         self.sticky = sticky
         
         self.time_lag_window = time_lag_window
         self.symmetric = symmetric
         self.locality = locality
+        self.circular = circular
         self.smoothness = smoothness
         self.grid_upsample = grid_upsample
         self.time_bin = time_bin
@@ -183,7 +186,7 @@ class Rastermap:
         return self.embedding
 
     def fit(self, data=None, Usv=None, Vsv=None, U_nodes=None, itrain=None,
-            normalize=True, mean_time=False, compute_X_embedding=True, 
+            normalize=True, mean_time=True, compute_X_embedding=True, 
             bin_size=0):
         """Fit X into an embedded space.
         Inputs
@@ -226,6 +229,7 @@ class Rastermap:
                         X_one /= (X_one**2).sum()**0.5
                         V_mean = SVD(np.stack((X_mean, X_one), axis=1), 
                                      n_components=2)
+                        self.V_mean = V_mean
                         proj_mean = X @ V_mean
                         X -= proj_mean @ V_mean.T
                     if self.keep_norm_X:
@@ -237,8 +241,23 @@ class Rastermap:
                     X = data
         elif hasattr(self, "X"):
             X = self.X
+            Vsv_sub = Vsv.copy()
             if normalize:
                 warnings.warn("not renormalizing, using previous normalization")
+        else:
+            if mean_time:
+                V_mean = Vsv.mean(axis=1)
+                V_mean /= (V_mean**2).sum()**0.5
+                V_one = np.ones_like(V_mean)
+                V_one /= (V_one**2).sum()**0.5
+                V_mean = SVD(np.stack((V_mean, V_one), axis=1), 
+                                n_components=2)
+                self.V_mean = V_mean
+                proj_mean = V_mean @ (V_mean.T @ Vsv)
+                Vsv_sub = Vsv.copy() - proj_mean
+            else:
+                Vsv_sub = Vsv.copy()
+            stdx = Usv.std(axis=1) if stdx is None else stdx
 
         stdx = X.std(axis=1) if stdx is None else stdx
         igood = np.logical_and(igood, stdx > 0)
@@ -269,9 +288,14 @@ class Rastermap:
                 U = self.Usv.copy() / self.sv
                 self.Vsv = X.T @ U 
             elif Vsv is not None:
-                self.Vsv = Vsv
+                self.Vsv = Vsv_sub
 
         ### ------------- clustering ----------------------------------------------- ###
+        if self.run_scaled_kmeans:
+            kmeans_func = scaled_kmeans
+        else:
+            kmeans_func = kmeans
+
         if ((U_nodes is None and self.Usv.shape[0] <= 50) or 
             (self.Usv.shape[0] <= 200 and self.n_clusters is None)):
             # number of neurons / voxels <= 50, skip clustering
@@ -304,10 +328,7 @@ class Rastermap:
         else:
             # run clustering
             self.n_clusters = min(self.Usv.shape[0]//2, self.n_clusters)
-            if self.run_scaled_kmeans:
-                U_nodes, imax = scaled_kmeans(self.Usv[igood], n_clusters=self.n_clusters)
-            else:
-                U_nodes, imax = kmeans(self.Usv[igood], n_clusters=self.n_clusters)
+            U_nodes, imax = kmeans_func(self.Usv[igood], n_clusters=self.n_clusters)
             print(f"{U_nodes.shape[0]} clusters computed, time {time.time() - t0:0.2f}")
 
         # compute correlation matrix across clusters
@@ -320,31 +341,35 @@ class Rastermap:
 
         ### ---------------- sorting ----------------------------------------------- ###
         cc, inds = traveling_salesman(cc, verbose=self.verbose_sorting, 
-                                       locality=self.locality, n_skip=None)[:2]
+                                       locality=self.locality, circular=self.circular,
+                                        n_skip=None)[:2]
         U_nodes = U_nodes[inds]
-        ineurons = inds[imax]
+        ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
         self.cc = cc
         Y_nodes = np.arange(0, U_nodes.shape[0])[:, np.newaxis]
 
         # split and recluster and sort
         if self.n_splits > 0:
-            nc = 25
+            n_nodes = U_nodes.shape[0]
+            nc = min(50, n_nodes // 4) if self.nc_splits is None else self.nc_splits
             for k in range(self.n_splits):
                 U_nodes_new = np.zeros((0, self.n_PCs))
                 n_nodes = U_nodes.shape[0]
                 if not self.sticky and k > 0:
-                    ineurons = (U @ U_nodes.T).argmax(axis=1)
-                ineurons_new = -1 * np.ones(U.shape[0], np.int64)
+                    ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
+                ineurons_new = -1 * np.ones(self.Usv[igood].shape[0], np.int64)
                 for i in range(n_nodes // nc):
                     ii = np.arange(n_nodes)
                     node_set = np.logical_and(ii >= i * nc, ii < (i + 1) * nc)
                     in_set = np.logical_and(ineurons >= i * nc, ineurons < (i + 1) * nc)
-                    U_nodes0, ineurons_set = kmeans(U[in_set], n_clusters=2 * nc)
+                    U_nodes0, ineurons_set = kmeans_func(self.Usv[igood][in_set], 
+                                                         n_clusters=2 * nc)                                
                     cc = U_nodes0 @ U_nodes0.T
                     cc_add = U_nodes0 @ U_nodes[~node_set].T
                     ifrac = node_set.mean()
                     x = np.linspace(i * nc / n_nodes, 
-                                    (i + 1) * nc / n_nodes, 2 * nc + 1)[:-1]
+                                    (i + 1) * nc / n_nodes, 
+                                    cc.shape[0] + 1)[:-1]
                     y = np.linspace(0, 1, n_nodes + 1)[:-1][~node_set]
                     BBt = compute_BBt(x, x, locality=self.locality)
                     BBt -= np.diag(np.diag(BBt))
@@ -353,13 +378,14 @@ class Rastermap:
                                                             verbose=False)  
                     U_nodes0 = U_nodes0[inds]
                     ineurons_new[in_set] = (2 * nc * i + # offset based on partition
-                                            (U[in_set] @ U_nodes0.T).argmax(axis=1))
+                                            (self.Usv[igood][in_set] @ U_nodes0.T).argmax(axis=1))
                     U_nodes_new = np.vstack((U_nodes_new, U_nodes0))
                 n_nodes = U_nodes_new.shape[0]
                 U_nodes = U_nodes_new.copy()
                 ineurons = ineurons_new.copy()
             if not self.sticky:
                 ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
+            Y_nodes = np.arange(0, U_nodes.shape[0])[:, np.newaxis]
 
         print(f"clusters sorted, time {time.time() - t0:0.2f}")
         
@@ -375,7 +401,13 @@ class Rastermap:
                                             e_neighbor=e_neighbor)
             print(f"clusters upsampled, time {time.time() - t0:0.2f}")
         else:
-            Y = ineurons.argsort()[:,np.newaxis]
+            if len(U_nodes) == n_samples:
+                Y = np.zeros(n_samples, "int")
+                Y[inds] = np.arange(0, n_samples)
+            else:
+                Y = np.zeros(n_samples, "int")
+                Y[ineurons.argsort()] = np.arange(0, n_samples)
+            Y = Y[:,np.newaxis]
             Xrec = U_nodes
         
         self.embedding_clust = ineurons
@@ -400,8 +432,8 @@ class Rastermap:
         if data is not None and compute_X_embedding:
             if (bin_size==0 or n_samples < bin_size or 
                 (bin_size == 50 and n_samples < 1000)):
-                bin_size = max(1, n_samples // 200)
-            self.X_embedding = zscore(bin1d(X[igood][self.isort], bin_size), axis=1)
+                bin_size = max(1, n_samples // 500)
+            self.X_embedding = zscore(bin1d(X[igood][self.isort], bin_size, axis=0), axis=1)
 
         self.pc_time = pc_time
         self.map_time = time.time() - t0 - pc_time

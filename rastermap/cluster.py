@@ -3,7 +3,7 @@ Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer an
 """
 import numpy as np
 import warnings
-from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans as KMeans
 from scipy.stats import zscore
 
 def _scaled_kmeans_init(X, n_clusters=100, n_local_trials=None):
@@ -90,7 +90,8 @@ def _scaled_kmeans_init(X, n_clusters=100, n_local_trials=None):
     return X_nodes
 
 
-def scaled_kmeans(X, n_clusters=100, n_iter=50, init="kmeans++", random_state=0):
+def scaled_kmeans(X, n_clusters=100, n_iter=50, n_local_trials=100, 
+                    init="kmeans++", random_state=0):
     """ kmeans using correlation distance
     
     Parameters
@@ -116,7 +117,8 @@ def scaled_kmeans(X, n_clusters=100, n_iter=50, init="kmeans++", random_state=0)
     # initialize with kmeans++
     if init == "kmeans++":
         np.random.seed(random_state)
-        X_nodes = _scaled_kmeans_init(X, n_clusters=n_clusters, n_local_trials=100)
+        X_nodes = _scaled_kmeans_init(X, n_clusters=n_clusters, 
+                                        n_local_trials=n_local_trials)
     else:
         np.random.seed(random_state)
         X_nodes = np.random.randn(n_clusters, n_features) * (X**2).sum(axis=0)**0.5

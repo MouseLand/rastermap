@@ -177,7 +177,8 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
     return cc, inds, seg_len, start_pos, end_pos, flipped
 
 
-def traveling_salesman(cc, n_iter=400, locality=0.0, n_skip=None, verbose=False):
+def traveling_salesman(cc, n_iter=400, locality=0.0, circular=False,
+                         n_skip=None, verbose=False):
     """ matches correlation matrix cc to B@B.T basis functions """
     n_nodes = (cc.shape[0])
     if n_skip is None:
@@ -187,7 +188,7 @@ def traveling_salesman(cc, n_iter=400, locality=0.0, n_skip=None, verbose=False)
     n_components = 1
 
     x = np.arange(0, 1.0, 1.0 / n_nodes)[:n_nodes]
-    BBt = compute_BBt(x, x, locality=locality)
+    BBt = compute_BBt(x, x, locality=locality, circular=circular)
     if np.isinf(locality):
         BBt = np.ones((n_nodes, n_nodes))
         BBt = np.tril(np.triu(BBt, -1), 1)
@@ -243,6 +244,7 @@ def shift_matrix_sub(cc, ishift):
 def shift_rows(cc, ishift):
     return cc[ishift]
 
+w_add = 4
 
 @njit(
     "float32 (float32[:,:], float32[:,:], int64, int64, int64, int64, int64, float32[:,:], float32[:,:])",
@@ -255,7 +257,7 @@ def new_correlation_sub(cc, cc_add, i0, i1, inode, n_nodes, isforward, BBt, BBt_
     cc2 = shift_matrix_sub(cc, ishift)
     cc_add2 = shift_rows(cc_add, ishift)
     corr_new = elementwise_mult_sum(cc2,
-                                    BBt) + 4 * elementwise_mult_sum(cc_add2, BBt_add)
+                                    BBt) + w_add * elementwise_mult_sum(cc_add2, BBt_add)
     return corr_new
 
 
@@ -276,7 +278,7 @@ def tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add, verbose):
         improved = False
         if corr_orig == 0:
             corr_orig = elementwise_mult_sum(
-                cc, BBt) + 4 * elementwise_mult_sum(cc_add, BBt_add)
+                cc, BBt) + w_add * elementwise_mult_sum(cc_add, BBt_add)
         for tl in range(len(test_lengths)):
             corr_change_seg[:] = -np.inf
             for ix in prange(0, n_len * n_nodes * n_test):
@@ -317,7 +319,7 @@ def tsp_sub(cc, cc_add, n_iter, n_nodes, n_skip, BBt, BBt_add, verbose):
                 cc = shift_matrix_sub(cc, ishift)
                 cc_add = shift_rows(cc_add, ishift)
                 corr_new = elementwise_mult_sum(
-                    cc, BBt) + 4 * elementwise_mult_sum(cc_add, BBt_add)
+                    cc, BBt) + w_add * elementwise_mult_sum(cc_add, BBt_add)
                 inds = inds[ishift]
                 if verbose:
                     print(k, i0, i1, inode, corr_change, corr_new - corr_orig, corr_new)
@@ -332,6 +334,7 @@ def matrix_matching(cc, BBt, cc_add, BBt_add, n_iter=400, n_skip=None, verbose=F
     n_nodes = (cc.shape[0])
     if n_skip is None:
         n_skip = max(1, n_nodes // 30)
+    
     cc = cc.astype(np.float32)
     cc_add = cc_add.astype(np.float32)
     BBt = BBt.astype(np.float32)
@@ -355,15 +358,23 @@ def compute_BBt_mask(xi, yi):
     return gaussian
 
 
-def compute_BBt(xi, yi, locality=0):
+def compute_BBt(xi, yi, locality=0, circular=False):
     if locality > 0:
         BBt0 = compute_BBt(xi, xi, locality=0)
         BBt_norm = BBt0.sum()
         BBt_mask_norm = compute_BBt_mask(xi, xi).sum()
     eps = 1e-3
-    ds = np.abs(xi[:, np.newaxis] - yi)
-    ds[ds == 0] = 1 - eps
-    BBt = -np.log(eps + ds)
+    if not circular:
+        ds = np.abs(xi[:, np.newaxis] - yi)
+        ds[ds == 0] = 1 - eps
+        BBt = -np.log(eps + ds)
+    else:
+        ds = np.abs(xi[len(xi)//2] - yi)
+        ds[ds == 0] = 1 - eps
+        BBt0 = -np.log(eps + ds)
+        BBt = np.zeros((len(xi), len(yi)), "float32")
+        for k in range(len(xi)):
+            BBt[k] = np.roll(BBt0, -len(xi)//2 + k)
     if locality > 0:
         BBt_mask = compute_BBt_mask(xi, yi)
         # need to make BBt and BBt_mask on same scale

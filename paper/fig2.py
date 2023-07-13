@@ -7,13 +7,6 @@ import os
 import numpy as np
 from fig_utils import *
 
-kp_colors = np.array([[0.55,0.55,0.55],
-                      [0.,0.,1],
-                      [0.8,0,0],
-                      [1.,0.4,0.2],
-                      [0,0.6,0.4],
-                      [0.2,1,0.5],
-                      ])
 
 def panel_neuron_pos(fig, grid1, il, yratio, xpos0, ypos0, isort, brain_img):
     xpos, ypos = xpos0.copy(), -1*ypos0.copy()
@@ -27,12 +20,11 @@ def panel_neuron_pos(fig, grid1, il, yratio, xpos0, ypos0, isort, brain_img):
     poss = ax.get_position().bounds
     transl = mtransforms.ScaledTranslation(-10 / 72, -12 / 72, fig.dpi_scale_trans)
     il = plot_label(ltr, il, ax, transl, fs_title)
-    
     memb = np.zeros_like(isort)
     memb[isort] = np.arange(0, len(isort))
     subsample = 5
     ax.scatter(ypos[::subsample], xpos[::subsample], cmap=cmap_emb, 
-                s=0.5, alpha=0.5, c=memb[::subsample])
+                s=0.5, alpha=0.5, c=memb[::subsample], rasterized=True)
     ax.axis("off")
     add_apml(ax, xpos, ypos)
 
@@ -235,7 +227,7 @@ def fig2(root, save_figure=True):
 
     fig = _fig2(brain_img, face_img, **d);
     if save_figure:
-        fig.savefig(os.path.join(root, "figures", "fig2.pdf"))
+        fig.savefig(os.path.join(root, "figures", "fig2.pdf"), dpi=200)
 
             
 

@@ -25,21 +25,17 @@ def subsampled_mean(X, n_mean=1000):
 
     return avgframe, stdframe
 
-def SVD(X, n_components=250, return_USV=False):
+def SVD(X, n_components=250, return_USV=False, transpose=False):
     nmin = np.min(X.shape)
     nmin = min(nmin, n_components)
     
-    if X.shape[-1] >= X.shape[0]:
-        cov = X @ X.T
-    else:
-        cov = X.T @ X
-    
+    Xt = X.T if transpose else X
     U = TruncatedSVD(n_components=nmin, 
-                        random_state=0).fit_transform(cov)
-    if X.shape[-1] < X.shape[0]:
-        ev = (U**2).sum(axis=0)**0.5
-        U /= ev
-        sv = ev**0.5
+                     random_state=0).fit_transform(Xt)
+    
+    if transpose:
+        sv = (U**2).sum(axis=0)**0.5
+        U /= sv
         V = (X @ U) / sv
         if return_USV:
             return V, sv, U
@@ -47,9 +43,8 @@ def SVD(X, n_components=250, return_USV=False):
             return V
     else:
         if return_USV:
-            ev = (U**2).sum(axis=0)**0.5
-            U /= ev
-            sv = ev**0.5
+            sv = (U**2).sum(axis=0)**0.5
+            U /= sv
             V = (X.T @ U) / sv
             return U, sv, V
         else:

@@ -3,13 +3,15 @@ Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer an
 """
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
-from scipy.stats import zscore
+from scipy.stats import zscore, spearmanr
+from sklearn.decomposition import TruncatedSVD
+from sklearn.neighbors import NearestNeighbors
 from rastermap.svd import SVD
 from rastermap.utils import bin1d
 from rastermap import Rastermap
 import sys, os
-sys.path.insert(0, '/github/rastermap/paper/')
 
+#sys.path.insert(0, '/github/rastermap/paper/')
 import metrics
 
 def psth_to_spks(psth, mean_fr=1e-2):
@@ -217,8 +219,50 @@ def make_full_simulation(n_per_module=1000, random_state=0):
 
     # independent noise
     spks += np.random.poisson(0.03, size=spks.shape)
+
+    iperm = np.random.permutation(len(spks))
+    spks = spks[iperm]
+    xi_all = xi_all[iperm]
     
-    return spks, xi_all, stim_times_all, psth, psth_spont
+    return spks, xi_all, stim_times_all, psth, psth_spont, iperm
+
+def make_2D_simulation(filename):
+    n_neurons = 30000
+    basis = 0.1
+    alpha = 2.
+
+    # 2D positions for each neuron
+    np.random.seed(0)
+    xi = 1 * np.random.rand(n_neurons, 2)
+
+    # basis functions in 2D
+    isort0 = np.argsort(xi[:,0])
+    kx,ky = np.meshgrid(np.arange(0,31), np.arange(0,31))
+    kx = kx.flatten()
+    ky = ky.flatten()
+    kx = kx[1:]
+    ky = ky[1:]
+    B = np.cos(np.pi * xi[:,[0]] * kx ) * np.cos(np.pi * xi[:,[1]] * ky ) 
+    plaw = ((kx**2 + ky**2)**0.5)**(-alpha/2)
+    B *= plaw
+    B = B.astype(np.float32)
+    sv = (B**2).sum(axis=0)**0.5
+    B0 = B.copy()
+
+    # time components
+    n_time = 20000
+    V = np.random.randn(n_time, B0.shape[1]).astype("float32")
+    V -= V.mean(axis=0)
+    V = TruncatedSVD(n_components=B0.shape[1]).fit_transform(V)
+    V /= (V**2).sum(axis=0)**0.5
+    B = B0 @ V.T
+
+    noise = np.random.randn(*B.shape).astype("float32")
+    spks = B.copy() + 5e-3 * noise
+
+    np.savez(filename, 
+            spks=spks, xi=xi)
+
 
 def tuning_stats(X_embedding, spks, stim_times):
     n_x = X_embedding.shape[0]
@@ -265,18 +309,44 @@ def sequence_stats(X_embedding, stim_times):
     seqcurves /= n_seq
     return seqcurves 
 
+def benchmark_2D(xi, isorts):
+    ### Benchmarks
+    Xdist = metrics.distance_matrix(xi)
+    nbrs1 = NearestNeighbors(n_neighbors=1500, metric="precomputed").fit(Xdist)
+    ind1 = nbrs1.kneighbors(return_distance=False)
+    xd = Xdist[np.tril_indices(Xdist.shape[0], -1)]
 
-def embedding_performance(root, n_per_module=1000, save=True):
-    mids = np.arange(0, n_per_module*4 + 1, n_per_module)
-    n_neurons = n_per_module * 6
-    mids = np.append(mids, np.array([n_neurons]), axis=0)
+    inds = []
+    rhos = []
+    for isort in isorts:
+        idx = np.zeros((len(isort),1))
+        idx[isort, 0] = np.arange(len(isort))
+        Zdist = metrics.distance_matrix(idx)
+        nbrs1 = NearestNeighbors(n_neighbors=1500, metric="precomputed").fit(Zdist)
+        inds.append(nbrs1.kneighbors(return_distance=False))
+        zd = Zdist[np.tril_indices(Xdist.shape[0], -1)]
+        rhos.append(spearmanr(xd[::10], zd[::10]).correlation)
 
-    embs_all = []
-    scores_all = []
+    knn = [10, 50, 100, 200, 400, 800, 1500]
+    knn_score = np.zeros((len(knn), len(inds)))
+    intersections = np.zeros(len(knn))
+    for j, ind2 in enumerate(inds):
+        print(j)
+        for k, kni in enumerate(knn):
+            for i in range(len(xi)):
+                knn_score[k,j] += len(set(ind1[i, :kni]) & set(ind2[i, :kni]))
+            knn_score[k,j] /= len(ind1) * kni
+
+    return knn_score, knn, rhos
+
+
+def embedding_performance(root, save=True):
+    # 6000 neurons in simulation with 6 modules
+    embs_all = np.zeros((10, 5, 6000, 1))
+    scores_all = np.zeros((10, 2, 6, 5))
     algos = ["rastermap", "tSNE", "UMAP", "isomap", "laplacian\neigenmaps"]
 
     for random_state in range(10):
-        embs = []
         dat = np.load(os.path.join(root, "simulations", f"sim_{random_state}.npz"), allow_pickle=True)
         spks = dat["spks"]
         
@@ -289,19 +359,19 @@ def embedding_performance(root, n_per_module=1000, save=True):
                         grid_upsample=10,
                         time_bin=10,
                         bin_size=0).fit(spks, normalize=True, mean_time=True)
-        embs.append(model.embedding)
+        embs_all[random_state, 0] = model.embedding
 
         # tsne
         M = metrics.run_TSNE(model.Usv, perplexities=[30])
-        embs.append(M)
+        embs_all[random_state, 1] = M
 
         # umap
         M = metrics.run_UMAP(model.Usv)
-        embs.append(M)
-
+        embs_all[random_state, 2] = M
+        
         # isomap
         M = metrics.run_isomap(model.Usv)
-        embs.append(M)
+        embs_all[random_state, 3] = M
 
         # LLE
         # M = metrics.run_LLE(model.Usv)
@@ -309,14 +379,14 @@ def embedding_performance(root, n_per_module=1000, save=True):
 
         # LE
         M = metrics.run_LE(model.Usv)
-        embs.append(M)
+        embs_all[random_state, 4] = M
 
-        embs_all.append(embs)
-        
         # benchmarks
-        contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], embs, mids)
+        contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], 
+                                                        embs_all[random_state].copy())
         print(triplet_scores)
-        scores_all.append((contamination_scores, triplet_scores))
+        scores_all[random_state] = np.stack((contamination_scores, triplet_scores), 
+                                            axis=0)
         
         # compute stats for example sim
         if random_state == 0:
@@ -325,7 +395,8 @@ def embedding_performance(root, n_per_module=1000, save=True):
 
             # superneurons and correlation matrices
             spks_norm = zscore(spks, axis=1)
-            X_embs = [zscore(bin1d(spks_norm[emb[:,0].argsort()], 30, axis=0), axis=1) for emb in embs]
+            X_embs = [zscore(bin1d(spks_norm[emb[:,0].argsort()], 30, axis=0), axis=1) 
+                        for emb in embs_all[random_state].copy()]
             X_embs_bin = [zscore(bin1d(X_emb, 10, axis=1), axis=1) for X_emb in X_embs]
             cc_embs = [(X_emb @ X_emb.T) / X_emb.shape[1] for X_emb in X_embs_bin]
             tshifts = np.arange(0, 11)
@@ -369,18 +440,18 @@ def embedding_performance(root, n_per_module=1000, save=True):
             U_nodes = model.U_nodes
             U_upsampled = model.U_upsampled
 
-    scores_all = np.array(scores_all)
-    embs_all = np.array(embs_all)
-    
-    if save:
-        np.savez(os.path.join(root, "simulations", "sim_performance.npz"), 
-                scores_all=scores_all, 
-                embs_all=embs)
-
-        np.savez(os.path.join(root, "simulations", "sim_results.npz"), 
+            if save:
+                np.savez(os.path.join(root, "simulations", "sim_results.npz"), 
                     xi_all=xi_all, cc_tdelay=cc_tdelay, tshifts=tshifts, 
                     BBt_log=BBt_log, BBt_travel=BBt_travel, 
                     U_nodes=U_nodes, U_upsampled=U_upsampled, cc_embs=cc_embs, 
                     X_embs=X_embs, cc_embs_max=cc_embs_max,
                     tcurves=tcurves, csig=csig, xresp=xresp, seqcurves0=seqcurves0,
                     seqcurves1=seqcurves1)
+    
+    if save:
+        np.savez(os.path.join(root, "simulations", "sim_performance.npz"), 
+                scores_all=scores_all, 
+                embs_all=embs_all)
+
+        

@@ -24,7 +24,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="rastermap",
-    version="0.1.3",
+    use_scm_version=True,
     author="Marius Pachitariu and Carsen Stringer",
     author_email="carsen.stringer@gmail.com",
     description="Unsupervised clustering algorithm for 2D data (neurons by time)",
@@ -36,6 +36,7 @@ setuptools.setup(
     extras_require = {
       "gui": gui_deps
     },
+    tests_require = ["pytest"],
     include_package_data=True,
     classifiers=(
         "Programming Language :: Python :: 3",
