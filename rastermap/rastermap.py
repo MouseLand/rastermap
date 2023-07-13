@@ -222,16 +222,10 @@ class Rastermap:
                     stdx = X.std(axis=1)
                     X /= stdx[:,np.newaxis]
                     if mean_time:
-                        #X -= np.nanmean(X, axis=0)
-                        X_mean = np.nanmean(X, axis=0)
+                        X_mean = np.nanmean(X, axis=0, keepdims=True).T
                         X_mean /= (X_mean**2).sum()**0.5
-                        X_one = np.ones_like(X_mean)
-                        X_one /= (X_one**2).sum()**0.5
-                        V_mean = SVD(np.stack((X_mean, X_one), axis=1), 
-                                     n_components=2)
-                        self.V_mean = V_mean
-                        proj_mean = X @ V_mean
-                        X -= proj_mean @ V_mean.T
+                        w_mean = X @ X_mean
+                        X -= w_mean @ X_mean.T
                     if self.keep_norm_X:
                         self.X = X
             else:
@@ -246,12 +240,8 @@ class Rastermap:
                 warnings.warn("not renormalizing, using previous normalization")
         else:
             if mean_time:
-                V_mean = Vsv.mean(axis=1)
+                V_mean = Vsv.mean(axis=1, keepdims=True)
                 V_mean /= (V_mean**2).sum()**0.5
-                V_one = np.ones_like(V_mean)
-                V_one /= (V_one**2).sum()**0.5
-                V_mean = SVD(np.stack((V_mean, V_one), axis=1), 
-                                n_components=2)
                 self.V_mean = V_mean
                 proj_mean = V_mean @ (V_mean.T @ Vsv)
                 Vsv_sub = Vsv.copy() - proj_mean
