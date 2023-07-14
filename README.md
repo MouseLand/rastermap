@@ -1,6 +1,5 @@
 # Rastermap
 
-[![Documentation Status](https://readthedocs.org/projects/rastermap/badge/?version=latest)](https://rastermap.readthedocs.io/en/latest/?badge=latest)
 ![tests](https://github.com/mouseland/rastermap/actions/workflows/test_and_deploy.yml/badge.svg)
 [![codecov](https://codecov.io/gh/MouseLand/rastermap/branch/main/graph/badge.svg?token=9FFo4zNtYP)](https://codecov.io/gh/MouseLand/rastermap)
 [![PyPI version](https://badge.fury.io/py/rastermap.svg)](https://badge.fury.io/py/rastermap)

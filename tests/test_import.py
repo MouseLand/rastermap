@@ -1,5 +1,6 @@
-from rastermap import Rastermap 
-from rastermap.gui import gui
 
 def test_gui():
-    gui.run()
+    from rastermap.gui import gui
+
+def test_class():
+    from rastermap import Rastermap 
