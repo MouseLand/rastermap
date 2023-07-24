@@ -13,20 +13,16 @@ from .utils import bin1d
 from .svd import SVD
 
 def default_settings():
+    """ default settings for main algorithm settings """
     settings = {}
     settings["n_clusters"] = 100
     settings["n_PCs"] = 200
     settings["time_lag_window"] = 0
     settings["locality"] = 0.0
-    settings["grid_upsample"] = 10
-    settings["smoothness"] = 1
     settings["n_splits"] = 0
-    settings["bin_size"] = 0
     settings["time_bin"] = 0
-    settings["run_scaled_kmeans"] = True
-    settings["symmetric"] = True
-    settings["keep_norm_X"] = False
-    settings["sticky"] = True
+    settings["grid_upsample"] = 10
+    settings["mean_time"] = True
     settings["verbose"] = True
     settings["verbose_sorting"] = False
     return settings
@@ -36,7 +32,7 @@ def sequence_settings():
     """ good for data with sequences """
     settings = default_settings()
     settings["time_lag_window"] = 10
-    settings["locality"] = 1.0
+    settings["locality"] = 0.75
     return settings
 
 
@@ -57,36 +53,22 @@ def settings_info():
     )
     info["n_PCs"] = "number of PCs to use during optimization"
     info["time_lag_window"] = (
-        """number of time points into the future to compute cross-correlation, useful for sequence finding"""
+        """number of time points into the future to compute cross-correlation, 
+            useful for sequence finding"""
     )
     info["locality"] = (
         "how local should the algorithm be -- set to 1.0 for highly local + sequence finding"
     )
     info["grid_upsample"] = "how much to upsample clusters"
-    info["smoothness"] = (
-        "how much to smooth over clusters when upsampling, set to number from 1 to number of clusters"
-    )
     info["n_splits"] = (
         "split, recluster and sort n_splits times (increases local neighborhood preservation); \n (4 with 50 clusters => 800 clusters)"
-    )
-    info["bin_size"] = (
-        """binning of data across n_samples to return embedding figure, X_embedding; \n 
-            if 0, then binning based on data size, if 1 then no binning"""
     )
     info["time_bin"] = (
         """ binning of data in time before PCA is computed """
     )
-    info["run_scaled_kmeans"] = (
-        "run scaled_kmeans as clustering algorithm; if False, run kmeans"
-    )
-    info["symmetric"] = (
-        """if False, use only positive time lag cross-correlations for sorting (only makes a difference if time_lag_window > 0); 
-            \n keep False for sequence finding"""
-    )
-    info["keep_norm_X"] = "keep normalized version of X saved as member of class"
-    info["sticky"] = (
-        """if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; \n 
-            otherwise neurons can move each split (which generally does not work as well)"""
+    info["mean_time"] = (
+        """whether to project out the mean over data samples at each timepoint,
+             usually good to keep on to find structure"""
     )
     info["verbose"] = "whether to output progress during optimization"
     info["verbose_sorting"] = "output progress in travelling salesman"
@@ -98,101 +80,133 @@ class Rastermap:
     Rastermap takes the n_PCs (200 default) of the data, and embeds them into
     n_clusters clusters. It then sorts the clusters and upsamples to a grid with 
     grid_upsample * n_clusters nodes. Each data sample is assigned to a node. 
-    The assignment of the samples to nodes is returned.
+    The assignment of the samples to nodes is attribute `embedding`, and the sorting 
+    of the nodes is `isort`.
 
-    data : n_samples x n_features
+    Parameters in order of importance
 
     Parameters
     -----------
     n_clusters : int, optional (default: 100)
         number of clusters created from data before upsampling and creating embedding
-        (any number above 150 will be very slow due to NP-hard sorting problem)
+        (any number above 150 will be slow due to NP-hard sorting problem, max is 200)
     n_PCs : int, optional (default: 200)
         number of PCs to use during optimization
     time_lag_window : int, optional (default: 0)
-        number of time points into the future to compute cross-correlation, useful for sequence finding
+        number of time points into the future to compute cross-correlation, 
+        useful to set to several timepoints for sequence finding
     locality : float, optional (default: 0.0)
-        how local should the algorithm be -- set to 1.0 for highly local + sequence finding
+        how local should the algorithm be -- set to 1.0 for highly local + 
+        sequence finding, and 0.0 for global sorting
     grid_upsample : int, optional (default: 10)
         how much to upsample clusters, if set to 0.0 then no upsampling
-    smoothness : int, optional (default: 1)
-        how much to smooth over clusters when upsampling, number from 1 to number of clusters
+    time_bin : int, optional (default: 0)
+        binning of data in time before PCA is computed, if set to 0 or 1 no binning occurs
+    mean_time : bool, optional (default: True)
+        whether to project out the mean over data samples at each timepoint,
+             usually good to keep on to find structure
     n_splits : int, optional (default: 0)
-        split, recluster and sort n_splits times (increases local neighborhood preservation); 
-        (4 with 50 clusters => 800 clusters)
-    bin_size : int, optional (default: 0)
-        binning of data across n_samples to return embedding figure, X_embedding; 
-        if 0, then binning based on data size, if 1 then no binning
+        split, recluster and sort n_splits times 
+        (increases local neighborhood preservation for high-dim data); 
+        results in (n_clusters * 2**n_splits) clusters
     run_scaled_kmeans : bool, optional (default: True)
         run scaled_kmeans as clustering algorithm; if False, run kmeans
-    symmetric : bool, optional (default: False)
-        if False, use only positive time lag cross-correlations for sorting (only makes a difference if time_lag_window > 0); 
-        keep False for sequence finding
-    keep_norm_X : bool, optional (default: True)
-        keep normalized version of X saved as member of class
-    sticky : bool, optional (default: True)
-        if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; 
-        otherwise neurons can move each split (which generally does not work as well)
     verbose : bool (default: True)
         whether to output progress during optimization
     verbose_sorting : bool (default: False)
-        output progress in travelling salesman
+        output progress in travelling salesman    
+    keep_norm_X : bool, optional (default: True)
+        keep normalized version of X saved as member of class
+    bin_size : int, optional (default: 0)
+        binning of data across n_samples to return embedding figure, X_embedding; 
+        if 0, then binning based on data size, if 1 then no binning
+    symmetric : bool, optional (default: False)
+        if False, use only positive time lag cross-correlations for sorting 
+        (only makes a difference if time_lag_window > 0); 
+        recommended to keep False for sequence finding
+    sticky : bool, optional (default: True)
+        if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; 
+        otherwise neurons can move each split (which generally does not work as well)
+    nc_splits : int, optional (default: None)
+        if n_splits > 0, size to split n_clusters into; 
+        if None, nc_splits = min(50, n_clusters // 4)
+    smoothness : int, optional (default: 1)
+        how much to smooth over clusters when upsampling, number from 1 to number of 
+        clusters (recommended to not change, instead use locality to change sorting)
+    
     """
 
     def __init__(self, n_clusters=100, n_PCs=200, time_lag_window=0.0, locality=0.0,
-                 smoothness=1, grid_upsample=10, bin_size=0, 
-                 time_bin=0, sticky=True, n_splits=0, nc_splits=None, circular=False,
-                 run_scaled_kmeans=True, symmetric=False, 
-                 keep_norm_X=True, verbose=True,
-                 verbose_sorting=False):
+                 grid_upsample=10, time_bin=0, normalize=True, mean_time=True, n_splits=0,
+                 run_scaled_kmeans=True, verbose=True, verbose_sorting=False, 
+                 keep_norm_X=True, bin_size=0, symmetric=False, 
+                 sticky=True, nc_splits=None, smoothness=1):
 
-        self.n_PCs = n_PCs
-        self.n_splits = n_splits
         self.n_clusters = n_clusters
-        self.nc_splits = nc_splits
-        self.run_scaled_kmeans = run_scaled_kmeans
-        self.sticky = sticky
-        
+        self.n_PCs = n_PCs
         self.time_lag_window = time_lag_window
-        self.symmetric = symmetric
         self.locality = locality
-        self.circular = circular
-        self.smoothness = smoothness
         self.grid_upsample = grid_upsample
         self.time_bin = time_bin
-        self.bin_size = 0
-        
-        self.keep_norm_X = keep_norm_X
+        self.normalize = normalize
+        self.mean_time = mean_time
+        self.n_splits = n_splits
+        self.run_scaled_kmeans = run_scaled_kmeans
         self.verbose = verbose
         self.verbose_sorting = verbose_sorting
 
+        self.keep_norm_X = keep_norm_X
+        self.bin_size = bin_size                
+        self.symmetric = symmetric
+        self.sticky = sticky
+        self.nc_splits = nc_splits
+        self.smoothness = smoothness
+        
         self.sorting_algorithm = "travelling_salesman"
-        self.quadratic_upsample = False
-        self.gradient_upsample = False  ### NOT IMPLEMENTED
-
-    def fit_transform(self, X, u=None):
-        """Fit X into an embedded space and return that transformed
-        output.
-        Inputs
-        ----------
-        X : array, shape (n_samples, n_features). X contains a sample per row.
-
-        Returns
-        -------
-        embedding : array, shape (n_samples, n_components)
-            Embedding of the training data in low-dimensional space.
-        """
-        self.fit(X, u)
-        return self.embedding
-
+        
     def fit(self, data=None, Usv=None, Vsv=None, U_nodes=None, itrain=None,
-            normalize=True, mean_time=True, compute_X_embedding=True, 
-            bin_size=0):
-        """Fit X into an embedded space.
+            compute_X_embedding=False):
+        """ sorts data or singular value decomposition of data by first axis
+
+        can use full data matrix, or use singular value decomposition, to reduce RAM 
+        requirements, it is recommended to use float32
+
+        example usage:
+        ```
+        import numpy as np
+        import matplotlib.pyplot as plt
+        from rastermap import Rastermap, utils
+        from scipy.stats import zscore
+
+        # spks is neurons by time
+        spks = np.load("spks.npy").astype("float32")
+        spks = zscore(spks, axis=1)
+
+        # fit rastermap
+        model = Rastermap(n_PCs=200, n_clusters=100, 
+                        locality=0.75, time_lag_window=5).fit(spks)
+        y = model.embedding # neurons x 1
+        isort = model.isort
+
+        # bin over neurons
+        X_embedding = zscore(utils.bin1d(spks, bin_size=25, axis=0), axis=1)
+
+        # plot
+        fig = plt.figure(figsize=(12,5))
+        ax = fig.add_subplot(111)
+        ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap="gray_r", aspect="auto")
+        ```
+
         Inputs
         ----------
-        X : array, shape (n_samples, n_features) - float32 recommended
-        u, v : svd decomposition of X (optional), u should be u*sv
+        data : array, shape (n_samples, n_features) (optional, default None) 
+            this matrix should be neurons or voxels by time, or None if using decomposition, 
+            e.g. as in widefield imaging
+        Usv : array, shape (n_samples, n_PCs) (optional, default None)
+            singular vectors U times singular values sv
+        Vsv : array, shape (n_features, n_PCs) (optional, default None)
+            singular vectors U times singular values sv
+
 
         Assigns
         ----------
@@ -208,7 +222,7 @@ class Rastermap:
         igood = ~np.isnan(data[:,0]) if data is not None else ~np.isnan(Usv[:,0])
         stdx = None
         if data is not None:
-            if normalize:
+            if self.normalize:
                 if hasattr(self, "X"):
                     warnings.warn("not renormalizing, using previous normalization")
                     X = self.X 
@@ -221,25 +235,25 @@ class Rastermap:
                     X -= X.mean(axis=1)[:,np.newaxis]
                     stdx = X.std(axis=1)
                     X /= stdx[:,np.newaxis]
-                    if mean_time:
-                        X_mean = np.nanmean(X, axis=0, keepdims=True).T
-                        X_mean /= (X_mean**2).sum()**0.5
-                        w_mean = X @ X_mean
-                        X -= w_mean @ X_mean.T
-                    if self.keep_norm_X:
-                        self.X = X
             else:
                 if self.time_bin > 1:
                     X = bin1d(data.copy(), bin_size=self.time_bin, axis=1)
                 else:
                     X = data
+            if self.mean_time:
+                X_mean = np.nanmean(X, axis=0, keepdims=True).T
+                X_mean /= (X_mean**2).sum()**0.5
+                w_mean = X @ X_mean
+                X -= w_mean @ X_mean.T
+            if self.keep_norm_X and (self.mean_time or self.normalize):
+                self.X = X
         elif hasattr(self, "X"):
             X = self.X
             Vsv_sub = Vsv.copy()
-            if normalize:
-                warnings.warn("not renormalizing, using previous normalization")
+            if self.normalize or self.mean_time:
+                warnings.warn("not renormalizing / subtracting mean, using previous normalization")
         else:
-            if mean_time:
+            if self.mean_time:
                 V_mean = Vsv.mean(axis=1, keepdims=True)
                 V_mean /= (V_mean**2).sum()**0.5
                 self.V_mean = V_mean

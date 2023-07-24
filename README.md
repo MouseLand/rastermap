@@ -13,19 +13,21 @@
 [![GitHub forks](https://img.shields.io/github/forks/MouseLand/rastermap?style=social)](https://github.com/MouseLand/rastermap/)
 
 
-Rastermap is a visualization algorithm for neural data. The algorithm was written by 
-Carsen Stringer and Marius Pachitariu. To learn about Rastermap, read the [paper]() 
-or watch the [talk](). For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation).
+Rastermap is a discovry algorithm for neural data. The algorithm was written by 
+Carsen Stringer and Marius Pachitariu. To learn about Rastermap, read the [paper]() or watch the [talk](). For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation).
 
-It assumes that the data matrix `data` is neurons (or voxels) by timepoints. Rastermap runs in python 3.8+ and has a GUI for running it easily. See the [run_rastermap.ipynb](notebooks/run_rastermap.ipynb) notebook to see an example for how to use it, it includes a download for example data. We also have a guided [tutorial.ipynb](notebooks/tutorial.ipynb) integrating rastermap and facemap in an attempt to understand behavioral representations.
+Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for running it easily. Rastermap can also be run in a jupyter notebook locally or on google colab:
+* [run_rastermap_largescale.ipynb](notebooks/run_rastermap_largescale.ipynb) notebook shows how to use it with large-scale data (> 200 neurons)
+* [run_rastermap.ipynb](notebooks/run_rastermap.ipynb) notebook shows how to use it with small to medium sized data (< 200 neurons)
+* [tutorial.ipynb](notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap in an attempt to understand behavioral representations
 
-Here is what the output looks like for a segment of a mesoscope recording (3.2Hz sampling rate) (sorted in neural space):
+Here is what the output looks like for a segment of a mesoscope recording in a mouse during spontaneous activity (3.2Hz sampling rate), compared to random neural sorting:
 
-TBD
+<img src="https://www.suite2p.org/static/images/example_sorting_spont.png" width="600" alt="random sorting and rastermap sorting of spontaneous activity"/>
 
-Here is what the output looks like for a recording of 64,000 neurons in a larval zebrafish (data [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1), thanks to Chen, Mu, Hu, Kuan et al / Ahrens lab for sharing!). The plot on the left shows the activity of the clusters. The right plot is the positions neurons in the tissue, colored according to their 1D position in the Rastermap embedding.
+Here is what the output looks like for a recording of 64,000 neurons in a larval zebrafish (data [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1), thanks to Chen, Mu, Hu, Kuan et al / Ahrens lab for sharing). The plot on the left shows the sorted activity, and the right plot is the 2D positions of the neurons in the tissue, divided into 18 clusters according to their 1D position in the Rastermap embedding:
 
-TBD
+<img src="https://www.suite2p.org/static/images/rastermap_zebrafish.png" width="800" alt="wholebrain neural activity from a zebrafish sorted by rastermap"/>
 
 # Installation
 
@@ -33,7 +35,7 @@ TBD
 
 ### System requirements
 
-Linux, Windows and Mac OS are supported for running the code. For running the graphical interface you will need a Mac OS later than Yosemite. At least 8GB of RAM is required to run the software. 16GB-32GB may be required for larger images and 3D volumes. The software has been heavily tested on Windows 10 and Ubuntu 18.04 and less well-tested on Mac OS. Please open an issue if you have problems with installation.
+Linux, Windows and Mac OS are supported for running the code. For running the graphical interface you will need a Mac OS later than Yosemite. At least 8GB of RAM is required to run the software. 16GB-32GB may be required for larger images and 3D volumes. The software has been heavily tested on Windows 10 and Ubuntu 20.04 and less well-tested on Mac OS. Please open an [issue](https://github.com/MouseLand/rastermap/issues) if you have problems with installation.
 
 ### Instructions
 
@@ -49,11 +51,11 @@ pip install rastermap[gui]
 ~~~
 
 Rastermap has only a few dependencies so you may not need to make a special environment for it 
-(it should work in a `suite2p` or `facemap` environment), but if the pip install above does not work,
+(e.g. it should work in a `suite2p` or `facemap` environment), but if the pip install above does not work,
  please follow these instructions:
 
 1. Open an anaconda prompt / command prompt with `conda` for **python 3** in the path.
-2. Create a new environment with `conda create --name rastermap python=3.8`. Python 3.9 and 3.10 will likely work as well.
+2. Create a new environment with `conda create --name rastermap python=3.8`. Python 3.9 and 3.10 will likely work fine as well.
 4. To activate this new environment, run `conda activate rastermap`
 5. To install the minimal version of rastermap, run `pip install rastermap`.  
 6. To install rastermap and the GUI, run `pip install rastermap[gui]`. If you're on a zsh server, you may need to use ' ' around the rastermap[gui] call: `pip install 'rastermap[gui]'`.
@@ -70,9 +72,11 @@ Note you will always have to run **conda activate rastermap** before you run ras
 
 ### Dependencies
 
-This package relies on the awesomeness of **numpy**, **scipy**, **numba**, **scikit-learn**, **PyQt5**, **PyQt5.sip** and **pyqtgraph**. You can pip install or conda install all of these packages. If having issues with **PyQt5**, then make an Anaconda environment and try to install within it.
+This package relies on the awesomeness of **numpy**, **scipy**, **numba**, **scikit-learn**, **PyQt5**, **PyQt5.sip** and **pyqtgraph**. You can pip install or conda install all of these packages. If having issues with **PyQt5**, then make an Anaconda environment and try to install within it with `pip install PyQt5` or `conda install pyqt`.
 
 # Using rastermap
+
+## GUI
 
 The quickest way to start is to open the GUI from a command line terminal. You might need to open an anaconda prompt if you did not add anaconda to the path. Then run:
 
@@ -80,27 +84,53 @@ The quickest way to start is to open the GUI from a command line terminal. You m
 python -m rastermap
 ~~~
 
-To starting using the GUI, save your data into an npy file that is just a matrix that is neurons x timepoints. Then "File > Load data matrix" and choose this file. Next click "Run > Run rastermap" and click run. See the parameters section to learn about the parameters.
+To start using the GUI, save your data into an npy file that is just a matrix that is neurons x timepoints. Then "File > Load data matrix" and choose this file. Next click "Run > Run rastermap" and click run. See the parameters section to learn about the parameters.
 
 The GUI will start with a highlighted region that you can drag to visualize the average activity of neurons in a given part of the plot. To draw more regions, you right-click to start a region, then right-click to end it. The neurons' activity traces then show up on the botton of the GUI, and if the neuron positions are loaded, you will see them colored by the region color. You can delete a region by holding CTRL and clicking on it. You can save the ROIs you've drawn with the "Save > Save processed data" button. They will save along with the embedding so you can reload the file with the "Load processed data" option.
-
-```
-import numpy as np
-model = np.load('embedding.npy')
-model = model.dict()
-y = model['embedding'] # neurons x 1
-```
 
 NOTE: If you are using suite2p "spks.npy", then the GUI will automatically use the "iscell.npy" file in the same folder to subsample your recording with the chosen neurons, and will automatically load 
 the neuron positions from the "stat.npy" file.
 
 ## In a notebook
 
-Please see example notebooks [run_rastermap.ipynb](notebooks/run_rastermap.ipynb) and [tutorial.ipynb](notebooks/tutorial.ipynb).
+For this, `pip install notebook` and `pip install matpltolib`.
+
+See example notebooks for more details: [run_rastermap_largescale.ipynb](notebooks/run_rastermap_largescale.ipynb), [run_rastermap.ipynb](notebooks/run_rastermap.ipynb), and [tutorial.ipynb](notebooks/tutorial.ipynb).
+
+Short code snippet:
+
+```
+import numpy as np
+import matplotlib.pyplot as plt
+from rastermap import Rastermap, utils
+from scipy.stats import zscore
+
+# spks is neurons by time
+spks = np.load("spks.npy").astype("float32")
+spks = zscore(spks, axis=1)
+
+# fit rastermap
+model = Rastermap(n_PCs=200, n_clusters=100, 
+                  locality=0.75, time_lag_window=5).fit(spks)
+y = model.embedding # neurons x 1
+isort = model.isort
+
+# bin over neurons
+X_embedding = zscore(utils.bin1d(spks, bin_size=25, axis=0), axis=1)
+
+# plot
+fig = plt.figure(figsize=(12,5))
+ax = fig.add_subplot(111)
+ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap="gray_r", aspect="auto")
+```
 
 ## From the command line
 
-TBD
+Save an "ops.npy" file with the parameters and a "spks.npy" file with a matrix of neurons by time, and run
+
+~~~sh
+python -m rastermap --S spks.npy --ops ops.npy
+~~~
 
 # Parameters
 
