@@ -179,7 +179,7 @@ def panel_cc(grid, il, yratio, cc_nodes):
     plt.colorbar(im, cax)
     return il
 
-def _fig3(brain_img, sn, xpos, ypos, isort, cc_nodes,
+def _fig3(brain_img, sn, xpos, ypos, isort, isort2, cc_nodes,
          corridor_starts, corridor_widths, 
          corridor_tuning, corridor_imgs, VRpos,
          reward_inds, sound_inds, lick_inds, run):
@@ -199,8 +199,8 @@ def _fig3(brain_img, sn, xpos, ypos, isort, cc_nodes,
     pos = ax.get_position().bounds
     ax.remove()
 
-    xmin = 1000
-    xmax=xmin+500
+    xmin = 1410
+    xmax=xmin+520
 
     nn = sn.shape[0]
     xr = xmax - xmin
@@ -240,7 +240,7 @@ def _fig3(brain_img, sn, xpos, ypos, isort, cc_nodes,
 
 
 def fig3(root, save_figure=True):
-    d = np.load(os.path.join(root, "results", "corridor_proc2.npz"), allow_pickle=True) 
+    d = np.load(os.path.join(root, "results", "corridor_proc.npz"), allow_pickle=True) 
     d2 = np.load(os.path.join(root, "data", "corridor_behavior.npz"), allow_pickle=True) 
     try:
         brain_img = plt.imread(os.path.join(root, "figures", "brain_window_visual.png"))

@@ -595,20 +595,22 @@ class MainW(QMainWindow):
             colors = colormaps.gist_ncar[np.linspace(
                 0, 254, len(x)).astype("int")][self.sorting]
             brushes = [pg.mkBrush(color=c) for c in colors]
-            self.scatter_plots[iplane][0].setData(x, y, symbol="o", brush=brushes,
+            self.scatter_plots[iplane][0].setData(x, y, symbol="o", size=3,
+                                                  brush=brushes,
                                                   hoverable=True)
             for i in range(1, nclust_max + 1):
                 self.scatter_plots[iplane][i].setData([], [])
         else:
             if roi_id is None:
                 self.scatter_plots[iplane][0].setData(
-                    x, y, symbol="o", brush=pg.mkBrush(color=(180, 180, 180)),
+                    x, y, symbol="o", size=3,
+                    brush=pg.mkBrush(color=(180, 180, 180)),
                     hoverable=True)
                 for roi_id in range(nclust_max):
                     if roi_id < len(self.cluster_rois):
                         selected = self.neurons_selected(self.cluster_slices[roi_id])
                         self.scatter_plots[iplane][roi_id + 1].setData(
-                            x[selected], y[selected], symbol="o",
+                            x[selected], y[selected], symbol="o", size=3,
                             brush=pg.mkBrush(color=self.colors[roi_id][:3]),
                             hoverable=True)
                     else:
@@ -616,7 +618,7 @@ class MainW(QMainWindow):
             else:
                 selected = self.neurons_selected(self.cluster_slices[roi_id])
                 self.scatter_plots[iplane][roi_id + 1].setData(
-                    x[selected], y[selected], symbol="o",
+                    x[selected], y[selected], symbol="o", size=3,
                     brush=pg.mkBrush(color=self.colors[roi_id][:3]), hoverable=True)
 
 

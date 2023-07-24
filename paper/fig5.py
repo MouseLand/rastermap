@@ -31,13 +31,18 @@ def fig5(root, save_figure=True):
 
         ax = plt.subplot(grid[i0, j0+1:j0+3])
         pos = ax.get_position().bounds
-        ax.imshow(X_embedding, aspect='auto', vmax=2.5, vmin=-0., cmap='gray_r')
+        ax.imshow(X_embedding, aspect='auto', 
+                 vmax=2.5, vmin=-0., 
+                 cmap='gray_r')
+        
         for k in range(4):
             ik = iframes[k]
             ax.plot(ik*np.ones(2), [0, nn], color="b", ls="--")
         ax.spines["left"].set_visible(False)
         ax.set_yticks([])
         ax.set_ylim([0, nn])
+        if env_id=="EnduroNoFrameskip-v4":
+            ax.set_xlim([780, nt])
         ax.invert_yaxis()
         ax.set_xlabel("timepoint in episode")
         if igame==0:

@@ -44,7 +44,7 @@ if __name__ == "__main__":
                 X = X[iscell, :]
                 print("iscell found and used to select neurons")
         
-        if Usv.ndim==3:
+        if Usv is not None and Usv.ndim==3:
             Usv = Usv.reshape(-1, Usv.shape[-1])
         
         model = Rastermap(**ops)
@@ -52,7 +52,7 @@ if __name__ == "__main__":
                              else Vsv.shape[0], "bool")
         if X is not None:
             if ("end_time" in ops and ops["end_time"] == -1) or "end_time" not in ops:
-                ops["end_time"] = S.shape[1]
+                ops["end_time"] = X.shape[1]
                 ops["start_time"] = 0
             else:
                 train_time = np.zeros(X.shape[1], "bool")

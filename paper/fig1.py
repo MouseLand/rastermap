@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 from rastermap.utils import bin1d
+from rastermap.sort import compute_BBt, compute_BBt_mask
 import metrics
 from fig_utils import *
 
@@ -38,7 +39,7 @@ def panels_schematic(fig, grid, il, cc_tdelay, tshifts, BBt_log, BBt_travel,
     ax_kmeans_img.axis("off")
 
     # plot example crosscorr
-    c0, c1 = 1, 4
+    c0, c1 = 5, 7
     ax_crosscorr.plot(tshifts, cc_tdelay[c0,c1], color=[0.5,0.5,0.5], zorder=1)
     ax_crosscorr.set_ylabel("corr")
     ax_crosscorr.set_xlabel("time lag ($\delta$t)")
@@ -83,31 +84,43 @@ def panels_schematic(fig, grid, il, cc_tdelay, tshifts, BBt_log, BBt_travel,
     ax.set_title("matching matrix")
     ax.axis("off")
     pos = ax.get_position().bounds
+    xi = np.arange(0, nshow, 1, "float32") / nshow
+    BBt_log = compute_BBt(xi, xi)
+    BBt_log = np.triu(BBt_log)
+    BBt_log /= BBt_log.sum()
+    BBt_travel = compute_BBt_mask(xi, xi)
+    BBt_travel = np.triu(BBt_travel)
+    BBt_travel /= BBt_travel.sum() 
+    vmax = 2e-2
     for i,mat in enumerate([BBt_log, BBt_travel]):
-        axi = fig.add_axes([pos[0]-dx*0.05+i*dx*1, 
-                                    pos[1]+pos[3]*0.3-i*dy*0.3, pos[2]*0.5, pos[3]*0.5])
-        axi.imshow(mat[:nshow,:nshow], vmin=-6, vmax=6, cmap="RdBu_r")
+        axi = fig.add_axes([pos[0]+dx*0.2+i*dx*1, 
+                            pos[1]+pos[3]*0.3, pos[2]*0.5, pos[3]*0.5])
+        axi.imshow(mat[:nshow,:nshow], vmin=-vmax, vmax=vmax, cmap="RdBu_r")
         axi.set_yticks([])
         axi.set_xticks([])
         axi.spines["right"].set_visible(True)
         axi.spines["top"].set_visible(True)
-        axi.set_title(["global", "traveling\nsalesman"][i])
+        axi.set_title(["global", "local"][i])
         if i==0:
-            axi.text(1.2,0.25, "+",transform=axi.transAxes, fontsize=default_font+4)
+            axi.text(1.07,0.5, "+",transform=axi.transAxes, fontsize=default_font+6)
+            axi.text(1.3,0.5, "w",transform=axi.transAxes, fontsize=default_font+2)
+            axi.text(-0.05,0.5, "(1-w)",transform=axi.transAxes, 
+                        fontsize=default_font+2, ha="right")
+        else:
+            axi.text(1.2,0.4, "=",transform=axi.transAxes, fontsize=default_font+6)
 
     ax = plt.subplot(grid[0,3])
-    il = plot_label(ltr, il, ax, transl, fs_title)
-    nn = cc_tdelay.shape[0]
-    cc_tdelay[np.arange(0, nn), np.arange(0, nn)] = 1
-    im=ax.imshow(cc_tdelay[c0:c0+nshow,c0:c0+nshow,10:].max(axis=-1), vmin=-1, vmax=1, cmap="RdBu_r")
-    ax.set_title("asymmetric similarity")
+    pos = ax.get_position().bounds
+    ax.set_position([pos[0]+dx*0.2, pos[1]+pos[3]*0.3, pos[2]*0.5, pos[3]*0.5])
+    im = ax.imshow(BBt_log[:nshow, :nshow]/2 + BBt_travel[:nshow, :nshow]/2, 
+                    vmin=-vmax, vmax=vmax, cmap="RdBu_r")
     ax.set_yticks([])
     ax.set_xticks([])
     ax.spines["right"].set_visible(True)
     ax.spines["top"].set_visible(True)
     posi = ax.get_position().bounds
     #divider = make_axes_locatable(ax)
-    cax = fig.add_axes([posi[0]+posi[2]*1.02, posi[1]+posi[3]*0.75, posi[2]*0.05, posi[3]*0.25])
+    cax = fig.add_axes([posi[0]+posi[2]*1.1, posi[1]+posi[3]*0.6, posi[2]*0.07, posi[3]*0.4])
     plt.colorbar(im, cax)
 
     ax = plt.subplot(grid[0,4])
@@ -117,10 +130,12 @@ def panels_schematic(fig, grid, il, cc_tdelay, tshifts, BBt_log, BBt_travel,
         du = 0.4
         p = ax.plot(np.linspace(0, len(U_upsampled[c0:c0+nshow*10,i]), 
                                             len(U_nodes[c0:c0+nshow+1,i])), 
-                            U_nodes[c0:c0+nshow+1,i] + du*(2-i), "x", markersize=6, 
+                            U_nodes[c0:c0+nshow+1,i] + du*(2-i) + (i==2)*0.08, "x", 
+                            markersize=6, 
                             color=np.ones(3)*(0.25*i),
                             lw=4)
-        ax.plot(U_upsampled[c0*10:(c0+nshow)*10,i] + du*(2-i), color=p[0].get_color(), lw=1)
+        ax.plot(U_upsampled[c0*10:(c0+nshow)*10,i] + du*(2-i) + (i==2)*0.08, 
+                color=p[0].get_color(), lw=1)
         ax.text(20*10, du*(2-i) + du*0.05 + U_nodes[c0:c0+nshow,i].max(), f"PC {i+1:d}", 
                          color=p[0].get_color(), ha="right")
     ax.set_ylim([-du*0.8,du*2.4])
@@ -317,6 +332,7 @@ def panels_scores(grid, transl, il, scores_all, alg_cols, mod_names):
     ax.set_xticks(np.arange(0, 5))
     ax.set_xticklabels(mod_names, 
                         rotation=30, ha="right", rotation_mode="anchor")
+    ax.set_ylim([0, 85])
     return il
 
 def _fig1(kmeans_img, xi_all, cc_tdelay, tshifts, BBt_log, BBt_travel, 
@@ -428,6 +444,7 @@ def panels_scores_tsne_umap(fig, grid, il, transl, scores_all, mnn_all, knn,
     ax.plot(100 * np.array([5./6, 5./6, 5./6, 5./6, 2./3]), color="k", linestyle="--")
     ax.text(0, 85, "chance")
     ax.set_ylabel("% contamination")
+    ax.set_ylim([0, 85])
     ax.set_xticks(np.arange(0, 5))
     ax.set_xticklabels(mod_names, 
                         rotation=30, ha="right", rotation_mode="anchor")
