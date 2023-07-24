@@ -205,6 +205,7 @@ def load_fish_data(root, subject):
     S = S[good_neurons]
     F = F[good_neurons]
     xyz = xyz[good_neurons]
+    xyz[:,0] = -1*xyz[:,0]
 
     return S, F, xyz, stims, swimming, eyepos
 

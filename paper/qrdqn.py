@@ -156,11 +156,16 @@ def sort_spks(root, env_id):
     # show last episode
     bin_size = 50
     X_embedding = zscore(utils.bin1d(S[:,-eps_len[-1]:][isort], bin_size, axis=0), axis=1)
-    if env_id=="EnduroNoFrameskip-v4":
-        X_embedding = X_embedding[:,780:]
-        obs = obs[780:]
+    #if env_id=="EnduroNoFrameskip-v4":
+    #    X_embedding = X_embedding[:,780:]
+    #    obs = obs[780:]
     nn, nt = X_embedding.shape
-    iframes = np.linspace(nt*0.1, nt*0.9, 4).astype("int")
+    if env_id=="EnduroNoFrameskip-v4":
+        nt = nt-900
+        iframes = np.linspace(780 + nt*0.1, 780 + nt*0.9, 4).astype("int")
+    else:
+        iframes = np.linspace(nt*0.1, nt*0.9, 4).astype("int")
+    print(iframes)
     emb_layer = mode(ilayer[igood][isort][:nn*bin_size].reshape(-1, bin_size), axis=1, keepdims=False).mode
     ex_frames = obs[iframes]
     print(ex_frames.shape)

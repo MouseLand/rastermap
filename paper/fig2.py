@@ -7,7 +7,6 @@ import os
 import numpy as np
 from fig_utils import *
 
-
 def panel_neuron_pos(fig, grid1, il, yratio, xpos0, ypos0, isort, brain_img):
     xpos, ypos = xpos0.copy(), -1*ypos0.copy()
     ylim = np.array([ypos.min(), ypos.max()])
@@ -141,7 +140,7 @@ def panels_rasters(fig, grid, il, yh, padding, ipl, sn_test, sn_pred_test,
         transl = mtransforms.ScaledTranslation(-15 / 72, 12 / 72, fig.dpi_scale_trans)
         il = plot_label(ltr, il, ax, transl, fs_title)
         if k==0:
-            il+=1
+            il+=2
 
         if k==0:
             ax.text(0.75,0.8,"running speed", transform=ax.transAxes, color=kp_colors[0])
@@ -157,8 +156,9 @@ def panels_rasters(fig, grid, il, yh, padding, ipl, sn_test, sn_pred_test,
         else: 
             cax = None
         plot_raster(ax, sn_test if k==0 else sn_pred_test, 
-                    xmin=xmin, xmax=xmax, vmax=1.5, fs=3.38, label=k==1, 
-                    padding=padding, cax=cax, label_pos="right")    
+                    xmin=xmin, xmax=xmax, vmax=1.5, fs=3.38, 
+                    nper=200, n_neurons=5000, label=k==1, 
+                    padding=padding, padding_x=0.01, cax=cax, label_pos="right")    
         if k==0:
             cax = fig.add_axes([pos[0]+0.02-pos[2]*0.02, pos[1], pos[2]*0.01, pos[3]*yh])
             nn = sn_test.shape[0]
@@ -177,7 +177,8 @@ def panels_rasters(fig, grid, il, yh, padding, ipl, sn_test, sn_pred_test,
                 ax.add_artist(con)
     return il
             
-def _fig2(brain_img, face_img, xpos, ypos, isort, cc_nodes,
+def _fig2(brain_img, face_img, xpos, ypos, isort, 
+            isort2, sn, cc_nodes, sn_rand,
             beh, beh_names, tcam, tneural, 
             itest, rfs, run, sn_test, sn_pred_test):
     fig = plt.figure(figsize=(14,7))
@@ -202,16 +203,16 @@ def _fig2(brain_img, face_img, xpos, ypos, isort, cc_nodes,
     ax.remove()
     il = 0
 
-    il+=1
+    il+=2
     il = panels_beh_traces(grid1, il, face_img, beh, beh_names, tcam, tneural, itest, xmin, xmax)
 
-    il-=2
+    il-=3
     il = panel_neuron_pos(fig, grid1, il, yratio, xpos, ypos, isort, brain_img)
     
     il+=2
     il = panels_rfs(grid, il, yh, padding, ipl, rfs, beh_names)
         
-    il-=2
+    il-=3
     il = panels_rasters(fig, grid, il, yh, padding, ipl, sn_test, sn_pred_test, 
                         run, itest, xmin, xmax)
     return fig
@@ -232,4 +233,64 @@ def fig2(root, save_figure=True):
             
 
 
+def suppfig_random(root, save_figure=True):
+    d = np.load(os.path.join(root, "results", "spont_proc.npz"), allow_pickle=True) 
+    sn = d["sn"]
+    sn_rand = d["sn_rand"]
+    run = d["run"]
+    itest = d["itest"]
 
+    fig = plt.figure(figsize=(14/2,7/2))
+
+    grid = plt.GridSpec(1,2, figure=fig, left=0.04, right=0.96, top=0.88, bottom=0.13, 
+                        wspace = 0.35, hspace = 0.3)
+    il = 0
+
+    titles = ["random sorting", 
+            "Rastermap sorting"]
+
+    xmin = 185 
+    xmax = xmin+500
+    padding = 0.015
+    yh = 0.94 # fraction raster vs run
+    xr = xmax - xmin
+
+    for k in range(2):
+        ax = plt.subplot(grid[k])
+        pos = ax.get_position().bounds
+        ax.axis("off")
+        ax.remove()
+
+        # run raster
+        ax = fig.add_axes([pos[0]+0.02*(k==0), pos[1]+pos[3]*(yh+0.01), pos[2], pos[3]*(1-yh-0.01)])     
+        ax.fill_between(np.arange(0, xr), run[itest.flatten()][xmin:xmax], 
+                        color=kp_colors[0])
+        ax.set_xlim([0, 1.008*xr])
+        ax.set_ylim([0,1.2])
+        ax.spines["left"].set_visible(False)
+        ax.set_yticks([])
+        ax.set_xticks([])
+        transl = mtransforms.ScaledTranslation(-15 / 72, 12 / 72, fig.dpi_scale_trans)
+        il = plot_label(ltr, il, ax, transl, fs_title)
+        
+        if k==0:
+            ax.text(0.75,0.8,"running speed", transform=ax.transAxes, color=kp_colors[0])
+        ax.text(0,1.5,titles[k], transform=ax.transAxes, fontsize="large")
+        
+        # spk raster
+        ax = fig.add_axes([pos[0]+0.02*(k==0), pos[1], pos[2], pos[3]*yh])     
+        if k==0:
+            ax0 = ax
+        xw = pos[2]*0.1
+        if k==0:
+            cax = fig.add_axes([pos[0]+0.02, pos[1]-pos[3]*0.005, xw, pos[3]*0.01])
+        else: 
+            cax = None
+        plot_raster(ax, sn_rand[:,itest.flatten()] if k==0 else sn[:, itest.flatten()], 
+                    xmin=xmin, xmax=xmax, vmax=1.5, fs=3.38, label=k==0, 
+                    nper=200, n_neurons=5000,
+                    padding=padding, padding_x=0.02, cax=cax, label_pos="right")    
+
+    
+    if save_figure:
+        fig.savefig(os.path.join(root, "figures", "suppfig_random.pdf"))

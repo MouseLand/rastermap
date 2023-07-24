@@ -369,9 +369,9 @@ def load_proc(parent, name=None):
 
     parent.embedding = y
     parent.sorting = isort
-    parent.Usv = Usv if parent.Usv is None else parent.Usv
-    parent.Vsv = Vsv if parent.Vsv is None else parent.Vsv
-    parent.sv = sv if parent.sv is None else parent.sv
+    parent.Usv = Usv #if parent.Usv is None else parent.Usv
+    parent.Vsv = Vsv #if parent.Vsv is None else parent.Vsv
+    parent.sv = sv #if parent.sv is None else parent.sv
     parent.ops = ops
     parent.user_clusters = user_clusters
 

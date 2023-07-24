@@ -32,7 +32,7 @@ def brain_plot(ax, x, y, cweights, cmap, theta=np.pi*0.77, subsample=5,
     #ax.axis("square")
 
 def panels_hippocampus(fig, grid, il, spks, pyr_cells, speed, loc2d, tcurves, isort,
-                        cc_nodes, xmin=1000, xmax=2000, bin_sec=0.2):
+                        cc_nodes, isort2, xmin=1000, xmax=2000, bin_sec=0.2):
     ax = plt.subplot(grid[0,:3])
     pos = ax.get_position().bounds
     ax.set_position([pos[0], pos[1]+pos[3]*0.1, pos[2], pos[3]*0.9])
@@ -192,7 +192,7 @@ def panels_widefield(fig, grid, il, stim_times_0, stim_times_1,
         else:
             X = sn_pred - sn_pred_beh
             ve = ven - ven_beh
-        vmax=2
+        vmax=1.1
         ax = plt.subplot(grid1[j,1:])
         poss = ax.get_position().bounds
         ax.set_position([poss[0], poss[1], poss[2]*0.9, poss[3]])
@@ -255,12 +255,15 @@ def panels_widefield(fig, grid, il, stim_times_0, stim_times_1,
 
 
 def panels_fish(fig, grid1, il, sn, swimming, eyepos, 
-                stims, xyz, isort, cc_nodes,
-                xmin=5900, xmax=6600):
+                stims, xyz, isort, isort2, cc_nodes):
     nn = sn.shape[0]
     nx = 3
     ny = 6
     nxy = nx * ny
+
+    xi = np.hstack((np.arange(5700, 6500), np.arange(7300,7860)))
+    stims = stims[xi]
+    #xmin=5600, xmax=7900
 
     ax = plt.subplot(grid1[0,:-1])
     pos = ax.get_position().bounds 
@@ -278,15 +281,15 @@ def panels_fish(fig, grid1, il, sn, swimming, eyepos,
     ax = fig.add_axes([pos_neural[0], pos[1], pos_neural[2], yh])
     eye_color = [[0,0.95,0], [0,0.5,0.]]
     for i in range(2):
-        ax.plot(eyepos[:,i], color=eye_color[i])
-        ax.text(xmin+130, swimming[xmin:xmax].max()*(0.6- 0.42*i), 
+        ax.plot(eyepos[xi,i], color=eye_color[i])
+        ax.text(320+130*i, eyepos[xi].max()*(0.8), 
                 "left" if i==0 else "right", color=eye_color[i])
-    ax.text(xmin, eyepos[xmin:xmax].max()*0.6,"eye pos.", 
+    ax.text(0, eyepos[xi].max()*0.8, "eye pos.", 
                 color="k")
-    ax.plot([xmin, xmin+60], (-1+eyepos[xmin:xmax].min())*np.ones(2), 
+    ax.plot([0, 60], (-1+eyepos[xi].min())*np.ones(2), 
                 color="k")
-    ax.text(xmin, -5, "30 sec.")
-    ax.set_xlim([xmin,xmax])
+    ax.text(0, -5, "30 sec.")
+    ax.set_xlim([0, len(xi)])
     ax.axis("off")
     
     ### swimming
@@ -298,17 +301,17 @@ def panels_fish(fig, grid1, il, sn, swimming, eyepos,
     ax = fig.add_axes([pos_neural[0], pos[1] + yh + ypad, 
                         pos_neural[2], yh])
     for i in range(2):
-        ax.plot(swimming[:,i], color=swim_color[i])
-        ax.text(xmin+130, swimming[xmin:xmax].max()*(0.6- 0.42*i), 
+        ax.plot(swimming[xi,i], color=swim_color[i])
+        ax.text(0+320+130*i, swimming[xi].max()*(0.6), 
                 "left" if i==0 else "right", color=swim_color[i])
-    ax.text(xmin, swimming[xmin:xmax].max()*0.6,"swim speed", 
+    ax.text(0, swimming[xi].max()*0.6,"swimming", 
                 color="k")
-    ax.set_ylim([swimming[xmin:xmax].min(), swimming[xmin:xmax].max()])
-    ax.set_xlim([xmin,xmax])
+    ax.set_ylim([swimming[xi].min(), swimming[xi].max()])
+    ax.set_xlim([0, len(xi)])
     ax.axis("off")
 
     ### neuron activity
-    ax_neural.imshow(sn[:,xmin:xmax], vmin=0, vmax=1, 
+    ax_neural.imshow(sn[:, xi], vmin=0, vmax=1, 
                   cmap="gray_r", aspect="auto")
     ax_neural.axis("off")
     ax = fig.add_axes([-pos_neural[2]*0.01+pos_neural[0], pos_neural[1], 
@@ -340,67 +343,61 @@ def panels_fish(fig, grid1, il, sn, swimming, eyepos,
         stype = stims[start]
         if stype!=3:
             width = starts[n+1] - start
-            if start+width > xmin and start < xmax:
-                width += min(0, start-xmin)
-                start = max(0, start-xmin)
-                width = min(width, xmax - xmin - start)
-                ax_neural.add_patch(
-                        patches.Rectangle(xy=(start, 0), width=width,
-                                  height=nn, facecolor=fcolor[stype], 
-                                  edgecolor=None, alpha=0.15*(stype!=2)))
+            width += min(0, start)
+            start = max(0, start)
+            width = min(width, len(xi) - start)
+            ax_neural.add_patch(
+                    patches.Rectangle(xy=(start, 0), width=width,
+                                height=nn, facecolor=fcolor[stype], 
+                                edgecolor=None, alpha=0.15*(stype!=2)))
 
-                if stype==11 or stype==10:
-                    if stype==11:
-                        ax_stim.arrow(start+0.2*width, 0, width*0.75, 0, width=0.04, 
-                                        head_length=10, length_includes_head=True,
-                                        facecolor=fcolor[stype])
-                    else:
-                        ax_stim.arrow(start+width*0.8, 0, -width*0.75, 0, width=0.04, 
-                                        head_length=10, length_includes_head=True,
-                                        facecolor=fcolor[stype], edgecolor=None)
-                    pim = np.zeros((12,12))
-                    pim[1:-1,1:3] = 1
-                    pim[1:-1,5:7] = 1
-                    pim[1:-1,9:11] = 1
-                    ax_stim.imshow(pim, extent=(start, start+width+2, -0.1, 0.1), 
-                                aspect="auto", cmap="gray", vmin=0, vmax=1)
-                elif stype==9 or stype==8:
-                    if stype==9:
-                        ax_stim.arrow(start+width*0.5, -0.06, 0, 0.13*1.2, width=5,
-                                        head_length=0.08, length_includes_head=True,
-                                        facecolor=fcolor[stype])      
-                    else:
-                        ax_stim.arrow(start+width*0.5, 0.08, 0, -0.13*1.2, width=5,
+            if stype==11 or stype==10:
+                if stype==11:
+                    ax_stim.arrow(start+0.2*width, 0, width*0.75, 0, width=0.04, 
+                                    head_length=10, length_includes_head=True,
+                                    facecolor=fcolor[stype], edgecolor='none')
+                else:
+                    ax_stim.arrow(start+width*0.8, 0, -width*0.75, 0, width=0.04, 
+                                    head_length=10, length_includes_head=True,
+                                    facecolor=fcolor[stype], edgecolor='none')
+                pim = np.ones((12,12))
+                ax_stim.imshow(pim, extent=(start, start+width+2, -0.1, 0.1), 
+                            aspect="auto", cmap="gray", vmin=0, vmax=1)
+            elif stype==9 or stype==8:
+                if stype==9:
+                    ax_stim.arrow(start+width*0.5, -0.06, 0, 0.13*1.2, width=8,
                                     head_length=0.08, length_includes_head=True,
-                                    facecolor=fcolor[stype], edgecolor=None)
-                    pim = np.zeros((12,width))
-                    pim[1:3,1:-1] = 1
-                    pim[5:7,1:-1] = 1
-                    pim[9:11,1:-1] = 1
-                    ax_stim.imshow(pim, extent=(start, start+width+2, -0.1, 0.1), 
-                                aspect="auto", cmap="gray", vmin=0, vmax=1)
-                elif stype==1:
-                    pim = np.zeros((12,width))
-                    pim[1:6] = 1
-                    ax_stim.imshow(pim, extent=(start, start+width+1, -0.1, 0.1), 
-                                aspect="auto", cmap="gray", vmin=0, vmax=1)
-                elif stype==0:
-                    pim = np.zeros((12,width))
-                    pim[6:11,:] = 1
-                    ax_stim.imshow(pim, extent=(start, start+width+1, -0.1, 0.1), 
-                                aspect="auto", cmap="gray", vmin=0, vmax=1)
-                elif stype==2:
-                    pim = np.zeros((12,width))
-                    pim[1:-1] = 1
-                    ax_stim.imshow(pim, extent=(start, start+width+2, -0.1, 0.1), 
-                                aspect="auto", cmap="gray", vmin=0, vmax=1)
+                                    facecolor=fcolor[stype], edgecolor='none')      
+                else:
+                    ax_stim.arrow(start+width*0.5, 0.08, 0, -0.13*1.2, width=8,
+                                head_length=0.08, length_includes_head=True,
+                                facecolor=fcolor[stype], edgecolor='none')
+                pim = np.ones((12,width))
+                ax_stim.imshow(pim, extent=(start, start+width+2, -0.1, 0.1), 
+                            aspect="auto", cmap="gray", vmin=0, vmax=1)
+            elif stype==1:
+                pim = np.ones((12,width))
+                ax_stim.text(start+width/2, -0.07, "L", fontsize="small",
+                                ha="center", va="bottom", color=fcolor[stype])
+                ax_stim.imshow(pim, extent=(start, start+width+1, -0.1, 0.1), 
+                            aspect="auto", cmap="gray", vmin=0, vmax=1)
+            elif stype==0:
+                pim = np.ones((12,width))
+                ax_stim.text(start+width/2, -0.07, "R", fontsize="small",
+                                ha="center", va="bottom", color=fcolor[stype])
+                ax_stim.imshow(pim, extent=(start, start+width+1, -0.1, 0.1), 
+                            aspect="auto", cmap="gray", vmin=0, vmax=1)
+            elif stype==2:
+                pim = np.ones((12,width))
+                ax_stim.imshow(pim, extent=(start, start+width+2, -0.1, 0.1), 
+                            aspect="auto", cmap="gray", vmin=0, vmax=1)
 
-    ax_stim.set_xlim([0, xmax - xmin])
+    ax_stim.set_xlim([0, len(xi)])
     ax_stim.axis("off")
 
-    ax_stim.text(0.2, 1.1, "phototactic stimuli", 
-        transform=ax_stim.transAxes, ha="center")
-    ax_stim.text(0.71, 1.1, "optomotor response stimuli", 
+    ax_stim.text(0., 1.1, "phototactic stimuli", 
+        transform=ax_stim.transAxes, ha="left")
+    ax_stim.text(0.55, 1.1, "optomotor response stimuli", 
         transform=ax_stim.transAxes, ha="center")
 
     ### title
@@ -463,7 +460,7 @@ def fig4(root, save_figure=True):
     il = 0
 
     try:
-        d = np.load(os.path.join(root, "results", "hippocampus_proc2.npz"))
+        d = np.load(os.path.join(root, "results", "hippocampus_proc.npz"))
         il = panels_hippocampus(fig, grid, il, **d)    
     except:
         print("hippocampus data not processed")
@@ -473,16 +470,51 @@ def fig4(root, save_figure=True):
                                                             wspace=0.3, hspace=0.15)
     ax.remove()
     try:
-        d = np.load(os.path.join(root, "results", "fish_proc2.npz"))
+        d = np.load(os.path.join(root, "results", "fish_proc.npz"))
         il = panels_fish(fig, grid1, il, **d) 
     except:
         print("fish data not processed")
 
     try:
-        d = np.load(os.path.join(root, "results", "widefield_proc2.npz"))
+        d = np.load(os.path.join(root, "results", "widefield_proc.npz"))
         il = panels_widefield(fig, grid, il, **d)
     except:
         print("widefield data not processed")
 
     if save_figure:
         fig.savefig(os.path.join(root, "figures", "fig4.pdf"), dpi=200)
+
+def suppfig_timesort(root, save_figure=True):
+
+    fig = plt.figure(figsize=(14,8))
+    yratio = 14 / 8
+    grid = plt.GridSpec(2,2, figure=fig, left=0.05, right=0.98, top=0.95, bottom=0.06, 
+                    wspace = 0.2, hspace = 0.25)
+    il = 0
+
+    titles = ["spontaneous activity", "virtual reality task", "rat hippocampus, linear track",
+                "fish wholebrain, visual stimuli"]
+    tstr = ["spont", "corridor", "hippocampus", "fish"]
+    transl = mtransforms.ScaledTranslation(-20 / 72, 10/ 72, fig.dpi_scale_trans)
+        
+    for j in range(4):
+        d = np.load(os.path.join(root, "results", f"{tstr[j]}_proc.npz"))
+        ax = plt.subplot(grid[j//2, j%2])
+        il = plot_label(ltr, il, ax, transl, fs_title)
+        if j!=2:
+            isort2 = d["isort2"]
+            sn = d["sn"]
+            sp = sn[:,isort2]
+        else:
+            isort = d["isort"]
+            isort2 = d["isort2"]
+            spks = d["spks"]
+            sp = spks[isort][:,isort2]
+
+        ax.imshow(sp, vmin=0, vmax=1.5, aspect="auto", cmap="gray_r")
+        ax.set_xlabel("time sorted")
+        ax.set_ylabel("superneurons" if j!=2 else "neurons")
+        ax.set_title(titles[j])
+
+    if save_figure:
+        fig.savefig(os.path.join(root, "figures", "suppfig_timesort.pdf"), dpi=200)
