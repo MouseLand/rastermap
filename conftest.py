@@ -47,7 +47,7 @@ def download_url_to_file(url, dst, progress=True):
 
 @pytest.fixture()
 def test_file():
-    ddir = Path.home().joinpath('.neuropop')
+    ddir = Path.home().joinpath('.rastermap')
     ddir.mkdir(exist_ok=True)
     data_dir = ddir.joinpath('data')
     data_dir.mkdir(exist_ok=True)

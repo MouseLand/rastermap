@@ -169,7 +169,8 @@ class Rastermap:
         """ sorts data or singular value decomposition of data by first axis
 
         can use full data matrix, or use singular value decomposition, to reduce RAM 
-        requirements, it is recommended to use float32
+        requirements, it is recommended to use float32. see Rastermap class for 
+        parameter information (`Rastermap?`)
 
         example usage:
         ```
@@ -200,20 +201,44 @@ class Rastermap:
         Inputs
         ----------
         data : array, shape (n_samples, n_features) (optional, default None) 
-            this matrix should be neurons or voxels by time, or None if using decomposition, 
+            this matrix is usually neurons/voxels by time, or None if using decomposition, 
             e.g. as in widefield imaging
         Usv : array, shape (n_samples, n_PCs) (optional, default None)
             singular vectors U times singular values sv
         Vsv : array, shape (n_features, n_PCs) (optional, default None)
             singular vectors U times singular values sv
-
+        U_nodes : array, shape (n_clusters, n_PCs) (optional, default None)
+            cluster centers in PC space
+        itrain : array, shape (n_features,) (optional, default None)
+            fit embedding on timepoints itrain only
 
         Assigns
         ----------
-        embedding : array-like, shape (n_samples, n_components)
-            Stores the embedding vectors.
-        isort : sorting along first dimension of matrix
-        
+        embedding : array, shape (n_samples, 1)
+            embedding of each neuron / voxel
+        isort : sorting along first dimension of input matrix
+            use this to get neuron / voxel sorting
+        igood : array, shape (n_samples, 1)
+            neurons/voxels which had non-zero activity and were used for sorting
+        Usv : array, shape (n_samples, n_PCs) 
+            singular vectors U times singular values sv
+        Vsv : array, shape (n_features, n_PCs)
+            singular vectors U times singular values sv
+        U_nodes : array, shape (n_clusters, n_PCs) 
+            cluster centers in PC space
+        Y_nodes : array, shape (n_clusters, 1) 
+            np.arange(0, n_clusters)
+        X_nodes : array, shape (n_clusters, n_features)
+            cluster activity traces in time
+        cc : array, shape (n_clusters, n_clusters)
+            sorted asymmetric similarity matrix
+        embedding_clust : array, shape (n_samples, 1)
+            assignment of each neuron/voxel to each cluster (before upsampling)
+        X : array, shape (n_samples, n_features)
+            normalized data stored (if keep_norm_X is True)
+        X_embedding : array, shape (n_samples//bin_size, n_features)
+            normalized data binned across samples (if compute_X_embedding is True)
+
         """
         t0 = time.time()
 
@@ -221,13 +246,14 @@ class Rastermap:
         # normalize data
         igood = ~np.isnan(data[:,0]) if data is not None else ~np.isnan(Usv[:,0])
         stdx = None
+        normed = False
         if data is not None:
             if self.normalize:
                 if hasattr(self, "X"):
-                    warnings.warn("not renormalizing, using previous normalization")
+                    warnings.warn("not renormalizing / subtracting mean, using previous normalization")
                     X = self.X 
                 else:
-                    print("normalizing data")
+                    print("normalizing data across axis=1")
                     X = data.copy() 
                     if self.time_bin > 1:
                         print(f"binning in time with time_bin = {self.time_bin}")
@@ -235,16 +261,23 @@ class Rastermap:
                     X -= X.mean(axis=1)[:,np.newaxis]
                     stdx = X.std(axis=1)
                     X /= stdx[:,np.newaxis]
+                    normed = True
             else:
                 if self.time_bin > 1:
                     X = bin1d(data.copy(), bin_size=self.time_bin, axis=1)
                 else:
                     X = data
             if self.mean_time:
-                X_mean = np.nanmean(X, axis=0, keepdims=True).T
-                X_mean /= (X_mean**2).sum()**0.5
-                w_mean = X @ X_mean
-                X -= w_mean @ X_mean.T
+                if hasattr(self, "X"):
+                    warnings.warn("not renormalizing / subtracting mean, using previous normalization")
+                    X = self.X 
+                else:
+                    print("projecting out mean along axis=0")
+                    X_mean = np.nanmean(X, axis=0, keepdims=True).T
+                    X_mean /= (X_mean**2).sum()**0.5
+                    w_mean = X @ X_mean
+                    X -= w_mean @ X_mean.T
+                    normed = True
             if self.keep_norm_X and (self.mean_time or self.normalize):
                 self.X = X
         elif hasattr(self, "X"):
@@ -259,9 +292,12 @@ class Rastermap:
                 self.V_mean = V_mean
                 proj_mean = V_mean @ (V_mean.T @ Vsv)
                 Vsv_sub = Vsv.copy() - proj_mean
+                normed = True
             else:
                 Vsv_sub = Vsv.copy()
             stdx = Usv.std(axis=1) if stdx is None else stdx
+        if normed:
+            print(f"data normalized, {time.time()-t0:0.2f}sec")    
 
         stdx = X.std(axis=1) if stdx is None else stdx
         igood = np.logical_and(igood, stdx > 0)
@@ -281,7 +317,7 @@ class Rastermap:
                 self.Usv = Usv
                 self.n_PCs = Usv.shape[1]
                 pc_time = time.time() - tic
-                print(f"n_PCs = {self.n_PCs} computed in {pc_time:0.2f}sec")    
+                print(f"n_PCs = {self.n_PCs} computed, {time.time()-t0:0.2f}sec")    
             elif Usv is not None:
                 self.Usv = Usv
                 pc_time = 0
@@ -333,7 +369,7 @@ class Rastermap:
             # run clustering
             self.n_clusters = min(self.Usv.shape[0]//2, self.n_clusters)
             U_nodes, imax = kmeans_func(self.Usv[igood], n_clusters=self.n_clusters)
-            print(f"{U_nodes.shape[0]} clusters computed, time {time.time() - t0:0.2f}")
+            print(f"{U_nodes.shape[0]} clusters computed, time {time.time() - t0:0.2f}sec")
 
         # compute correlation matrix across clusters
         if self.time_lag_window > 0:
@@ -345,7 +381,7 @@ class Rastermap:
 
         ### ---------------- sorting ----------------------------------------------- ###
         cc, inds = traveling_salesman(cc, verbose=self.verbose_sorting, 
-                                       locality=self.locality, circular=self.circular,
+                                       locality=self.locality,
                                         n_skip=None)[:2]
         U_nodes = U_nodes[inds]
         ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
@@ -391,7 +427,7 @@ class Rastermap:
                 ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
             Y_nodes = np.arange(0, U_nodes.shape[0])[:, np.newaxis]
 
-        print(f"clusters sorted, time {time.time() - t0:0.2f}")
+        print(f"clusters sorted, time {time.time() - t0:0.2f}sec")
         
         ### ---------------- upsample ---------------------------------------------- ###
         self.n_clusters = U_nodes.shape[0]
@@ -403,7 +439,7 @@ class Rastermap:
             Y, corr, g, Xrec = grid_upsampling(self.Usv[igood], U_nodes, Y_nodes, n_X=self.n_X,
                                             n_neighbors=n_neighbors,
                                             e_neighbor=e_neighbor)
-            print(f"clusters upsampled, time {time.time() - t0:0.2f}")
+            print(f"clusters upsampled, time {time.time() - t0:0.2f}sec")
         else:
             if len(U_nodes) == n_samples:
                 Y = np.zeros(n_samples, "int")
@@ -424,8 +460,9 @@ class Rastermap:
         # convert cluster centers to time traces (not used in algorithm)
         Vnorm = (self.Vsv**2).sum(axis=1)**0.5
         self.X_nodes = U_nodes @ (self.Vsv / Vnorm[:, np.newaxis]).T
-        if data is not None:
-            self.X_upsampled = Xrec @ self.Vsv.T
+        # upsampled cluster centers in time (these are large so we won't keep them for now)
+        # if data is not None:
+        #     self.X_upsampled = Xrec @ (self.Vsv / Vnorm[:, np.newaxis]).T
         
         self.igood = igood
         self.embedding = np.nan * np.zeros((len(self.igood),1))
@@ -439,7 +476,9 @@ class Rastermap:
                 bin_size = max(1, n_samples // 500)
             self.X_embedding = zscore(bin1d(X[igood][self.isort], bin_size, axis=0), axis=1)
 
+        print(f"rastermap complete, time {time.time() - t0:0.2f}sec")
+
+        self.runtime = time.time() - t0
         self.pc_time = pc_time
-        self.map_time = time.time() - t0 - pc_time
 
         return self
