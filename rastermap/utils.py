@@ -58,8 +58,6 @@ def split_traintest(n_t, frac=0.25, n_segs=20, pad=3, split_time=False):
     itest = (inds_test[:,np.newaxis] + np.arange(0, l_test, 1, int))
     return itrain, itest
 
-
-
 def download_url_to_file(url, dst, progress=True):
     r"""Download object at the given URL to a local path.
             Thanks to torch, slightly modified
@@ -101,7 +99,15 @@ def download_url_to_file(url, dst, progress=True):
             os.remove(f.name)
 
 def download_data(data_type="hippocampus"):
-    url = f"http://www.suite2p.org/static/test_data/{data_type}_data.npz"
+    #url = f"http://www.suite2p.org/static/test_data/{data_type}_data.npz"
+    if data_type=="widefield":
+        url = "https://osf.io/5d8q7"
+    elif data_type=="spont2":
+        url = "https://osf.io/8xg7n"
+    elif data_type=="hippocampus":
+        url = "https://osf.io/szmw6"
+    elif data_type=="fish":
+        url = "https://osf.io/2w8pa"
     ddir = Path.home().joinpath('.rastermap')
     ddir.mkdir(exist_ok=True)
     data_dir = ddir.joinpath('data')

@@ -240,10 +240,10 @@ def suppfig_random(root, save_figure=True):
     run = d["run"]
     itest = d["itest"]
 
-    fig = plt.figure(figsize=(14/2,7/2))
+    fig = plt.figure(figsize=(14*0.75,8*0.75))
 
-    grid = plt.GridSpec(1,2, figure=fig, left=0.04, right=0.96, top=0.88, bottom=0.13, 
-                        wspace = 0.35, hspace = 0.3)
+    grid = plt.GridSpec(1,2, figure=fig, left=0.02, right=0.99, top=0.9, bottom=0.13, 
+                        wspace = 0.15, hspace = 0.3)
     il = 0
 
     titles = ["random sorting", 
@@ -289,7 +289,7 @@ def suppfig_random(root, save_figure=True):
         plot_raster(ax, sn_rand[:,itest.flatten()] if k==0 else sn[:, itest.flatten()], 
                     xmin=xmin, xmax=xmax, vmax=1.5, fs=3.38, label=k==0, 
                     nper=200, n_neurons=5000,
-                    padding=padding, padding_x=0.02, cax=cax, label_pos="right")    
+                    padding=padding, padding_x=0.01, cax=cax, label_pos="right")    
 
     
     if save_figure:

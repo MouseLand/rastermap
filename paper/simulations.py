@@ -358,7 +358,7 @@ def embedding_performance(root, save=True):
                         symmetric=False,
                         grid_upsample=10,
                         time_bin=10,
-                        bin_size=0).fit(spks, normalize=True, mean_time=True)
+                        bin_size=0).fit(spks)
         embs_all[random_state, 0] = model.embedding
 
         # tsne

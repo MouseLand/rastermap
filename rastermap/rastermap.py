@@ -208,7 +208,7 @@ class Rastermap:
         Vsv : array, shape (n_features, n_PCs) (optional, default None)
             singular vectors U times singular values sv
         U_nodes : array, shape (n_clusters, n_PCs) (optional, default None)
-            cluster centers in PC space
+            cluster centers in PC space, if you have precomputed them
         itrain : array, shape (n_features,) (optional, default None)
             fit embedding on timepoints itrain only
 

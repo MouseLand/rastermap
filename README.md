@@ -17,17 +17,19 @@ Rastermap is a discovry algorithm for neural data. The algorithm was written by
 Carsen Stringer and Marius Pachitariu. To learn about Rastermap, read the [paper]() or watch the [talk](). For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation).
 
 Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for running it easily. Rastermap can also be run in a jupyter notebook locally or on google colab:
-* [run_rastermap_largescale.ipynb](notebooks/run_rastermap_largescale.ipynb) notebook shows how to use it with large-scale data (> 200 neurons)
-* [run_rastermap.ipynb](notebooks/run_rastermap.ipynb) notebook shows how to use it with small to medium sized data (< 200 neurons)
-* [tutorial.ipynb](notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap in an attempt to understand behavioral representations
+* [rastermap_largescale.ipynb](notebooks/rastermap_largescale.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_largescale.ipynb) shows how to use it with large-scale data from mouse cortex (> 200 neurons) 
+* [rastermap_singleneurons.ipynb](notebooks/rastermap_singleneurons.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_singleneurons.ipynb) shows how to use it with small to medium sized data (< 200 neurons), in this case recorded from rat hippocampus 
+* [rastermap_zebrafish.ipynb](notebooks/rastermap_zebrafish.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_zebrafish.ipynb) shows how to use it with large-scale data from zebrafish 
+* [rastermap_widefield.ipynb](notebooks/rastermap_widefield.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_widefield.ipynb) shows how to use it with widefield imaging data, or other types of datasets that are too large to fit into memory 
+* [tutorial.ipynb](notebooks/tutorial.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap to visualize behavioral representations 
 
 Here is what the output looks like for a segment of a mesoscope recording in a mouse during spontaneous activity (3.2Hz sampling rate), compared to random neural sorting:
 
 <img src="https://www.suite2p.org/static/images/example_sorting_spont.png" width="600" alt="random sorting and rastermap sorting of spontaneous activity"/>
 
-Here is what the output looks like for a recording of 64,000 neurons in a larval zebrafish (data [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1), thanks to Chen, Mu, Hu, Kuan et al / Ahrens lab for sharing). The plot on the left shows the sorted activity, and the right plot is the 2D positions of the neurons in the tissue, divided into 18 clusters according to their 1D position in the Rastermap embedding:
+Here is what the output looks like for a recording of wholebrain neural activity in a larval zebrafish from Chen, Mu, Hu, Kuan et al 2018 (dataset [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1)). The plot on the left shows the sorted activity, and the right plot is the 2D positions of the neurons in the tissue, divided into 18 clusters according to their 1D position in the Rastermap embedding:
 
-<img src="https://www.suite2p.org/static/images/rastermap_zebrafish.png" width="800" alt="wholebrain neural activity from a zebrafish sorted by rastermap"/>
+<img src="https://www.suite2p.org/static/images/rastermap_zebrafish.PNG" width="800" alt="wholebrain neural activity from a zebrafish sorted by rastermap"/>
 
 # Installation
 
@@ -35,7 +37,7 @@ Here is what the output looks like for a recording of 64,000 neurons in a larval
 
 ### System requirements
 
-Linux, Windows and Mac OS are supported for running the code. For running the graphical interface you will need a Mac OS later than Yosemite. At least 8GB of RAM is required to run the software. 16GB-32GB may be required for larger images and 3D volumes. The software has been heavily tested on Windows 10 and Ubuntu 20.04 and less well-tested on Mac OS. Please open an [issue](https://github.com/MouseLand/rastermap/issues) if you have problems with installation.
+Linux, Windows and Mac OS are supported for running the code. For running the graphical interface you will need a Mac OS later than Yosemite. At least 8GB of RAM is recommended to run the software. 16GB-32GB may be required for larger datasets. The software has been heavily tested on Windows 10 and Ubuntu 20.04 and less well-tested on Mac OS. Please open an [issue](https://github.com/MouseLand/rastermap/issues) if you have problems with installation.
 
 ### Instructions
 
@@ -97,7 +99,7 @@ For this, `pip install notebook` and `pip install matpltolib`.
 
 See example notebooks for more details: [run_rastermap_largescale.ipynb](notebooks/run_rastermap_largescale.ipynb), [run_rastermap.ipynb](notebooks/run_rastermap.ipynb), and [tutorial.ipynb](notebooks/tutorial.ipynb).
 
-Short code snippet:
+Short example code snippet for running rastermap:
 
 ```
 import numpy as np
@@ -124,6 +126,14 @@ ax = fig.add_subplot(111)
 ax.imshow(X_embedding, vmin=0, vmax=1.5, cmap="gray_r", aspect="auto")
 ```
 
+If you are using google colab, you can mount your google drive and use your data from there with the following command, you will then see your files in the left bar under `drive`:
+
+```
+from google.colab import drive
+drive.mount('/content/drive')
+```
+
+
 ## From the command line
 
 Save an "ops.npy" file with the parameters and a "spks.npy" file with a matrix of neurons by time, and run
@@ -132,13 +142,117 @@ Save an "ops.npy" file with the parameters and a "spks.npy" file with a matrix o
 python -m rastermap --S spks.npy --ops ops.npy
 ~~~
 
-# Parameters
+# Inputs
 
-TBD
+Most of the time you will input to `Rastermap().fit` a matrix of neurons by time. For more details, these are all the inputs to the function:
+
+* **data** : array, shape (n_samples, n_features) (optional, default None) 
+            this matrix is usually neurons/voxels by time, or None if using decomposition, 
+            e.g. as in widefield imaging
+* **Usv** : array, shape (n_samples, n_PCs) (optional, default None)
+    singular vectors U times singular values sv
+* **Vsv** : array, shape (n_features, n_PCs) (optional, default None)
+    singular vectors U times singular values sv
+* **U_nodes** : array, shape (n_clusters, n_PCs) (optional, default None)
+    cluster centers in PC space, if you have precomputed them
+* **itrain** : array, shape (n_features,) (optional, default None)
+    fit embedding on timepoints itrain only
+
+# Settings
+
+These are inputs to the `Rastermap` class initialization, the settings are sorted in order of importance 
+(you will probably never need to change any other than the first few):
+
+* **n_clusters** : int, optional (default: 100)
+        number of clusters created from data before upsampling and creating embedding
+        (any number above 150 will be slow due to NP-hard sorting problem, max is 200)
+* **n_PCs** : int, optional (default: 200)
+        number of PCs to use during optimization
+* **time_lag_window** : int, optional (default: 0)
+        number of time points into the future to compute cross-correlation, 
+        useful to set to several timepoints for sequence finding
+* **locality** : float, optional (default: 0.0)
+        how local should the algorithm be -- set to 1.0 for highly local + 
+        sequence finding, and 0.0 for global sorting
+* **grid_upsample** : int, optional (default: 10)
+        how much to upsample clusters, if set to 0.0 then no upsampling
+* **time_bin** : int, optional (default: 0)
+        binning of data in time before PCA is computed, if set to 0 or 1 no binning occurs
+* **mean_time** : bool, optional (default: True)
+        whether to project out the mean over data samples at each timepoint,
+             usually good to keep on to find structure
+* **n_splits** : int, optional (default: 0)
+        split, recluster and sort n_splits times 
+        (increases local neighborhood preservation for high-dim data); 
+        results in (n_clusters * 2**n_splits) clusters
+* **run_scaled_kmeans** : bool, optional (default: True)
+        run scaled_kmeans as clustering algorithm; if False, run kmeans
+* **verbose** : bool (default: True)
+        whether to output progress during optimization
+* **verbose_sorting** : bool (default: False)
+        output progress in travelling salesman    
+* **keep_norm_X** : bool, optional (default: True)
+        keep normalized version of X saved as member of class
+* **bin_size** : int, optional (default: 0)
+        binning of data across n_samples to return embedding figure, X_embedding; 
+        if 0, then binning based on data size, if 1 then no binning
+* **symmetric** : bool, optional (default: False)
+        if False, use only positive time lag cross-correlations for sorting 
+        (only makes a difference if time_lag_window > 0); 
+        recommended to keep False for sequence finding
+* **sticky** : bool, optional (default: True)
+        if n_splits>0, sticky=True keeps neurons in same place as initial sorting before splitting; 
+        otherwise neurons can move each split (which generally does not work as well)
+* **nc_splits** : int, optional (default: None)
+        if n_splits > 0, size to split n_clusters into; 
+        if None, nc_splits = min(50, n_clusters // 4)
+* **smoothness** : int, optional (default: 1)
+        how much to smooth over clusters when upsampling, number from 1 to number of 
+        clusters (recommended to not change, instead use locality to change sorting)
+    
 
 # Outputs
 
-TBD
+The main output you want is the sorting, `isort`, which is assigned to the `Rastermap` class, e.g.
+
+```
+model = Rastermap().fit(spks)
+isort = model.isort
+```
+
+You may also want to color the neurons by their positions which are in `embedding`, e.g.
+```
+y = model.embedding[:,0]
+plt.scatter(xpos, ypos, cmap="gist_rainbow", c=y, s=1)
+```
+
+Here is the list of all variables assigned from `fit`:
+
+* **embedding** : array, shape (n_samples, 1)
+            embedding of each neuron / voxel
+* **isort** : sorting along first dimension of input matrix
+            use this to get neuron / voxel sorting
+* **igood** : array, shape (n_samples, 1)
+    neurons/voxels which had non-zero activity and were used for sorting
+* **Usv** : array, shape (n_samples, n_PCs) 
+    singular vectors U times singular values sv
+* **Vsv** : array, shape (n_features, n_PCs)
+    singular vectors U times singular values sv
+* **U_nodes** : array, shape (n_clusters, n_PCs) 
+    cluster centers in PC space
+* **Y_nodes** : array, shape (n_clusters, 1) 
+    np.arange(0, n_clusters)
+* **X_nodes** : array, shape (n_clusters, n_features)
+    cluster activity traces in time
+* **cc** : array, shape (n_clusters, n_clusters)
+    sorted asymmetric similarity matrix
+* **embedding_clust** : array, shape (n_samples, 1)
+    assignment of each neuron/voxel to each cluster (before upsampling)
+* **X** : array, shape (n_samples, n_features)
+    normalized data stored (if keep_norm_X is True)
+* **X_embedding** : array, shape (n_samples//bin_size, n_features)
+    normalized data binned across samples (if compute_X_embedding is True)
+
 
 # License
 
