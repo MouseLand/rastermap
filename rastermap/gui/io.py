@@ -350,9 +350,6 @@ def load_proc(parent, name=None):
 
         isort = parent.proc["isort"]
         y = parent.proc["embedding"]
-        Usv = parent.proc["Usv"]
-        Vsv = parent.proc["Vsv"]
-        sv = parent.proc["sv"]
         ops = parent.proc["ops"]
         user_clusters = parent.proc.get("user_clusters", None)
         
@@ -369,11 +366,11 @@ def load_proc(parent, name=None):
         parent.smooth_bin = user_clusters[0]["binsize"]
         parent.smooth.setText(str(int(parent.smooth_bin)))
 
+    print(f"using sorting from {name}")
     parent.embedding = y
     parent.sorting = isort
     parent.Usv = Usv #if parent.Usv is None else parent.Usv
     parent.Vsv = Vsv #if parent.Vsv is None else parent.Vsv
-    parent.sv = sv #if parent.sv is None else parent.sv
     parent.ops = ops
     parent.user_clusters = user_clusters
 

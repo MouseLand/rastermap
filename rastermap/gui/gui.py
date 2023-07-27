@@ -145,7 +145,7 @@ class MainW(QMainWindow):
         # Add slider for saturation
         self.sat = [30., 70.]
         self.sat_slider = QRangeSlider(Horizontal)
-        self.sat_slider.setRange(0., 200.)
+        self.sat_slider.setRange(0., 100.)
         self.sat_slider.setTickPosition(QtW.QSlider.TickPosition.TicksAbove)
         self.sat_slider.valueChanged.connect(self.sat_changed)
         self.sat_slider.setValue((self.sat[0], self.sat[1]))
@@ -290,9 +290,16 @@ class MainW(QMainWindow):
 
     def dropEvent(self, event):
         files = [u.toLocalFile() for u in event.mimeData().urls()]
-        ext = os.path.splitext(files[0])[-1]
+        file = files[0]
+        file0, ext = os.path.splitext(file)
+        proc_file = file0 + "_embedding.npy"
         if ext == ".npy" or ext == ".mat" or ext==".npz":
-            io.load_mat(self, name=files[0])
+            if file[-14:] == "_embedding.npy":
+                io.load_proc(self, name=files[0])
+            elif os.path.exists(proc_file):
+                io.load_proc(self, name=proc_file)
+            else:
+                io.load_mat(self, name=files[0])
         else:
             print("ERROR: must drag and drop *.npy, *.npz, or *.mat files")
 
@@ -451,8 +458,8 @@ class MainW(QMainWindow):
                                               (nn, N, -1)).mean(axis=1)
                 self.sp_smoothed = (Usv_ds / self.sv) @ self.Vsv.T
             self.sp_smoothed = zscore(self.sp_smoothed, axis=1)
-            self.sp_smoothed = np.maximum(-4, np.minimum(8, self.sp_smoothed)) + 4
-            self.sp_smoothed /= 12
+            self.sp_smoothed = np.maximum(-2, np.minimum(5, self.sp_smoothed)) + 2
+            self.sp_smoothed /= 7
         else:
             self.sp_smoothed = self.sp.copy()
         self.nsmooth = self.sp_smoothed.shape[0]
@@ -591,11 +598,13 @@ class MainW(QMainWindow):
             self.update_status_bar("ERROR: please upload neuron position data")
 
     def plot_scatter(self, x, y, roi_id=None, iplane=0):
+        subsample = 1
         if self.all_neurons_checkBox.isChecked() and roi_id is None:
             colors = colormaps.gist_ncar[np.linspace(
                 0, 254, len(x)).astype("int")][self.sorting]
-            brushes = [pg.mkBrush(color=c) for c in colors]
-            self.scatter_plots[iplane][0].setData(x, y, symbol="o", size=3,
+            brushes = [pg.mkBrush(color=c) for c in colors[::subsample]]
+            self.scatter_plots[iplane][0].setData(x[::subsample], y[::subsample], 
+                                                  symbol="o", size=3,
                                                   brush=brushes,
                                                   hoverable=True)
             for i in range(1, nclust_max + 1):
@@ -610,7 +619,8 @@ class MainW(QMainWindow):
                     if roi_id < len(self.cluster_rois):
                         selected = self.neurons_selected(self.cluster_slices[roi_id])
                         self.scatter_plots[iplane][roi_id + 1].setData(
-                            x[selected], y[selected], symbol="o", size=3,
+                            x[selected][::subsample], y[selected][::subsample], 
+                            symbol="o", size=3,
                             brush=pg.mkBrush(color=self.colors[roi_id][:3]),
                             hoverable=True)
                     else:
