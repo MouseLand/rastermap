@@ -101,13 +101,13 @@ def download_url_to_file(url, dst, progress=True):
 def download_data(data_type="hippocampus"):
     #url = f"http://www.suite2p.org/static/test_data/{data_type}_data.npz"
     if data_type=="widefield":
-        url = "https://osf.io/5d8q7"
+        url = "https://osf.io/5d8q7/download"
     elif data_type=="spont2":
-        url = "https://osf.io/8xg7n"
+        url = "https://osf.io/8xg7n/download"
     elif data_type=="hippocampus":
-        url = "https://osf.io/szmw6"
+        url = "https://osf.io/szmw6/download"
     elif data_type=="fish":
-        url = "https://osf.io/2w8pa"
+        url = "https://osf.io/2w8pa/download"
     ddir = Path.home().joinpath('.rastermap')
     ddir.mkdir(exist_ok=True)
     data_dir = ddir.joinpath('data')
