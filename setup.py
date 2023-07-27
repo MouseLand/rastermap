@@ -20,6 +20,28 @@ gui_deps = [
         "superqt",
         ]
 
+try:
+    import PyQt5
+    gui_deps.remove("pyqt6")
+    gui_deps.remove("pyqt6.sip")
+except:
+    pass
+
+try:
+    import PySide2
+    gui_deps.remove("pyqt6")
+    gui_deps.remove("pyqt6.sip")
+except:
+    pass
+
+try:
+    import PySide6
+    gui_deps.remove("pyqt6")
+    gui_deps.remove("pyqt6.sip")
+except:
+    pass
+
+
 with open("README.md", "r") as fh:
     long_description = fh.read()
 

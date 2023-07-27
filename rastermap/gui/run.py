@@ -2,7 +2,7 @@
 Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer and Marius Pachitariu.
 """
 import numpy as np
-import os
+import os, sys
 from qtpy import QtGui, QtCore
 from qtpy.QtWidgets import QMainWindow, QApplication, QSizePolicy, QDialog, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QButtonGroup, QRadioButton, QStatusBar, QTextEdit
 from . import io
@@ -79,13 +79,14 @@ class RunWindow(QDialog):
         self.finish = True
         self.error = False
         self.save_text()
-        np.save("rmap_ops.npy", self.ops)
+        ops_path = os.path.join(os.getcwd(), "rmap_ops.npy")
+        np.save(ops_path, self.ops)
         print("Running rastermap with command:")
-        cmd = f"-u -W ignore -m rastermap --ops rmap_ops.npy --S {parent.filebase} "
+        cmd = f"-u -W ignore -m rastermap --ops {ops_path} --S {parent.filebase}"
         if parent.file_iscell is not None:
             cmd += f"--iscell {parent.file_iscell}"
-        print(cmd)
-        self.process.start("python3", cmd.split(" "))
+        print("python " + cmd)
+        self.process.start(sys.executable, cmd.split(" "))
 
     def stop(self):
         self.finish = False
