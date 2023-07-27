@@ -31,15 +31,15 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      - name: Install ubuntu gl
+        if: runner.os == 'Linux'
+        run: |
+          apt-get update && apt-get install libgl1
       - name: Install dependencies
         run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-              apt-get update && apt-get install libgl1
-          else
-              echo "$RUNNER_OS"
-          fi
           pip install --upgrade pip
           pip install setuptools tox tox-gh-actions
+        shell: bash
           
       - name: Test with tox
         run: tox
