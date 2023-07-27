@@ -74,7 +74,7 @@ Note you will always have to run **conda activate rastermap** before you run ras
 
 ### Dependencies
 
-This package relies on the awesomeness of **numpy**, **scipy**, **numba**, **scikit-learn**, **PyQt5**, **PyQt5.sip** and **pyqtgraph**. You can pip install or conda install all of these packages. If having issues with **PyQt5**, then make an Anaconda environment and try to install within it with `pip install PyQt5` or `conda install pyqt`.
+This package relies on the awesomeness of **numpy**, **scipy**, **numba**, **scikit-learn**, **PyQt6**, **PyQt6.sip** and **pyqtgraph**. You can pip install or conda install all of these packages. If having issues with **PyQt6**, then make an Anaconda environment and try to install within it `conda install pyqt`. On **Ubuntu** you may need to `sudo apt-get install libegl1` to support PyQt6. Alternatively, you can use PyQt5 by running `pip uninstall PyQt6` and `pip install PyQt5`. If you already have a PyQt version installed, Rastermap will not install a new one.
 
 # Using rastermap
 

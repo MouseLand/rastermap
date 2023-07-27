@@ -31,10 +31,15 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      - name: Install ubuntu gl
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install libegl1
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install setuptools tox tox-gh-actions
+        shell: bash
           
       - name: Test with tox
         run: tox
