@@ -240,7 +240,7 @@ def suppfig_random(root, save_figure=True):
     run = d["run"]
     itest = d["itest"]
 
-    fig = plt.figure(figsize=(14*0.75,8*0.75))
+    fig = plt.figure(figsize=(14,8))
 
     grid = plt.GridSpec(1,2, figure=fig, left=0.02, right=0.99, top=0.9, bottom=0.13, 
                         wspace = 0.15, hspace = 0.3)

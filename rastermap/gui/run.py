@@ -3,8 +3,8 @@ Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer an
 """
 import numpy as np
 import os
-from PyQt5 import QtGui, QtCore
-from PyQt5.QtWidgets import QMainWindow, QApplication, QSizePolicy, QDialog, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QButtonGroup, QRadioButton, QStatusBar, QTextEdit
+from qtpy import QtGui, QtCore
+from qtpy.QtWidgets import QMainWindow, QApplication, QSizePolicy, QDialog, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QButtonGroup, QRadioButton, QStatusBar, QTextEdit
 from . import io
 
 
@@ -29,7 +29,7 @@ class RunWindow(QDialog):
         info = settings_info()
         keys = [
             "n_clusters", "n_PCs", "time_lag_window", "locality", "grid_upsample",
-            "time_bin", "n_splits", "run_scaled_kmeans"
+            "time_bin", "n_splits"
         ]
         tooltips = [info[key] for key in keys]
         bigfont = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
@@ -63,9 +63,10 @@ class RunWindow(QDialog):
         self.process = QtCore.QProcess(self)
         self.process.readyReadStandardOutput.connect(self.stdout_write)
         self.process.readyReadStandardError.connect(self.stderr_write)
-        # disable the button when running the s2p process
+        # disable the button when running the rastermap process
         self.process.started.connect(self.started)
         self.process.finished.connect(lambda: self.finished(parent))
+        self.process.errorOccurred.connect(self.errored)
         # stop process
         self.stopButton = QPushButton("STOP")
         self.stopButton.setEnabled(False)
@@ -75,21 +76,25 @@ class RunWindow(QDialog):
         self.show()
 
     def run_RMAP(self, parent):
-        del parent.sp
         self.finish = True
         self.error = False
         self.save_text()
         np.save("rmap_ops.npy", self.ops)
         print("Running rastermap with command:")
-        cmd = f"python -u -W ignore -m rastermap --ops rmap_ops.npy --S {parent.filebase} "
+        cmd = f"-u -W ignore -m rastermap --ops rmap_ops.npy --S {parent.filebase} "
         if parent.file_iscell is not None:
             cmd += f"--iscell {parent.file_iscell}"
         print(cmd)
-        self.process.start(cmd)
+        self.process.start("python3", cmd.split(" "))
 
     def stop(self):
         self.finish = False
         self.process.kill()
+
+    def errored(self, error):
+        print("ERROR")
+        process = self.process
+        print("error: ", error, "-", " ".join([process.program()] + process.arguments()))
 
     def started(self):
         self.runButton.setEnabled(False)

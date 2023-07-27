@@ -14,8 +14,9 @@ install_deps = [
 
 gui_deps = [
         "pyqtgraph>=0.11.0rc0", 
-        "pyqt5", 
-        "pyqt5.sip",
+        "pyqt6", 
+        "pyqt6.sip",
+        "qtpy",
         "superqt",
         ]
 

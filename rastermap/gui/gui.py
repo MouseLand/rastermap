@@ -4,10 +4,10 @@ Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer an
 import sys, os
 import numpy as np
 import pyqtgraph as pg
-from PyQt5 import QtGui, QtCore
-from PyQt5 import QtWidgets as QtW
-from PyQt5.QtCore import QEvent
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QButtonGroup, QRadioButton, QStatusBar
+from qtpy import QtGui, QtCore
+from qtpy import QtWidgets as QtW
+from qtpy.QtCore import QEvent
+from qtpy.QtWidgets import QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox, QButtonGroup, QRadioButton, QStatusBar
 from scipy.stats import zscore
 # patch for Qt 5.15 on macos >= 12
 os.environ["USE_MAC_SLIDER_PATCH"] = "1"
