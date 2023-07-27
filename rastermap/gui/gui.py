@@ -291,10 +291,10 @@ class MainW(QMainWindow):
     def dropEvent(self, event):
         files = [u.toLocalFile() for u in event.mimeData().urls()]
         ext = os.path.splitext(files[0])[-1]
-        if ext == ".npy" or ext == ".mat":
+        if ext == ".npy" or ext == ".mat" or ext==".npz":
             io.load_mat(self, name=files[0])
         else:
-            print("ERROR: must drag and drop *.npy or *.mat files")
+            print("ERROR: must drag and drop *.npy, *.npz, or *.mat files")
 
     def plane_window(self):
         self.PlaneWindow = views.PlaneWindow(self)

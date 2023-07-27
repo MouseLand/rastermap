@@ -11,8 +11,9 @@ import scipy.io as sio
 from . import guiparts
 from ..io import _load_iscell, _load_stat, load_activity
 
-def _load_activity_gui(parent, X, Usv, Vsv):
+def _load_activity_gui(parent, X, Usv, Vsv, xy):
         
+    igood = None
     if X is not None:
         parent.update_status_bar(
             f"activity loaded: {X.shape[0]} samples by {X.shape[1]} timepoints")
@@ -27,18 +28,25 @@ def _load_activity_gui(parent, X, Usv, Vsv):
         parent.Usv = Usv 
         parent.Vsv = Vsv
         parent.sv = (Vsv**2).sum(axis=0)**0.5
+        igood = np.logical_and(~np.isnan(Usv[...,0]), 
+                                Usv.std(axis=-1) > 0)
         if parent.Usv.ndim==3:
-            igood = ~np.isnan(Usv[:,:,0])
             xy = np.array(np.nonzero(igood)).T
             parent.Usv = parent.Usv[xy[:,0], xy[:,1]]
             parent.neuron_pos = xy
             parent.update_status_bar(
                 f"using voxel positions for xy")
+        elif parent.Usv.ndim==2:
+            parent.Usv = parent.Usv[igood]
+            
         parent.update_status_bar(
             f"PCs of activity loaded: {Usv.shape[0]} samples by {Vsv.shape[0]} timepoints")
         
     else:
         raise ValueError("file missing keys / data")
+
+    if xy is not None:
+        parent.neuron_pos = xy if igood is None else xy[igood]
 
     parent.n_samples = (parent.sp.shape[0] if parent.sp is not None 
                         else parent.Usv.shape[0])
@@ -55,24 +63,18 @@ def load_mat(parent, name=None):
     Note: can only load mat files containing one key assigned to data matrix
     
     """
-    try:
-        if name is None:
-            name = QFileDialog.getOpenFileName(parent, "Open *.npy or *.mat",
-                                               filter="*.npy *.npz *.mat")
-            parent.fname = name[0]
-            parent.filebase = name[0]
-        else:
-            parent.fname = name
-            parent.filebase = name
-        
-        X, Usv, Vsv = load_activity(parent.fname)
-        _load_activity_gui(parent, X, Usv, Vsv)
-        
-    except Exception as e:
-        print(e)
-        X = None
-        return
-
+    if name is None:
+        name = QFileDialog.getOpenFileName(parent, "Open *.npy or *.mat",
+                                            filter="*.npy *.npz *.mat")
+        parent.fname = name[0]
+        parent.filebase = name[0]
+    else:
+        parent.fname = name
+        parent.filebase = name
+    
+    X, Usv, Vsv, xy = load_activity(parent.fname)
+    _load_activity_gui(parent, X, Usv, Vsv, xy)
+    
 def _load_sp(parent):
     if parent.n_samples < 100:
         smooth = 1
@@ -354,8 +356,8 @@ def load_proc(parent, name=None):
         ops = parent.proc["ops"]
         user_clusters = parent.proc.get("user_clusters", None)
         
-        X, Usv, Vsv = load_activity(parent.fname)
-        _load_activity_gui(parent, X, Usv, Vsv)
+        X, Usv, Vsv, xy = load_activity(parent.fname)
+        _load_activity_gui(parent, X, Usv, Vsv, xy)
         
     except Exception as e:
         raise e

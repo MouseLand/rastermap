@@ -99,7 +99,6 @@ def download_url_to_file(url, dst, progress=True):
             os.remove(f.name)
 
 def download_data(data_type="hippocampus"):
-    #url = f"http://www.suite2p.org/static/test_data/{data_type}_data.npz"
     if data_type=="widefield":
         url = "https://osf.io/5d8q7/download"
     elif data_type=="spont2":

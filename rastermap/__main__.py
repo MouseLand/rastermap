@@ -32,7 +32,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if len(args.ops) > 0 and len(args.S) > 0:
-        X, Usv, Vsv = load_activity(args.S)
+        X, Usv, Vsv, xy = load_activity(args.S)
         ops = np.load(args.ops, allow_pickle=True).item()
         if len(args.iscell) > 0:
             iscell = np.load(args.iscell)

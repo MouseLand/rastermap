@@ -7,7 +7,7 @@ import scipy.io as sio
 from scipy.stats import zscore
 
 def _load_dict(dat, keys):
-    X, Usv, Vsv = None, None, None
+    X, Usv, Vsv, xpos, ypos, xy = None, None, None, None, None, None
     other_keys = []
     for key in keys:
         if key=="Usv":
@@ -16,26 +16,47 @@ def _load_dict(dat, keys):
             Vsv = dat["Vsv"]
         elif key=="U":
             U = dat["U"]
+        elif key=="U0":
+            U = dat["U0"]
         elif key=="V":
             V = dat["V"]
+        elif key=="V0":
+            V = dat["V0"]
         elif key=="Sv":
             Sv = dat["Sv"]
+        elif key=="sv":
+            Sv = dat["sv"]
         elif key=="X":
             X = dat["X"]
         elif key=="spks":
             X = dat["spks"]
+        elif key=="xpos":
+            xpos = dat["xpos"]
+        elif key=="ypos":
+            ypos = dat["ypos"]
+        elif key=="xy":
+            xy = dat["xy"]
+        elif key=="xyz":
+            xy = dat["xyz"]
         else:
             other_keys.append(key)
 
-    if Usv is None and U is not None and Sv is not None:
-        Usv = U * Sv
-    if Vsv is None and V is not None and Sv is not None:
-        Vsv = V * Sv
+    if X is None:
+        if Usv is None and U is not None and Sv is None:
+            if Vsv is not None:
+                Sv = (Vsv**2).sum(axis=0)**0.5
+            else:
+                raise ValueError("no Sv scaling for PCs available")
+        elif Vsv is None and V is not None and Sv is None:
+            if Usv is not None:
+                Sv = (Usv**2).sum(axis=0)**0.5
+            else:
+                raise ValueError("no Sv scaling for PCs available")
+        if Usv is None and U is not None and Sv is not None:
+            Usv = U * Sv
+        if Vsv is None and V is not None and Sv is not None:
+            Vsv = V * Sv
 
-    if X is None and len(other_keys) > 0:
-        X = dat[other_keys[0]]
-
-    if Usv is not None and Vsv is not None:
         if Usv.shape[-1] != Vsv.shape[-1]:
             raise ValueError("Usv and Vsv must have the same number of components")
         if Usv.ndim > 3:
@@ -43,7 +64,24 @@ def _load_dict(dat, keys):
         if Vsv.ndim != 2:
             raise ValueError("Vsv must have 2 dimensions")
 
-    return X, Usv, Vsv
+    if xpos is not None and xy is None:
+        xy = np.stack((xpos, ypos), axis=1)
+
+    if xy is not None:
+        if xy.ndim != 2:
+            print("cannot use xy from file: x and y positions of neurons must be 2-dimensional")
+            xy = None
+        elif xy.shape[0]==2 or xy.shape[0]==3:
+            xy = xy.T
+        if xy is not None:
+            if X is not None and X.shape[0]!=xy.shape[0]:
+                xy = None
+            elif Usv.shape[0]!=xy.shape[0]:
+                xy = None
+            if xy is None:
+                print("cannot use xy from file: x and y positions of neurons are not same size as activity")
+
+    return X, Usv, Vsv, xy
 
 def load_activity(filename):
     ext = os.path.splitext(filename)[-1]
@@ -67,17 +105,17 @@ def load_activity(filename):
                 for i, key in enumerate(X.keys()):
                     if key not in ["__header__", "__version__", "__globals__"]:
                         keys.append(key)
-                X, Usv, Vsv = _load_dict(X, keys)
+                X, Usv, Vsv, xy = _load_dict(X, keys)
     elif ext == ".npy":
         X = np.load(filename, allow_pickle=True)
-        if isinstance(X, dict):
+        if isinstance(X.item(), dict):
             dat = X.item()
             keys = dat.keys()
-            X, Usv, Vsv = _load_dict(dat, keys)
+            X, Usv, Vsv, xy = _load_dict(dat, keys)
     elif ext == ".npz":
         dat = np.load(filename, allow_pickle=True)
         keys = dat.files
-        X, Usv, Vsv = _load_dict(dat, keys)    
+        X, Usv, Vsv, xy = _load_dict(dat, keys)    
     else:
         raise Exception("Invalid file type")
 
@@ -107,7 +145,7 @@ def load_activity(filename):
             )
             X = X.reshape(X.shape[0], -1)
     
-    return X, Usv, Vsv
+    return X, Usv, Vsv, xy
 
 def _load_iscell(filename):
     basename = os.path.split(filename)[0]
