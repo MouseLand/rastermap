@@ -12,7 +12,6 @@ from . import guiparts
 from ..io import _load_iscell, _load_stat, load_activity
 
 def _load_activity_gui(parent, X, Usv, Vsv, xy):
-        
     igood = None
     if X is not None:
         parent.update_status_bar(
@@ -45,8 +44,7 @@ def _load_activity_gui(parent, X, Usv, Vsv, xy):
     else:
         raise ValueError("file missing keys / data")
 
-    if xy is not None:
-        parent.neuron_pos = xy if igood is None else xy[igood]
+    parent.neuron_pos = xy if igood is None else xy[igood]
 
     parent.n_samples = (parent.sp.shape[0] if parent.sp is not None 
                         else parent.Usv.shape[0])
@@ -67,10 +65,8 @@ def load_mat(parent, name=None):
         name = QFileDialog.getOpenFileName(parent, "Open *.npy, *.npz, *.nwb or *.mat",
                                             filter="*.npy *.npz *.mat *.nwb")
         parent.fname = name[0]
-        parent.filebase = name[0]
     else:
         parent.fname = name
-        parent.filebase = name
     
     X, Usv, Vsv, xy = load_activity(parent.fname)
     _load_activity_gui(parent, X, Usv, Vsv, xy)
@@ -416,7 +412,7 @@ def save_proc(parent):  # Save embedding output
                     parent, "Choose save folder")
                 parent.save_path = folderName
             if parent.save_path:
-                filename = parent.fname.split("/")[-1]
+                filename = os.path.split(parent.fname)[-1]
                 filename, ext = os.path.splitext(filename)
                 savename = os.path.join(parent.save_path,
                                         ("%s_embedding.npy" % filename))
@@ -439,7 +435,6 @@ def save_proc(parent):  # Save embedding output
                     "save_path": parent.save_path,
                     "isort": parent.sorting,
                     "embedding": parent.embedding,
-                    "Usv": parent.U,
                     "user_clusters": user_clusters,
                     "ops": ops
                 }

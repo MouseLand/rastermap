@@ -16,12 +16,14 @@
 Rastermap is a discovry algorithm for neural data. The algorithm was written by 
 Carsen Stringer and Marius Pachitariu. To learn about Rastermap, read the [paper]() or watch the [talk](). For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation).
 
-Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for running it easily. Rastermap can also be run in a jupyter notebook locally or on google colab:
+Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for running it easily. Rastermap can also be run in a jupyter notebook locally or on google colab, see these demos:
 * [rastermap_largescale.ipynb](notebooks/rastermap_largescale.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_largescale.ipynb) shows how to use it with large-scale data from mouse cortex (> 200 neurons) 
 * [rastermap_singleneurons.ipynb](notebooks/rastermap_singleneurons.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_singleneurons.ipynb) shows how to use it with small to medium sized data (< 200 neurons), in this case recorded from rat hippocampus 
 * [rastermap_zebrafish.ipynb](notebooks/rastermap_zebrafish.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_zebrafish.ipynb) shows how to use it with large-scale data from zebrafish 
 * [rastermap_widefield.ipynb](notebooks/rastermap_widefield.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_widefield.ipynb) shows how to use it with widefield imaging data, or other types of datasets that are too large to fit into memory 
 * [tutorial.ipynb](notebooks/tutorial.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap to visualize behavioral representations 
+
+**all demo data available [here](https://osf.io/xn4cm/)**
 
 Here is what the output looks like for a segment of a mesoscope recording in a mouse during spontaneous activity (3.2Hz sampling rate), compared to random neural sorting:
 
@@ -86,7 +88,7 @@ The quickest way to start is to open the GUI from a command line terminal. You m
 python -m rastermap
 ~~~
 
-To start using the GUI, save your data into an npy file that is just a matrix that is neurons x timepoints. Then "File > Load data matrix" and choose this file. Next click "Run > Run rastermap" and click run. See the parameters section to learn about the parameters.
+To start using the GUI, save your data into an npy file that is just a matrix that is neurons x timepoints. Then "File > Load data matrix" and choose this file (or drag and drop your file). Next click "Run > Run rastermap" and click run. See the parameters section to learn about the parameters.
 
 The GUI will start with a highlighted region that you can drag to visualize the average activity of neurons in a given part of the plot. To draw more regions, you right-click to start a region, then right-click to end it. The neurons' activity traces then show up on the botton of the GUI, and if the neuron positions are loaded, you will see them colored by the region color. You can delete a region by holding CTRL and clicking on it. You can save the ROIs you've drawn with the "Save > Save processed data" button. They will save along with the embedding so you can reload the file with the "Load processed data" option.
 
@@ -230,8 +232,8 @@ Here is the list of all variables assigned from `fit`:
 
 * **embedding** : array, shape (n_samples, 1)
             embedding of each neuron / voxel
-* **isort** : sorting along first dimension of input matrix
-            use this to get neuron / voxel sorting
+* **isort** : array, shape (n_samples,)
+    sorting along first dimension of input matrix - use this to get neuron / voxel sorting
 * **igood** : array, shape (n_samples, 1)
     neurons/voxels which had non-zero activity and were used for sorting
 * **Usv** : array, shape (n_samples, n_PCs) 
@@ -252,6 +254,20 @@ Here is the list of all variables assigned from `fit`:
     normalized data stored (if keep_norm_X is True)
 * **X_embedding** : array, shape (n_samples//bin_size, n_features)
     normalized data binned across samples (if compute_X_embedding is True)
+
+The output from the GUI and the command line is a file that ends with `_embedding.npy`. This file contains:
+* **filename**: str,
+    path to file that rastermap was run on
+* **save_path**: str,
+    folder with filename
+* **embedding** : array, shape (n_samples, 1)
+            embedding of each neuron / voxel
+* **isort** : array, shape (n_samples,)
+    sorting along first dimension of input matrix - use this to get neuron / voxel sorting
+* **user_clusters**: list, 
+    list of user drawn clusters in GUI
+* **ops**: dict,
+    dictionary of options used to run rastermap
 
 
 # License

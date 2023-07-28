@@ -229,7 +229,6 @@ class MainW(QMainWindow):
         self.show()
 
     def reset(self):
-        self.run_embedding_button.setEnabled(False)
         self.p1.clear()
         self.p2.clear()
         self.p3.clear()
@@ -461,7 +460,7 @@ class MainW(QMainWindow):
             self.sp_smoothed = np.maximum(-2, np.minimum(5, self.sp_smoothed)) + 2
             self.sp_smoothed /= 7
         else:
-            self.sp_smoothed = self.sp.copy()
+            self.sp_smoothed = self.sp[self.sorting].copy()
         self.nsmooth = self.sp_smoothed.shape[0]
         yr0 = min(4, self.nsmooth // 4)
         ym = self.nsmooth // 2
@@ -475,6 +474,8 @@ class MainW(QMainWindow):
         self.get_behav_corr() if self.behav_data else None
         if self.neuron_pos is not None or self.behav_data is not None:
             self.update_scatter(init=True)
+        elif self.neuron_pos is None and self.scatter_comboBox.currentIndex()==0:
+            self.p5.clear()
         self.p2.show()
         self.p3.show()
 
@@ -558,7 +559,6 @@ class MainW(QMainWindow):
             self.p5.invertY(False)
         request = self.scatter_comboBox.currentIndex()
         if request > 0:
-
             self.plot_behav_corr(roi_id=roi_id, init=init)
         else:
             self.plot_neuron_pos(roi_id=roi_id, init=init)

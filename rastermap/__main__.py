@@ -62,14 +62,12 @@ if __name__ == "__main__":
         model.fit(data=X, Usv=Usv, Vsv=Vsv)
 
         proc = {
-            "embedding": model.embedding,
-            "isort": model.isort,
-            "Usv": model.Usv,
-            "Vsv": model.Vsv,
-            "sv": model.sv,
-            "ops": ops,
             "filename": args.S,
-            "train_time": train_time
+            "save_path": os.path.split(args.S)[0],
+            "isort": model.isort,
+            "embedding": model.embedding,
+            "user_clusters": None,
+            "ops": ops,
         }
         basename, fname = os.path.split(args.S)
         fname = os.path.splitext(fname)[0]

@@ -65,7 +65,7 @@ def _load_dict(dat, keys):
             raise ValueError("Vsv must have 2 dimensions")
 
     if xpos is not None and xy is None:
-        xy = np.stack((xpos, ypos), axis=1)
+        xy = np.stack((ypos, xpos), axis=1)
 
     if xy is not None:
         if xy.ndim != 2:
@@ -76,7 +76,7 @@ def _load_dict(dat, keys):
         if xy is not None:
             if X is not None and X.shape[0]!=xy.shape[0]:
                 xy = None
-            elif Usv.shape[0]!=xy.shape[0]:
+            elif Usv is not None and Usv.shape[0]!=xy.shape[0]:
                 xy = None
             if xy is None:
                 print("cannot use xy from file: x and y positions of neurons are not same size as activity")

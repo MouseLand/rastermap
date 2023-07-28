@@ -241,7 +241,7 @@ class Rastermap:
 
         """
         t0 = time.time()
-
+        self.n_clusters = None if self.n_clusters==0 else self.n_clusters
         
         # normalize data
         igood = ~np.isnan(data[:,0]) if data is not None else ~np.isnan(Usv[:,0])
