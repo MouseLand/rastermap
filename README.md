@@ -95,6 +95,25 @@ The GUI will start with a highlighted region that you can drag to visualize the 
 NOTE: If you are using suite2p "spks.npy", then the GUI will automatically use the "iscell.npy" file in the same folder to subsample your recording with the chosen neurons, and will automatically load 
 the neuron positions from the "stat.npy" file.
 
+GUI examples:
+
+zebrafish:
+
+<img src="https://www.suite2p.org/static/images/fish.gif" width="600" alt="wholebrain neural activity from a zebrafish sorted by rastermap"/>
+
+mouse sensorimotor activity:
+
+<img src="https://www.suite2p.org/static/images/spont.gif" width="600" alt="sensorimotor neural activity from a mouse sorted by rastermap"/>
+
+rat hippocampus:
+
+<img src="https://www.suite2p.org/static/images/hippocampus.gif" width="600" alt="hippocampal neural activity from a rat sorted by rastermap"/>
+
+mouse widefield:
+
+<img src="https://www.suite2p.org/static/images/widefield.gif" width="600" alt="widefield neural activity from a mouse sorted by rastermap"/>
+
+
 ## In a notebook
 
 For this, `pip install notebook` and `pip install matpltolib`.
