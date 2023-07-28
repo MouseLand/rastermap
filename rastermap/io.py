@@ -116,6 +116,8 @@ def load_activity(filename):
         dat = np.load(filename, allow_pickle=True)
         keys = dat.files
         X, Usv, Vsv, xy = _load_dict(dat, keys)    
+    elif ext == ".nwb":
+        X, xy = _load_nwb(filename)
     else:
         raise Exception("Invalid file type")
 
@@ -146,6 +148,78 @@ def load_activity(filename):
             X = X.reshape(X.shape[0], -1)
     
     return X, Usv, Vsv, xy
+
+
+def _cell_center(voxel_mask):
+    x = np.median(np.array([v[0] for v in voxel_mask]))
+    y = np.median(np.array([v[1] for v in voxel_mask]))
+    return np.array([x, y])
+
+def _load_nwb(filename):
+    try:
+        from pynwb import NWBHDF5IO, NWBFile, TimeSeries
+        from pynwb.ophys import (
+            DfOverF,
+            Fluorescence  ,
+            RoiResponseSeries      
+        )
+    except:
+        raise ImportError("pynwb not installed, please pip install pynwb")
+    """ load ophys data from nwb"""
+    with NWBHDF5IO(filename, "r") as io:
+        read_nwbfile = io.read()
+
+        # load neural activity
+        X = [x for x in read_nwbfile.objects.values() if isinstance(x, Fluorescence)]
+        names = [x.name for x in read_nwbfile.objects.values() if isinstance(x, Fluorescence)]
+        if len(X) == 0:
+            X = [x for x in read_nwbfile.objects.values() if isinstance(x, DfOverF)]
+            names = [x.name for x in read_nwbfile.objects.values() if isinstance(x, DfOverF)]
+            if len(X) == 0:
+                X = [x for x in read_nwbfile.objects.values() if isinstance(x, RoiResponseSeries)]
+                names = [x.name for x in read_nwbfile.objects.values() if isinstance(x, RoiResponseSeries)]
+                
+            
+        if len(X) > 0:
+            if len(X) == 3 and "Deconvolved" in names:
+                X = X[names.index("Deconvolved")]
+            elif len(X) > 1:
+                # todo: allow user to select series
+                print(f"more than one series to choose from, taking first series {names[0]}")
+                X = X[0]
+            elif len(X) == 1:
+                X = X[0]
+
+            planes = list(X.roi_response_series.keys())
+
+            spks = np.concatenate(([X[plane].data[:] for plane in planes]), 
+                                    axis=1).T 
+            spks = spks.astype("float32")
+            ids = np.concatenate(([X[plane].rois.data[:] for plane in planes]), 
+                                    axis=0)
+            
+            if hasattr(X[planes[0]].rois[0], "image_mask"):
+                roikey = "image_mask"
+            elif hasattr(X[planes[0]].rois[0], "voxel_mask"):
+                roikey = "voxel_mask"
+            else:
+                roikey = None
+
+            if roikey is not None:
+                xy = np.concatenate([np.array([_cell_center(roi[roikey].values[0]) 
+                                            for roi in X[plane].rois]) 
+                                                for plane in planes])
+            else:
+                voxel_masks = np.concatenate([np.array([roi
+                                        for roi in X[plane].rois]) 
+                                            for plane in planes])
+                xy = np.stack([_cell_center(vm[0][0]) for vm in voxel_masks], 
+                                        axis=0)
+        else:
+            raise ValueError("not an ophys NWB file with a Fluorescence or DfOverF roi_response_series")
+
+    return spks, xy
+        
 
 def _load_iscell(filename):
     basename = os.path.split(filename)[0]

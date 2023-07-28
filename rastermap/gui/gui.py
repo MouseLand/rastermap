@@ -293,7 +293,7 @@ class MainW(QMainWindow):
         file = files[0]
         file0, ext = os.path.splitext(file)
         proc_file = file0 + "_embedding.npy"
-        if ext == ".npy" or ext == ".mat" or ext==".npz":
+        if ext == ".npy" or ext == ".mat" or ext==".npz" or ext==".nwb":
             if file[-14:] == "_embedding.npy":
                 io.load_proc(self, name=files[0])
             elif os.path.exists(proc_file):
@@ -301,7 +301,7 @@ class MainW(QMainWindow):
             else:
                 io.load_mat(self, name=files[0])
         else:
-            print("ERROR: must drag and drop *.npy, *.npz, or *.mat files")
+            print("ERROR: must drag and drop *.npy, *.npz, *.nwb or *.mat files")
 
     def plane_window(self):
         self.PlaneWindow = views.PlaneWindow(self)
@@ -598,13 +598,15 @@ class MainW(QMainWindow):
             self.update_status_bar("ERROR: please upload neuron position data")
 
     def plot_scatter(self, x, y, roi_id=None, iplane=0):
-        subsample = 1
+        subsample = max(1, int(len(x)/5000))
+        n_pts = len(x) // subsample
+        marker_size = int(3 * max(1, 800 / n_pts))
         if self.all_neurons_checkBox.isChecked() and roi_id is None:
             colors = colormaps.gist_ncar[np.linspace(
                 0, 254, len(x)).astype("int")][self.sorting]
             brushes = [pg.mkBrush(color=c) for c in colors[::subsample]]
             self.scatter_plots[iplane][0].setData(x[::subsample], y[::subsample], 
-                                                  symbol="o", size=3,
+                                                  symbol="o", size=marker_size,
                                                   brush=brushes,
                                                   hoverable=True)
             for i in range(1, nclust_max + 1):
@@ -612,7 +614,7 @@ class MainW(QMainWindow):
         else:
             if roi_id is None:
                 self.scatter_plots[iplane][0].setData(
-                    x, y, symbol="o", size=3,
+                    x, y, symbol="o", size=marker_size,
                     brush=pg.mkBrush(color=(180, 180, 180)),
                     hoverable=True)
                 for roi_id in range(nclust_max):
@@ -620,7 +622,7 @@ class MainW(QMainWindow):
                         selected = self.neurons_selected(self.cluster_slices[roi_id])
                         self.scatter_plots[iplane][roi_id + 1].setData(
                             x[selected][::subsample], y[selected][::subsample], 
-                            symbol="o", size=3,
+                            symbol="o", size=marker_size,
                             brush=pg.mkBrush(color=self.colors[roi_id][:3]),
                             hoverable=True)
                     else:
@@ -628,7 +630,7 @@ class MainW(QMainWindow):
             else:
                 selected = self.neurons_selected(self.cluster_slices[roi_id])
                 self.scatter_plots[iplane][roi_id + 1].setData(
-                    x[selected], y[selected], symbol="o", size=3,
+                    x[selected], y[selected], symbol="o", size=marker_size,
                     brush=pg.mkBrush(color=self.colors[roi_id][:3]), hoverable=True)
 
 

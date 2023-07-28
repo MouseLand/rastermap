@@ -4,7 +4,7 @@ Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer an
 import os
 import numpy as np
 from qtpy import QtGui, QtCore, QtWidgets
-from qtpy.QtWidgets import QFileDialog, QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox
+from qtpy.QtWidgets import QFileDialog, QInputDialog, QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox
 import pyqtgraph as pg
 from scipy.stats import zscore
 import scipy.io as sio
@@ -64,8 +64,8 @@ def load_mat(parent, name=None):
     
     """
     if name is None:
-        name = QFileDialog.getOpenFileName(parent, "Open *.npy or *.mat",
-                                            filter="*.npy *.npz *.mat")
+        name = QFileDialog.getOpenFileName(parent, "Open *.npy, *.npz, *.nwb or *.mat",
+                                            filter="*.npy *.npz *.mat *.nwb")
         parent.fname = name[0]
         parent.filebase = name[0]
     else:
@@ -74,7 +74,28 @@ def load_mat(parent, name=None):
     
     X, Usv, Vsv, xy = load_activity(parent.fname)
     _load_activity_gui(parent, X, Usv, Vsv, xy)
-    
+
+#def load_dandiset(parent, name=None):
+#    try:
+#        import fsspec
+#        import dandi
+#        import pynwb
+#        import aiohttp
+#    except:
+#        raise ImportError("fsspec, dandi, pynwb, and/or aiohttp not installed, please 'pip install fsspec dandi pynwb aiohttp'")
+#    if name is None:
+#        name, ok = QInputDialog().getText(parent, "QInputDialog().getText()",
+#                                     "Dandiset ID:", QLineEdit.Normal)
+#        if not (name and ok):
+#            raise ValueError("not input by user")
+#    
+#    fs = fsspec.filesystem("http")
+
+    #X, Usv, Vsv, xy = load_activity(parent.fname)
+    #_load_activity_gui(parent, X, Usv, Vsv, xy)
+
+
+
 def _load_sp(parent):
     if parent.n_samples < 100:
         smooth = 1
