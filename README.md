@@ -13,7 +13,7 @@
 [![GitHub forks](https://img.shields.io/github/forks/MouseLand/rastermap?style=social)](https://github.com/MouseLand/rastermap/)
 
 
-Rastermap is a discovry algorithm for neural data. The algorithm was written by Carsen Stringer and Marius Pachitariu. For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation). If you use Rastermap in your work, please cite the [paper](https://www.biorxiv.org/content/10.1101/2023.07.25.550571v1):
+Rastermap is a discovery algorithm for neural data. The algorithm was written by Carsen Stringer and Marius Pachitariu. For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation). If you use Rastermap in your work, please cite the [paper](https://www.biorxiv.org/content/10.1101/2023.07.25.550571v1):
 
 Stringer C., Zhong L., Syeda A., Du F., & Pachitariu M. (2023). Rastermap: a discovery method for neural population recordings. *bioRxiv* 2023.07.25.550571; doi: https://doi.org/10.1101/2023.07.25.550571
 
@@ -117,9 +117,7 @@ mouse widefield:
 
 ## In a notebook
 
-For this, `pip install notebook` and `pip install matpltolib`.
-
-See example notebooks for more details: [run_rastermap_largescale.ipynb](notebooks/run_rastermap_largescale.ipynb), [run_rastermap.ipynb](notebooks/run_rastermap.ipynb), and [tutorial.ipynb](notebooks/tutorial.ipynb).
+For this, `pip install notebook` and `pip install matplotlib`. See example [notebooks](notebooks/) for full examples.
 
 Short example code snippet for running rastermap:
 

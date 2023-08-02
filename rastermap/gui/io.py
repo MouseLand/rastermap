@@ -44,7 +44,7 @@ def _load_activity_gui(parent, X, Usv, Vsv, xy):
     else:
         raise ValueError("file missing keys / data")
 
-    parent.neuron_pos = xy if igood is None else xy[igood]
+    parent.neuron_pos = xy if (igood is None or xy is None) else xy[igood]
 
     parent.n_samples = (parent.sp.shape[0] if parent.sp is not None 
                         else parent.Usv.shape[0])
@@ -89,7 +89,6 @@ def load_mat(parent, name=None):
 
     #X, Usv, Vsv, xy = load_activity(parent.fname)
     #_load_activity_gui(parent, X, Usv, Vsv, xy)
-
 
 
 def _load_sp(parent):
