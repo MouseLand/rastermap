@@ -12,6 +12,7 @@ from . import guiparts
 from ..io import _load_iscell, _load_stat, load_activity
 
 def _load_activity_gui(parent, X, Usv, Vsv, xy):
+    parent.reset_variables()
     igood = None
     parent.neuron_pos = xy
     if X is not None:
@@ -41,11 +42,9 @@ def _load_activity_gui(parent, X, Usv, Vsv, xy):
             
         parent.update_status_bar(
             f"PCs of activity loaded: {Usv.shape[0]} samples by {Vsv.shape[0]} timepoints")
-        parent.neuron_pos = xy if igood is None else xy[igood]    
+        parent.neuron_pos = xy if (igood is None or xy is None) else xy[igood] 
     else:
         raise ValueError("file missing keys / data")
-
-    
 
     parent.n_samples = (parent.sp.shape[0] if parent.sp is not None 
                         else parent.Usv.shape[0])
@@ -54,8 +53,7 @@ def _load_activity_gui(parent, X, Usv, Vsv, xy):
     parent.embedding = np.arange(0, parent.n_samples).astype(np.int64)[:, np.newaxis]
     parent.sorting = np.arange(0, parent.n_samples).astype(np.int64)
     _load_sp(parent)
-
-
+    
 def load_mat(parent, name=None):
     """ load data matrix of neurons by time (*.npy or *.mat)
     
@@ -92,7 +90,6 @@ def load_mat(parent, name=None):
     #_load_activity_gui(parent, X, Usv, Vsv, xy)
 
 
-
 def _load_sp(parent):
     if parent.n_samples < 100:
         smooth = 1
@@ -113,7 +110,7 @@ def _load_sp(parent):
 
     parent.loaded = True
     parent.plot_activity(init=True)
-
+    
     parent.show()
     parent.loadNd.setEnabled(True)
     parent.loadXY.setEnabled(True)
@@ -297,7 +294,6 @@ def load_neuron_pos(parent):
             parent.neuron_pos = data
         elif isinstance(data[0], dict):
             parent.neuron_pos = np.array([s["med"] for s in data])
-
         parent.scatter_comboBox.setCurrentIndex(0)
         parent.plot_neuron_pos(init=True)
 

@@ -266,7 +266,7 @@ class MainW(QMainWindow):
         self.behav_binary_labels = []
         self.behav_corr_all = None
         self.zstack = None
-        self.xrange = None
+        self.xrange = slice(0, 100)
         self.file_iscell = None
         self.iscell = None
         self.neuron_pos = None
@@ -469,13 +469,11 @@ class MainW(QMainWindow):
             for i in range(len(self.cluster_rois)):
                 self.p2.removeItem(self.cluster_rois[i])
         self.cluster_rois, self.cluster_slices = [], []
+        if self.neuron_pos is not None or self.behav_data is not None:
+            self.update_scatter(init=True)
         if self.user_clusters is None:
             self.add_cluster()
         self.get_behav_corr() if self.behav_data else None
-        if self.neuron_pos is not None or self.behav_data is not None:
-            self.update_scatter(init=True)
-        elif self.neuron_pos is None and self.scatter_comboBox.currentIndex()==0:
-            self.p5.clear()
         self.p2.show()
         self.p3.show()
 
@@ -590,14 +588,14 @@ class MainW(QMainWindow):
     def plot_neuron_pos(self, init=False, roi_id=None):
         if self.neuron_pos is not None:
             ypos, xpos = self.neuron_pos[:, 0], self.neuron_pos[:, 1]
-            self.plot_scatter(ypos, xpos, roi_id=roi_id)
+            self.plot_scatter(ypos, xpos, roi_id=roi_id, init=init)
             if init:
                 self.p5.setLabel("left", "y position")
                 self.p5.setLabel("bottom", "x position")
         else:
             self.update_status_bar("ERROR: please upload neuron position data")
 
-    def plot_scatter(self, x, y, roi_id=None, iplane=0):
+    def plot_scatter(self, x, y, roi_id=None, iplane=0, init=False):
         subsample = max(1, int(len(x)/5000))
         n_pts = len(x) // subsample
         marker_size = int(3 * max(1, 800 / n_pts))
@@ -612,7 +610,7 @@ class MainW(QMainWindow):
             for i in range(1, nclust_max + 1):
                 self.scatter_plots[iplane][i].setData([], [])
         else:
-            if roi_id is None:
+            if roi_id is None or init:
                 self.scatter_plots[iplane][0].setData(
                     x, y, symbol="o", size=marker_size,
                     brush=pg.mkBrush(color=(180, 180, 180)),

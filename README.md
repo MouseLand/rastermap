@@ -13,8 +13,9 @@
 [![GitHub forks](https://img.shields.io/github/forks/MouseLand/rastermap?style=social)](https://github.com/MouseLand/rastermap/)
 
 
-Rastermap is a discovry algorithm for neural data. The algorithm was written by 
-Carsen Stringer and Marius Pachitariu. To learn about Rastermap, read the [paper]() or watch the [talk](). For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation).
+Rastermap is a discovery algorithm for neural data. The algorithm was written by Carsen Stringer and Marius Pachitariu. For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation). If you use Rastermap in your work, please cite the [paper](https://www.biorxiv.org/content/10.1101/2023.07.25.550571v1):
+
+Stringer C., Zhong L., Syeda A., Du F., & Pachitariu M. (2023). Rastermap: a discovery method for neural population recordings. *bioRxiv* 2023.07.25.550571; doi: https://doi.org/10.1101/2023.07.25.550571
 
 Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for running it easily. Rastermap can also be run in a jupyter notebook locally or on google colab, see these demos:
 * [rastermap_largescale.ipynb](notebooks/rastermap_largescale.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_largescale.ipynb) shows how to use it with large-scale data from mouse cortex (> 200 neurons) 
@@ -23,7 +24,7 @@ Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for runni
 * [rastermap_widefield.ipynb](notebooks/rastermap_widefield.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_widefield.ipynb) shows how to use it with widefield imaging data, or other types of datasets that are too large to fit into memory 
 * [tutorial.ipynb](notebooks/tutorial.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap to visualize behavioral representations 
 
-**all demo data available [here](https://osf.io/xn4cm/)**
+All demo data available [here](https://osf.io/xn4cm/).
 
 Here is what the output looks like for a segment of a mesoscope recording in a mouse during spontaneous activity (3.2Hz sampling rate), compared to random neural sorting:
 
@@ -97,11 +98,28 @@ The GUI will start with a highlighted region that you can drag to visualize the 
 NOTE: If you are using suite2p "spks.npy", then the GUI will automatically use the "iscell.npy" file in the same folder to subsample your recording with the chosen neurons, and will automatically load 
 the neuron positions from the "stat.npy" file.
 
+GUI examples:
+
+zebrafish:
+
+<img src="https://www.suite2p.org/static/images/fish.gif" width="600" alt="wholebrain neural activity from a zebrafish sorted by rastermap"/>
+
+mouse sensorimotor activity:
+
+<img src="https://www.suite2p.org/static/images/spont.gif" width="600" alt="sensorimotor neural activity from a mouse sorted by rastermap"/>
+
+rat hippocampus:
+
+<img src="https://www.suite2p.org/static/images/hippocampus.gif" width="600" alt="hippocampal neural activity from a rat sorted by rastermap"/>
+
+mouse widefield:
+
+<img src="https://www.suite2p.org/static/images/widefield.gif" width="600" alt="widefield neural activity from a mouse sorted by rastermap"/>
+
+
 ## In a notebook
 
-For this, `pip install notebook` and `pip install matpltolib`.
-
-See example notebooks for more details: [run_rastermap_largescale.ipynb](notebooks/run_rastermap_largescale.ipynb), [run_rastermap.ipynb](notebooks/run_rastermap.ipynb), and [tutorial.ipynb](notebooks/tutorial.ipynb).
+For this, `pip install notebook` and `pip install matplotlib`. See example [notebooks](notebooks/) for full examples.
 
 Short example code snippet for running rastermap:
 

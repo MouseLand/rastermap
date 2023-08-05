@@ -84,7 +84,7 @@ class RunWindow(QDialog):
         print("Running rastermap with command:")
         cmd = f"-u -W ignore -m rastermap --ops {ops_path} --S {parent.fname}"
         if parent.file_iscell is not None:
-            cmd += f"--iscell {parent.file_iscell}"
+            cmd += f" --iscell {parent.file_iscell}"
         print("python " + cmd)
         self.process.start(sys.executable, cmd.split(" "))
 

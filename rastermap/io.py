@@ -108,15 +108,17 @@ def load_activity(filename):
                 X, Usv, Vsv, xy = _load_dict(X, keys)
     elif ext == ".npy":
         X = np.load(filename, allow_pickle=True)
-        if isinstance(X, np.ndarray):
-            print(f"matrix loaded")
-            print(X.shape)
-        elif isinstance(X.item(), dict):
-            dat = X.item()
-            keys = dat.keys()
-            X, Usv, Vsv, xy = _load_dict(dat, keys)
-        else:
-            raise ValueError(".npy file does not contain an array or a dictionary")
+        try:
+            if isinstance(X.item(), dict):
+                dat = X.item()
+                keys = dat.keys()
+                X, Usv, Vsv, xy = _load_dict(dat, keys)
+        except:
+            print("data matrix:")
+            try:
+                print(X.shape)
+            except:
+                raise ValueError(".npy file does not contain an array or a dictionary")
     elif ext == ".npz":
         dat = np.load(filename, allow_pickle=True)
         keys = dat.files
