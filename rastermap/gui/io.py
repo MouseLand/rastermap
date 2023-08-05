@@ -13,6 +13,7 @@ from ..io import _load_iscell, _load_stat, load_activity
 
 def _load_activity_gui(parent, X, Usv, Vsv, xy):
     igood = None
+    parent.neuron_pos = xy
     if X is not None:
         parent.update_status_bar(
             f"activity loaded: {X.shape[0]} samples by {X.shape[1]} timepoints")
@@ -40,11 +41,11 @@ def _load_activity_gui(parent, X, Usv, Vsv, xy):
             
         parent.update_status_bar(
             f"PCs of activity loaded: {Usv.shape[0]} samples by {Vsv.shape[0]} timepoints")
-        
+        parent.neuron_pos = xy if igood is None else xy[igood]    
     else:
         raise ValueError("file missing keys / data")
 
-    parent.neuron_pos = xy if igood is None else xy[igood]
+    
 
     parent.n_samples = (parent.sp.shape[0] if parent.sp is not None 
                         else parent.Usv.shape[0])

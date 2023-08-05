@@ -79,6 +79,14 @@ def mainmenu(parent):
     parent.addAction(parent.saveProc)
     save_menu.addAction(parent.saveProc)
 
+    #help_menu = main_menu.addMenu("&Help")
+    ## Save processed data
+    #helpmenu = QAction("&Save processed data", parent)
+    #parent.saveProc.setShortcut("Ctrl+S")
+    #parent.saveProc.triggered.connect(lambda: io.save_proc(parent))
+    #parent.addAction(parent.saveProc)
+    #save_menu.addAction(parent.saveProc)
+
 
 def export_fig(parent):
     parent.win.scene().contextMenuItem = parent.p0

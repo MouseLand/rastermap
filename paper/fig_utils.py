@@ -81,11 +81,13 @@ def plot_raster(ax, X, xmin, xmax, vmax=1.5, symmetric=False, cax=None, nper=30,
     if label_pos=="left":
         if n_neurons is not None:
             ax.plot(-padding_x*xr * np.ones(2), nn - np.array([0, n_neurons/nper]), color="k")
-        ax.plot(xmin + np.array([0, fs*n_sec]), nn*(1+padding/2) + np.zeros(2), color="k")
+        if n_sec is not None:
+            ax.plot(xmin + np.array([0, fs*n_sec]), nn*(1+padding/2) + np.zeros(2), color="k")
     else:
         if n_neurons is not None:
             ax.plot((1+padding_x)*xr * np.ones(2), nn - np.array([0, n_neurons/nper]), color="k")
-        ax.plot(xmin + np.array([xr-fs*n_sec, xr]), nn*(1+padding/2) + np.zeros(2), color="k")
+        if n_sec is not None:
+            ax.plot(xmin + np.array([xr-fs*n_sec, xr]), nn*(1+padding/2) + np.zeros(2), color="k")
     ax.set_ylim([0, nn*(1+padding)])
     ax.invert_yaxis()
     if cax is not None:
