@@ -166,6 +166,26 @@ Save an "ops.npy" file with the parameters and a "spks.npy" file with a matrix o
 python -m rastermap --S spks.npy --ops ops.npy
 ~~~
 
+## From MATLAB
+If you have an existing MATLAB analysis pipeline (and are using MATLAB version R2021b or newer), you can use MATLAB's Python interface to call Rastermap. First you need to tell MATLAB where your Python enviroment with Rastermap is (more details: https://www.mathworks.com/help/matlab/matlab_external/install-supported-python-implementation.html). Create or modify the "PYTHONHOME" environmental variable in your OS to point to the Rastermap environment root folder. Then in MATLAB run the following statement, modified for the specific path to your Rastermap environment pythonw executable:
+
+```
+pyenv('Version','C:\Users\admin\.conda\envs\rastermap\pythonw.exe', 'ExecutionMode', 'OutOfProcess')
+```
+Then you should be able to see your environment details in MATLAB after typing "pyenv" (the intepreter will not actually load until you try to run a Python statement). An example function to call Rastermap and return the sort order back as a MATLAB array is:
+```
+function [sortIdx] = rastermapSort(shankDataToSort)
+% wrapper to convert to numpy array, call Rastermap, and then convert back to MATLAB array
+
+ data = shankDataToSort.zScoredFiringRates; 
+ dataNdArray = py.numpy.array(data);
+ pyrun("from rastermap import Rastermap") %load interpreter, import main function
+ rmModel = pyrun("model = Rastermap(locality=0.5, time_lag_window=50).fit(spks)", "model", spks=dataNdArray);
+ sortIdx = int16(py.memoryview(rmModel.isort.data)) + 1; %back to MATLAB array, 1-indexing
+
+end
+```
+
 # Inputs
 
 Most of the time you will input to `Rastermap().fit` a matrix of neurons by time. For more details, these are all the inputs to the function:
