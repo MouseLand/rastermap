@@ -142,7 +142,7 @@ y = model.embedding # neurons x 1
 isort = model.isort
 
 # bin over neurons
-X_embedding = zscore(utils.bin1d(spks, bin_size=25, axis=0), axis=1)
+X_embedding = zscore(utils.bin1d(spks[isort], bin_size=25, axis=0), axis=1)
 
 # plot
 fig = plt.figure(figsize=(12,5))
