@@ -3,8 +3,8 @@
 ![tests](https://github.com/mouseland/rastermap/actions/workflows/test_and_deploy.yml/badge.svg)
 [![codecov](https://codecov.io/gh/MouseLand/rastermap/branch/main/graph/badge.svg?token=9FFo4zNtYP)](https://codecov.io/gh/MouseLand/rastermap)
 [![PyPI version](https://badge.fury.io/py/rastermap.svg)](https://badge.fury.io/py/rastermap)
-[![Downloads](https://pepy.tech/badge/rastermap)](https://pepy.tech/project/rastermap)
-[![Downloads](https://pepy.tech/badge/rastermap/month)](https://pepy.tech/project/rastermap)
+[![Downloads](https://static.pepy.tech/badge/rastermap)](https://pepy.tech/project/rastermap)
+[![Downloads](https://static.pepy.tech/badge/rastermap/month)](https://pepy.tech/project/rastermap)
 [![Python version](https://img.shields.io/pypi/pyversions/rastermap)](https://pypistats.org/packages/rastermap)
 [![Licence: GPL v3](https://img.shields.io/github/license/MouseLand/rastermap)](https://github.com/MouseLand/rastermap/blob/main/LICENSE)
 [![Contributors](https://img.shields.io/github/contributors-anon/MouseLand/rastermap)](https://github.com/MouseLand/rastermap/graphs/contributors)
@@ -15,14 +15,16 @@
 
 Rastermap is a discovery algorithm for neural data. The algorithm was written by Carsen Stringer and Marius Pachitariu. For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation). If you use Rastermap in your work, please cite the [paper](https://www.biorxiv.org/content/10.1101/2023.07.25.550571v1):
 
-Stringer C., Zhong L., Syeda A., Du F., & Pachitariu M. (2023). Rastermap: a discovery method for neural population recordings. *bioRxiv* 2023.07.25.550571; doi: https://doi.org/10.1101/2023.07.25.550571
+Stringer C., Zhong L., Syeda A., Du F., Kesa M., & Pachitariu M. (2023). Rastermap: a discovery method for neural population recordings. *bioRxiv* 2023.07.25.550571; doi: https://doi.org/10.1101/2023.07.25.550571
 
 Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for running it easily. Rastermap can also be run in a jupyter notebook locally or on google colab, see these demos:
 * [rastermap_largescale.ipynb](notebooks/rastermap_largescale.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_largescale.ipynb) shows how to use it with large-scale data from mouse cortex (> 200 neurons) 
 * [rastermap_singleneurons.ipynb](notebooks/rastermap_singleneurons.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_singleneurons.ipynb) shows how to use it with small to medium sized data (< 200 neurons), in this case recorded from rat hippocampus 
 * [rastermap_zebrafish.ipynb](notebooks/rastermap_zebrafish.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_zebrafish.ipynb) shows how to use it with large-scale data from zebrafish 
 * [rastermap_widefield.ipynb](notebooks/rastermap_widefield.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_widefield.ipynb) shows how to use it with widefield imaging data, or other types of datasets that are too large to fit into memory 
-* [tutorial.ipynb](notebooks/tutorial.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap to visualize behavioral representations 
+* [rastermap_interactive.ipynb](notebooks/rastermap_interactive.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_interactive.ipynb) allows running Rastermap in an interactive way without a local installation
+* [tutorial.ipynb](notebooks/tutorial.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap to visualize behavioral representations. See the student/teacher versions [here](https://github.com/MouseLand/course-materials/tree/main/behavior_encoding).
+
 
 All demo data available [here](https://osf.io/xn4cm/).
 
@@ -140,7 +142,7 @@ y = model.embedding # neurons x 1
 isort = model.isort
 
 # bin over neurons
-X_embedding = zscore(utils.bin1d(spks, bin_size=25, axis=0), axis=1)
+X_embedding = zscore(utils.bin1d(spks[isort], bin_size=25, axis=0), axis=1)
 
 # plot
 fig = plt.figure(figsize=(12,5))
@@ -163,6 +165,26 @@ Save an "ops.npy" file with the parameters and a "spks.npy" file with a matrix o
 ~~~sh
 python -m rastermap --S spks.npy --ops ops.npy
 ~~~
+
+## From MATLAB
+If you have an existing MATLAB analysis pipeline (and are using MATLAB version R2021b or newer), you can use MATLAB's Python interface to call Rastermap. First you need to tell MATLAB where your Python enviroment with Rastermap is (more details: https://www.mathworks.com/help/matlab/matlab_external/install-supported-python-implementation.html). Create or modify the "PYTHONHOME" environmental variable in your OS to point to the Rastermap environment root folder. Then in MATLAB run the following statement, modified for the specific path to your Rastermap environment pythonw executable:
+
+```
+pyenv('Version','C:\Users\admin\.conda\envs\rastermap\pythonw.exe', 'ExecutionMode', 'OutOfProcess')
+```
+Then you should be able to see your environment details in MATLAB after typing "pyenv" (the intepreter will not actually load until you try to run a Python statement). An example function to call Rastermap and return the sort order back as a MATLAB array is:
+```
+function [sortIdx] = rastermapSort(shankDataToSort)
+% wrapper to convert to numpy array, call Rastermap, and then convert back to MATLAB array
+
+ data = shankDataToSort.zScoredFiringRates; 
+ dataNdArray = py.numpy.array(data);
+ pyrun("from rastermap import Rastermap") %load interpreter, import main function
+ rmModel = pyrun("model = Rastermap(locality=0.5, time_lag_window=50).fit(spks)", "model", spks=dataNdArray);
+ sortIdx = int16(py.memoryview(rmModel.isort.data)) + 1; %back to MATLAB array, 1-indexing
+
+end
+```
 
 # Inputs
 
