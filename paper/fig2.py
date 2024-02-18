@@ -76,11 +76,12 @@ def panels_rfs(grid, il, yh, padding, ipl,rfs, beh_names):
     dx = 1.
     l = np.array([0,1,2])
     npl = len(ipl)
+    h = 4
     for i in range(npl):
         ir = ipl[i]
         rf = rfs[ir, 201-100:201+100].copy() / dx
         for k in range(rfs.shape[-1]):
-            ax.plot(np.arange(0,rf.shape[-2]) + k*dy, rf[:,k]*-1 + ir, color=kp_colors[k], lw=1)
+            ax.plot(np.arange(0,rf.shape[-2]) + k*dy, rf[:,k]*-h + ir, color=kp_colors[k], lw=1)
     ax.set_ylim([0, nn*(1+padding)])
     ax.invert_yaxis()
     ax.axis("off")
@@ -194,7 +195,7 @@ def _fig2(brain_img, face_img, xpos, ypos, isort,
 
     npl = 15
     nn = rfs.shape[0]
-    ipl = np.linspace(npl//3, nn-npl//3, npl).astype("int")
+    ipl = np.linspace(npl, nn-npl, npl).astype("int")
 
     ax = fig.add_subplot(grid[0])
     ax.axis("off")
@@ -229,9 +230,6 @@ def fig2(root, save_figure=True):
     fig = _fig2(brain_img, face_img, **d);
     if save_figure:
         fig.savefig(os.path.join(root, "figures", "fig2.pdf"), dpi=200)
-
-            
-
 
 def suppfig_random(root, save_figure=True):
     d = np.load(os.path.join(root, "results", "spont_proc.npz"), allow_pickle=True) 
