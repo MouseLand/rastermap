@@ -253,10 +253,12 @@ class Rastermap:
                     warnings.warn("not renormalizing / subtracting mean, using previous normalization")
                     X = self.X 
                 else:
-                    print("normalizing data across axis=1")
+                    if verbose:
+                        print("normalizing data across axis=1")
                     X = data.copy() 
                     if self.time_bin > 1:
-                        print(f"binning in time with time_bin = {self.time_bin}")
+                        if verbose:
+                            print(f"binning in time with time_bin = {self.time_bin}")
                         X = bin1d(X, bin_size=self.time_bin, axis=1)
                     X -= X.mean(axis=1)[:,np.newaxis]
                     stdx = X.std(axis=1)
@@ -272,7 +274,8 @@ class Rastermap:
                     warnings.warn("not renormalizing / subtracting mean, using previous normalization")
                     X = self.X 
                 else:
-                    print("projecting out mean along axis=0")
+                    if verbose:
+                        print("projecting out mean along axis=0")
                     X_mean = np.nanmean(X, axis=0, keepdims=True).T
                     X_mean /= (X_mean**2).sum()**0.5
                     w_mean = X @ X_mean
@@ -296,14 +299,15 @@ class Rastermap:
             else:
                 Vsv_sub = Vsv.copy()
             stdx = Usv.std(axis=1) if stdx is None else stdx
-        if normed:
+        if normed and verbose:
             print(f"data normalized, {time.time()-t0:0.2f}sec")    
 
         stdx = X.std(axis=1) if stdx is None else stdx
         igood = np.logical_and(igood, stdx > 0)
         n_samples = igood.sum() 
         n_time = data.shape[1] if data is not None else Vsv.shape[0]
-        print(f"sorting activity: {n_samples} valid samples by {n_time} timepoints")
+        if verbose:
+            print(f"sorting activity: {n_samples} valid samples by {n_time} timepoints")
         
 
         ### ------------- PCA ------------------------------------------------------ ###        
@@ -317,7 +321,8 @@ class Rastermap:
                 self.Usv = Usv
                 self.n_PCs = Usv.shape[1]
                 pc_time = time.time() - tic
-                print(f"n_PCs = {self.n_PCs} computed, {time.time()-t0:0.2f}sec")    
+                if verbose:
+                    print(f"n_PCs = {self.n_PCs} computed, {time.time()-t0:0.2f}sec")    
             elif Usv is not None:
                 self.Usv = Usv
                 pc_time = 0
@@ -342,7 +347,7 @@ class Rastermap:
             if U_nodes is None and self.Usv.shape[0] <= 50:
                 warnings.warn("""data has <= 50 samples, \n
                                 going to skip clustering and sort samples""")
-            elif (self.Usv.shape[0] <= 200 and self.n_clusters is None):
+            elif (self.Usv.shape[0] <= 200 and self.n_clusters is None) and verbose:
                 print("skipping clustering, n_clusters is None")
             U_nodes = self.Usv[igood].copy()
             imax = np.arange(0, U_nodes.shape[0])
@@ -352,7 +357,8 @@ class Rastermap:
             raise ValueError("n_clusters cannot be greater than 200")
         elif not hasattr(self, "U_nodes") and U_nodes is not None:
             # use user input for clusters
-            print("using cluster input from user")
+            if verbose:
+                print("using cluster input from user")
             cu = self.Usv[igood] @ U_nodes.T
             imax = cu.argmax(axis=1)
         elif hasattr(self, "U_nodes") and self.U_nodes is not None:
@@ -369,7 +375,8 @@ class Rastermap:
             # run clustering
             self.n_clusters = min(self.Usv.shape[0]//2, self.n_clusters)
             U_nodes, imax = kmeans_func(self.Usv[igood], n_clusters=self.n_clusters)
-            print(f"{U_nodes.shape[0]} clusters computed, time {time.time() - t0:0.2f}sec")
+            if verbose:
+                print(f"{U_nodes.shape[0]} clusters computed, time {time.time() - t0:0.2f}sec")
 
         # compute correlation matrix across clusters
         if self.time_lag_window > 0:
@@ -427,7 +434,8 @@ class Rastermap:
                 ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
             Y_nodes = np.arange(0, U_nodes.shape[0])[:, np.newaxis]
 
-        print(f"clusters sorted, time {time.time() - t0:0.2f}sec")
+        if verbose:
+            print(f"clusters sorted, time {time.time() - t0:0.2f}sec")
         
         ### ---------------- upsample ---------------------------------------------- ###
         self.n_clusters = U_nodes.shape[0]
@@ -439,7 +447,8 @@ class Rastermap:
             Y, corr, g, Xrec = grid_upsampling(self.Usv[igood], U_nodes, Y_nodes, n_X=self.n_X,
                                             n_neighbors=n_neighbors,
                                             e_neighbor=e_neighbor)
-            print(f"clusters upsampled, time {time.time() - t0:0.2f}sec")
+            if verbose:
+                print(f"clusters upsampled, time {time.time() - t0:0.2f}sec")
         else:
             if len(U_nodes) == n_samples:
                 Y = np.zeros(n_samples, "int")
@@ -476,7 +485,8 @@ class Rastermap:
                 bin_size = max(1, n_samples // 500)
             self.X_embedding = zscore(bin1d(X[igood][self.isort], bin_size, axis=0), axis=1)
 
-        print(f"rastermap complete, time {time.time() - t0:0.2f}sec")
+        if verbose:
+            print(f"rastermap complete, time {time.time() - t0:0.2f}sec")
 
         self.runtime = time.time() - t0
         self.pc_time = pc_time
