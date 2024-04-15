@@ -356,16 +356,28 @@ def compute_BBt_mask(xi, yi):
     return gaussian
 
 
-def compute_BBt(xi, yi, locality=0, circular=False):
+def compute_BBt(xi, yi, locality=0, circular=False, alpha=1):
+    """ can change alpha but only if not splitting """
     if locality > 0:
-        BBt0 = compute_BBt(xi, xi, locality=0)
+        BBt0 = compute_BBt(xi, yi, locality=0)
         BBt_norm = BBt0.sum()
-        BBt_mask_norm = compute_BBt_mask(xi, xi).sum()
+        BBt_mask_norm = compute_BBt_mask(xi, yi).sum()
     eps = 1e-3
+    
     if not circular:
-        ds = np.abs(xi[:, np.newaxis] - yi)
-        ds[ds == 0] = 1 - eps
-        BBt = -np.log(eps + ds)
+        if alpha==1:
+            ds = np.abs(xi[:, np.newaxis] - yi)
+            ds[ds == 0] = 1 - eps
+            BBt = -np.log(eps + ds)
+        else:
+            n_nodes = len(xi)
+            B, plaw = create_ND_basis(1, n_nodes, 5 * n_nodes, flag=False)
+            B = B[1:]
+            plaw = plaw[1:]
+            B /= plaw[:,np.newaxis] ** (alpha/2)
+            B_norm = (B**2).sum(axis=0)**0.5
+            B = B / B_norm
+            BBt0 = B.T @ B
     else:
         ds = np.abs(xi[len(xi)//2] - yi)
         ds[ds == 0] = 1 - eps

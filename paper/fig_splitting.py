@@ -42,9 +42,13 @@ def plot_sorting2d(ax, xi, isort, label=False):
     return line
 
 def panels_sim2d(fig, grid, il, xi, X_embedding, isorts, 
-                 knn_score, knn, rhos):
+                 knn_score, knn, rhos, g0=2):
     perplexities = [[10, 100], [10], [30], [100], [300]]
 
+    ax = plt.subplot(grid[g0,:-1])
+    grid1 = matplotlib.gridspec.GridSpecFromSubplotSpec(1,5, subplot_spec=ax, 
+                                                        wspace=0.3, hspace=0.6)
+    ax.remove()
     gs = plt.get_cmap("Greens")(np.linspace(0.3, 0.7, knn_score.shape[1]-1))[::-1,:3]
     colors = np.stack((0.*np.ones(3), np.array([0.5,0,0]), 
                         np.array([0,0,1]), *gs), axis=0)
@@ -52,14 +56,15 @@ def panels_sim2d(fig, grid, il, xi, X_embedding, isorts,
 
     isort0, isort_split, isort_tsne = isorts[:3]
 
-    dx = 0.01
-    ax = plt.subplot(grid[0,0])
+    dx = 0.02
+    ax = plt.subplot(grid1[0,0])
     pos = ax.get_position().bounds
     ax.set_position([pos[0]+2*dx, pos[1], pos[2], pos[3]])
-    transl = mtransforms.ScaledTranslation(-40 / 72, 10 / 72, fig.dpi_scale_trans)
+    transl = mtransforms.ScaledTranslation(-40/ 72, 28 / 72, fig.dpi_scale_trans)
     il = plot_label(ltr, il, ax, transl, fs_title)
     line = plot_sorting2d(ax, xi, isort0, label=True)
-    ax.text(-0.15, 1.07, "sorting by: ", fontweight="bold", transform=ax.transAxes)
+    ax.text(-0.2, 1.2, "2D simulation", transform=ax.transAxes, fontsize="large")
+    ax.text(-0.25, 1.05, "sorting by: ", fontweight="bold", transform=ax.transAxes)
     ax.set_title("   rastermap", fontsize="medium", 
                 color=colors[0], loc="center")#, fontweight="bold")
     cax = ax.inset_axes([-0.04, 0.0, 0.03, 0.3])
@@ -70,23 +75,23 @@ def panels_sim2d(fig, grid, il, xi, X_embedding, isorts,
     cax.set_yticks([0, 50])
     cax.set_yticklabels(["1st", "last"])
 
-    ax = plt.subplot(grid[0,1])
+    ax = plt.subplot(grid1[0,1])
     pos = ax.get_position().bounds
     ax.set_position([pos[0]+dx/2, pos[1], pos[2], pos[3]])
     plot_sorting2d(ax, xi, isort_split)
     ax.set_title("rastermap + splitting", fontsize="medium",
                 color=colors[1], loc="center")#, fontweight="bold")
 
-    ax = plt.subplot(grid[0,2])
+    ax = plt.subplot(grid1[0,2])
     pos = ax.get_position().bounds
     ax.set_position([pos[0]-dx, pos[1], pos[2], pos[3]])
     plot_sorting2d(ax, xi, isort_tsne)
     ax.set_title("t-SNE multi-perplexity", fontsize="medium", 
                 color=colors[2], loc="center")#, fontweight="bold")
 
-    ax = plt.subplot(grid[0,3])
+    ax = plt.subplot(grid1[0,3])
     pos = ax.get_position().bounds
-    ax.set_position([pos[0]+dx, pos[1]+0.03, pos[2]-dx, pos[3]])
+    ax.set_position([pos[0], pos[1]+0.03, pos[2], pos[2]*14/8])
     transl = mtransforms.ScaledTranslation(-40 / 72, 2 / 72, fig.dpi_scale_trans)
     il = plot_label(ltr, il, ax, transl, fs_title)
     titles = ["rastermap", "+ splitting", "t-SNE multi-$P$"]
@@ -103,10 +108,10 @@ def panels_sim2d(fig, grid, il, xi, X_embedding, isorts,
     ax.set_xticklabels(["10","100","1000"])
     #plot_raster(ax, X_embedding, 200, 275, vmax=2)
 
-    ax = plt.subplot(grid[0,4])
+    ax = plt.subplot(grid1[0,4])
     pos = ax.get_position().bounds
-    ax.set_position([pos[0]+dx, pos[1]+0.01, pos[2]-dx, pos[3]])
-    transl = mtransforms.ScaledTranslation(-20 / 72, 5 / 72, fig.dpi_scale_trans)
+    ax.set_position([pos[0], pos[1]+0.03, pos[2], pos[2]*14/8])
+    transl = mtransforms.ScaledTranslation(-20 / 72, 2 / 72, fig.dpi_scale_trans)
     il = plot_label(ltr, il, ax, transl, fs_title)
     im = ax.imshow(X_embedding[:, 230:320], vmin=0, vmax=2, 
                 cmap="gray_r", aspect="auto")
@@ -122,7 +127,7 @@ def panels_sim2d(fig, grid, il, xi, X_embedding, isorts,
 
 def panels_v1stimresp(fig, grid, il, yratio, areas, X_embedding, bin_size,
                       isort, xpos, ypos, stim_times, run, ex_stim, 
-                      isort2, x, rfs, g0=1):
+                      isort2, x, rfs, g0=0):
     subsample = 5
     xpos_sub = xpos[::subsample]
     ypos_sub = ypos[::subsample]
@@ -130,7 +135,7 @@ def panels_v1stimresp(fig, grid, il, yratio, areas, X_embedding, bin_size,
     ax = plt.subplot(grid[g0,0])
     pos = ax.get_position().bounds
     pos_ratio = (ypos.max() - ypos.min()) / (xpos.max() - xpos.min())
-    ax.set_position([pos[0]+0.01, pos[1]-0.07, pos[2]*0.9, pos[2]*0.9*yratio*pos_ratio])    
+    ax.set_position([pos[0]+0.01, pos[1]-0.04, pos[2]*0.89, pos[2]*0.89*yratio*pos_ratio])    
     memb = np.zeros_like(isort)
     memb[isort] = np.arange(0, len(isort))
     memb = memb[::subsample]
@@ -187,10 +192,11 @@ def panels_v1stimresp(fig, grid, il, yratio, areas, X_embedding, bin_size,
     
     ax = plt.subplot(grid[g0,1:4])
     pos = ax.get_position().bounds
-    ax.set_position([pos[0], pos[1]-0.03, pos[2], pos[3]*0.9])    
-    axs = fig.add_axes([pos[0], pos[1]-0.03 + pos[3]*1.07, pos[2], pos[3]*0.05])
+    ax.set_position([pos[0], pos[1]-0.03, pos[2]-0.015, pos[3]*0.9])    
+    axs = fig.add_axes([pos[0], pos[1]-0.03 + pos[3]*1.07, pos[2]-0.015, pos[3]*0.05])
     axs.text(0, 1.1, "visual stim.", transform=axs.transAxes)
     st = stim_times[np.logical_and(stim_times < xmax, stim_times >= xmin)] - xmin
+    print(len(st))
     axs.plot([0, xmax-xmin], [0, 0], color="k")
     axs.scatter(st, np.zeros(len(st)), color="k", marker=2, rasterized=True)
     axs.set_xlim([0, (xmax-xmin)*(1+padding_x*2)])
@@ -198,7 +204,7 @@ def panels_v1stimresp(fig, grid, il, yratio, areas, X_embedding, bin_size,
     axs.axis("off")
     transl = mtransforms.ScaledTranslation(-15 / 72, -2 / 72, fig.dpi_scale_trans)
     il = plot_label(ltr, il, axs, transl, fs_title)
-    axr = fig.add_axes([pos[0], pos[1]-0.03 + pos[3]*0.92, pos[2], pos[3]*0.13])
+    axr = fig.add_axes([pos[0], pos[1]-0.03 + pos[3]*0.92, pos[2]-0.015, pos[3]*0.13])
     axr.fill_between(np.arange(0, xmax-xmin), run[xmin : xmax], color=kp_colors[0])
     axr.text(0, 0.55, "running speed", color=kp_colors[0], 
             transform=axr.transAxes)
@@ -219,19 +225,9 @@ def panels_v1stimresp(fig, grid, il, yratio, areas, X_embedding, bin_size,
     cax.invert_yaxis()
     cax.axis("off")
 
-    ax = plt.subplot(grid[g0+1,1:4])
+    ax = plt.subplot(grid[:, -1])
     pos = ax.get_position().bounds
-    ax.set_position([pos[0], pos[1]-0.02, pos[2], pos[3]*0.9])    
-    transl = mtransforms.ScaledTranslation(-15 / 72, 5 / 72, fig.dpi_scale_trans)
-    il = plot_label(ltr, il, ax, transl, fs_title)
-    plot_raster(ax, x[:,isort2][:,::10], xmin=0, xmax=500, vmax=1.5, padding=0.04,
-                padding_x=padding_x, nper=bin_size, n_neurons=5000, xlabel="stim.",
-                label_pos="right", label=True, fs=1, n_sec=20)
-    ax.set_title("responses sorted across stimuli", fontsize="medium")
-
-    ax = plt.subplot(grid[g0:g0+4, 4])
-    pos = ax.get_position().bounds
-    ax.set_position([pos[0], pos[1]-0.07, pos[2], pos[3]+0.05])    
+    ax.set_position([pos[0], pos[1]-0.03, pos[2], pos[3]+0.01])    
     ny, nx = 30, 8
     grid1 = matplotlib.gridspec.GridSpecFromSubplotSpec(ny,nx, subplot_spec=ax, 
                                                                 wspace=0.15, hspace=0.1)
@@ -241,7 +237,7 @@ def panels_v1stimresp(fig, grid, il, yratio, areas, X_embedding, bin_size,
     rfj = np.linspace(0, nn-1, nx*ny).astype("int")
     for j in range(nx*ny):
         ax = plt.subplot(grid1[j//nx, j%nx])
-        rfi = rfj[nx*ny - 1 - j]
+        rfi = rfj[j]#nx*ny - 1 - j]
         ax.imshow(rfs[rfi], vmin = -vmax, vmax = vmax, cmap = 'RdBu_r', rasterized=True)
         if j==0:
             ax.text(0, 2.5, "superneuron receptive fields", transform=ax.transAxes)
@@ -249,15 +245,17 @@ def panels_v1stimresp(fig, grid, il, yratio, areas, X_embedding, bin_size,
             il = plot_label(ltr, il, ax, transl, fs_title)
         ax.axis('off')
         if j<2 or j>nx*ny-3:
-            ax.text(0.5, 1.1, f"{nn - rfi}", ha="center", transform=ax.transAxes)
+            ax.text(0.5, 1.1, f"{rfi+1}", ha="center", transform=ax.transAxes, 
+                    fontsize="small")
         elif j==2 or j==nx*ny-3:
-            ax.text(0.5, 1.5, f"...", ha="center", transform=ax.transAxes)
+            ax.text(0.5, 1.4, f"...", ha="center", transform=ax.transAxes, 
+                    fontsize="small")
 
 
     return il
 
 def panels_alexnet(fig, grid, il, X_embedding, bin_size, 
-                   isort, isort2, ipos, ilayer, iconv, nmax, g0=2):
+                   isort, isort2, ipos, ilayer, iconv, nmax, g0=1):
     
     memb = np.zeros(len(isort))
     memb[isort] = np.arange(len(isort))
@@ -281,17 +279,17 @@ def panels_alexnet(fig, grid, il, X_embedding, bin_size,
 
     ax = plt.subplot(grid[g0,1:4])
     xmin = 2200
-    xmax = 2700
+    xmax = xmin + 188 #2700
     padding_x = 0.005
     pos = ax.get_position().bounds
-    ax.set_position([pos[0], pos[1]-0.01, pos[2], pos[3]*0.9]) 
+    ax.set_position([pos[0], pos[1]-0.01, pos[2]-0.015, pos[3]*0.9]) 
     pos = ax.get_position().bounds
     cax = fig.add_axes([pos[0]+0.6*pos[2], pos[1]-pos[3]*0.05, 
                         pos[2]*0.06, pos[3]*0.03])
     plot_raster(ax, X_embedding, xmin, xmax, cax=cax, cax_label="left", 
                 vmax=2, padding=0.04, padding_x=padding_x, 
                 nper=bin_size, n_neurons=1000, xlabel="stim.",
-                fs=1, n_sec=20, label=True, label_pos="right")
+                fs=1, n_sec=10, label=True, label_pos="right")
     #ax.set_title("Alexnet responses to visual stimuli")
     cax = fig.add_axes([pos[0]-pos[2]*0.03, pos[1], pos[2]*0.015, pos[3]])
     nn = X_embedding.shape[0]
@@ -300,17 +298,6 @@ def panels_alexnet(fig, grid, il, X_embedding, bin_size,
     cax.set_ylim([0, nn*1.025])
     cax.invert_yaxis()
     cax.axis("off")
-
-    ax = plt.subplot(grid[g0+1,1:4])
-    pos = ax.get_position().bounds
-    ax.set_position([pos[0], pos[1]-0.0, pos[2], pos[3]*0.9])    
-    transl = mtransforms.ScaledTranslation(-15 / 72, 5 / 72, fig.dpi_scale_trans)
-    il = plot_label(ltr, il, ax, transl, fs_title)
-    plot_raster(ax, X_embedding[:,isort2][:,::10], xmin=0, xmax=500, vmax=1.5, padding=0.04,
-                padding_x=padding_x, nper=bin_size, n_neurons=5000, xlabel="stim.",
-                label_pos="right", label=True, fs=1, n_sec=20)
-    ax.set_title("responses sorted across stimuli", fontsize="medium")
-
 
     return il
 
@@ -322,12 +309,6 @@ def fig_all(root, save_figure=True):
     grid = plt.GridSpec(3,5, figure=fig, left=0.01, right=0.99, top=0.94, bottom=0.055, 
                     wspace = 0.15, hspace = 0.25)
     il = 0
-
-    try:
-        d = np.load(os.path.join(root, "simulations", "sim2D_results.npz"))
-        il = panels_sim2d(fig, grid, il, **d)
-    except:
-        print("simulation data not available")
 
     try:
         areas = loadmat(os.path.join(root, "figures", "ctxOutlines.mat"), 
@@ -342,6 +323,12 @@ def fig_all(root, save_figure=True):
         il = panels_alexnet(fig, grid, il, **d)  
     except:
         print("alexnet data not available")
+
+    try:
+        d = np.load(os.path.join(root, "simulations", "sim2D_results.npz"))
+        il = panels_sim2d(fig, grid, il, **d)
+    except:
+        print("simulation data not available")
 
     if save_figure:
         fig.savefig(os.path.join(root, "figures", "fig6.pdf"), dpi=200)

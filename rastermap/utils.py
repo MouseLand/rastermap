@@ -12,10 +12,9 @@ def bin1d(X, bin_size, axis=0):
     if bin_size > 0:
         size = list(X.shape)
         Xb = X.swapaxes(0, axis)
-        Xb = Xb[:size[axis]//bin_size*bin_size].reshape((size[axis]//bin_size, bin_size, -1)).mean(axis=1)
+        size_new = Xb.shape
+        Xb = Xb[:size[axis]//bin_size*bin_size].reshape((size[axis]//bin_size, bin_size, *size_new[1:])).mean(axis=1)
         Xb = Xb.swapaxes(axis, 0)
-        size[axis] = Xb.shape[axis]
-        Xb = Xb.reshape(size)
         return Xb
     else:
         return X

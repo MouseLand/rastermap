@@ -310,7 +310,7 @@ class Rastermap:
         if not hasattr(self, "Usv"):
             if Usv is None:
                 tic = time.time()
-                Usv_valid = SVD(X[igood][:, itrain] if itrain is not None else X, 
+                Usv_valid = SVD(X[igood][:, itrain] if itrain is not None else X[igood], 
                                n_components=self.n_PCs)            
                 Usv = np.nan * np.zeros((len(igood), Usv_valid.shape[1]), "float32")
                 Usv[igood] = Usv_valid
@@ -471,6 +471,7 @@ class Rastermap:
         
         ### ----------- bin across embedding --------------------------------------- ###
         if data is not None and compute_X_embedding:
+            bin_size=self.bin_size
             if (bin_size==0 or n_samples < bin_size or 
                 (bin_size == 50 and n_samples < 1000)):
                 bin_size = max(1, n_samples // 500)
