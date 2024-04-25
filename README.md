@@ -25,7 +25,6 @@ Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for runni
 * [rastermap_interactive.ipynb](notebooks/rastermap_interactive.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_interactive.ipynb) allows running Rastermap in an interactive way without a local installation
 * [tutorial.ipynb](notebooks/tutorial.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap to visualize behavioral representations. See the student/teacher versions [here](https://github.com/MouseLand/course-materials/tree/main/behavior_encoding).
 
-
 All demo data available [here](https://osf.io/xn4cm/).
 
 Here is what the output looks like for a segment of a mesoscope recording in a mouse during spontaneous activity (3.2Hz sampling rate), compared to random neural sorting:
@@ -42,7 +41,7 @@ Here is what the output looks like for a recording of wholebrain neural activity
 
 ### System requirements
 
-Linux, Windows and Mac OS are supported for running the code. For running the graphical interface you will need a Mac OS later than Yosemite. At least 8GB of RAM is recommended to run the software. 16GB-32GB may be required for larger datasets. The software has been heavily tested on Windows 10 and Ubuntu 20.04 and less well-tested on Mac OS. Please open an [issue](https://github.com/MouseLand/rastermap/issues) if you have problems with installation.
+Linux, Windows and Mac OS are supported for running the code. For running the graphical interface in Mac, you will need a Mac OS later than Yosemite. At least 8GB of RAM is recommended to run the software. 16GB-32GB may be required for larger datasets. The software has been heavily tested on Windows 10 and Ubuntu 20.04 and less well-tested on Mac OS. Please open an [issue](https://github.com/MouseLand/rastermap/issues) if you have problems with installation.
 
 ### Instructions
 
@@ -137,12 +136,12 @@ spks = zscore(spks, axis=1)
 
 # fit rastermap
 model = Rastermap(n_PCs=200, n_clusters=100, 
-                  locality=0.75, time_lag_window=5).fit(spks)
+                  locality=0.75, time_lag_window=5).fit(spks, compute_X_embedding=True)
 y = model.embedding # neurons x 1
 isort = model.isort
 
-# bin over neurons
-X_embedding = zscore(utils.bin1d(spks[isort], bin_size=25, axis=0), axis=1)
+# visualize binning over neurons
+X_embedding = model.X_embedding
 
 # plot
 fig = plt.figure(figsize=(12,5))
