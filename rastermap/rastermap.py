@@ -471,10 +471,10 @@ class Rastermap:
         
         ### ----------- bin across embedding --------------------------------------- ###
         if data is not None and compute_X_embedding:
-            if (bin_size==0 or n_samples < bin_size or 
-                (bin_size == 50 and n_samples < 1000)):
-                bin_size = max(1, n_samples // 500)
-            self.X_embedding = zscore(bin1d(X[igood][self.isort], bin_size, axis=0), axis=1)
+            if (self.bin_size==0 or n_samples < self.bin_size or 
+                (self.bin_size == 50 and n_samples < 1000)):
+                self.bin_size = max(1, n_samples // 500)
+            self.X_embedding = zscore(bin1d(X[igood][self.isort], self.bin_size, axis=0), axis=1)
 
         print(f"rastermap complete, time {time.time() - t0:0.2f}sec")
 
