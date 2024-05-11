@@ -310,11 +310,23 @@ def fig_all(root, save_figure=True):
                     wspace = 0.15, hspace = 0.25)
     il = 0
 
+    ax = plt.subplot(grid[:, -1])
+    pos = ax.get_position().bounds
+    ax.set_position([pos[0], pos[1]-0.03, pos[2], pos[3]+0.01])    
+    pos = ax.get_position().bounds
+    ax.remove()
+
     try:
         areas = loadmat(os.path.join(root, "figures", "ctxOutlines.mat"), 
                         squeeze_me=True)["coords"]
         d = np.load(os.path.join(root, "results", "v1stimresp_proc.npz"))
         il = panels_v1stimresp(fig, grid, il, yratio, areas, **d)
+        ax = fig.add_axes([pos[0]-0.045, pos[1], 0.04, pos[3]])
+        ax.plot([0, 1], [0.71, 0], color=0.5*np.ones(3), lw=1)
+        ax.plot([0, 1], [0.96, 1], color=0.5*np.ones(3), lw=1)
+        ax.set_ylim([0, 1])
+        ax.set_xlim([0, 1])
+        ax.axis("off")
     except:
         print("visual data not available")
 
@@ -331,4 +343,4 @@ def fig_all(root, save_figure=True):
         print("simulation data not available")
 
     if save_figure:
-        fig.savefig(os.path.join(root, "figures", "fig6.pdf"), dpi=200)
+        fig.savefig(os.path.join(root, "figures", "fig8.pdf"), dpi=200)

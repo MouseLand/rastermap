@@ -2,13 +2,16 @@
 Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer and Marius Pachitariu.
 """
 import numpy as np
+from pathlib import Path
 from scipy.ndimage import gaussian_filter1d
 from scipy.stats import zscore, spearmanr
+from scipy.cluster.hierarchy import fcluster, linkage
 from sklearn.decomposition import TruncatedSVD
 from sklearn.neighbors import NearestNeighbors
 from rastermap.svd import SVD
 from rastermap.utils import bin1d
 from rastermap import Rastermap
+from tqdm import trange, tqdm
 import sys, os
 
 #sys.path.insert(0, '/github/rastermap/paper/')
@@ -339,52 +342,62 @@ def benchmark_2D(xi, isorts):
 
     return knn_score, knn, rhos
 
+def run_algos(spks, time_lag_window=0, locality=0):
+    embs = np.zeros((7,len(spks),1))
+    for k in trange(7):
+        if k==0:
+            # rastermap
+            model = Rastermap(n_clusters=100, 
+                            n_PCs=200, 
+                            locality=locality,
+                            time_lag_window=time_lag_window,
+                            grid_upsample=10,
+                            time_bin=10,
+                            bin_size=0,
+                            verbose=False).fit(spks)
+            embs[k] = model.embedding
+        elif k==1:
+            # tsne
+            M = metrics.run_TSNE(model.Usv, perplexities=[30])
+            embs[k] = M
+        elif k==2:
+            # umap
+            M = metrics.run_UMAP(model.Usv)
+            embs[k] = M
+        elif k==3:        
+            # isomap
+            M = metrics.run_isomap(model.Usv)
+            embs[k] = M
+        elif k==4:
+            # LE
+            M = metrics.run_LE(model.Usv)
+            embs[k] = M
+        elif k==5:
+            # hierarchical clustering
+            Z = linkage(model.Usv, metric="correlation", method="single", optimal_ordering=True)
+            embs[k] = fcluster(Z, t=0.01)[:,np.newaxis]
+        else:        
+            # PCA
+            embs[k] = model.Usv[:,:1]
+
+    return embs, model
 
 def embedding_performance(root, save=True):
     # 6000 neurons in simulation with 6 modules
-    embs_all = np.zeros((10, 5, 6000, 1))
-    scores_all = np.zeros((10, 2, 6, 5))
-    algos = ["rastermap", "tSNE", "UMAP", "isomap", "laplacian\neigenmaps"]
+    embs_all = np.zeros((10, 7, 6000, 1))
+    scores_all = np.zeros((10, 2, 8, 5))
+    algos = ["rastermap", "tSNE", "UMAP", "isomap", "laplacian\neigenmaps", "hierarchical\nclustering", "PCA"]
 
-    for random_state in range(10):
-        dat = np.load(os.path.join(root, "simulations", f"sim_{random_state}.npz"), allow_pickle=True)
+    for random_state in trange(10):
+        path = os.path.join(root, "simulations", f"sim_{random_state}.npz")
+        dat = np.load(path, allow_pickle=True)
         spks = dat["spks"]
-        
-        # rastermap
-        model = Rastermap(n_clusters=100, 
-                        n_PCs=200, 
-                        locality=0.8,
-                        time_lag_window=10,
-                        symmetric=False,
-                        grid_upsample=10,
-                        time_bin=10,
-                        bin_size=0).fit(spks)
-        embs_all[random_state, 0] = model.embedding
-
-        # tsne
-        M = metrics.run_TSNE(model.Usv, perplexities=[30])
-        embs_all[random_state, 1] = M
-
-        # umap
-        M = metrics.run_UMAP(model.Usv)
-        embs_all[random_state, 2] = M
-        
-        # isomap
-        M = metrics.run_isomap(model.Usv)
-        embs_all[random_state, 3] = M
-
-        # LLE
-        # M = metrics.run_LLE(model.Usv)
-        # embs.append(M)
-
-        # LE
-        M = metrics.run_LE(model.Usv)
-        embs_all[random_state, 4] = M
-
+        embs, model = run_algos(path)
+    
         # benchmarks
         contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], 
-                                                        embs_all[random_state].copy())
-        print(triplet_scores)
+                                                    embs.copy())
+        embs_all[random_state] = embs
         scores_all[random_state] = np.stack((contamination_scores, triplet_scores), 
                                             axis=0)
         
@@ -454,4 +467,238 @@ def embedding_performance(root, save=True):
                 scores_all=scores_all, 
                 embs_all=embs_all)
 
+def repro_algs(root):
+
+    random_state = 0
+    path = Path(root) / "simulations" / f"sim_{random_state}.npz"
+    dat = np.load(path, allow_pickle=True)
+    spks = dat["spks"]
+    xi_all = dat["xi_all"]
+
+    embs_all = np.zeros((2, 20, 6000, 1))
+
+    for rs in trange(20):
+        model = Rastermap(n_clusters=100, n_PCs=200, locality=0.8,
+                        time_lag_window=10, grid_upsample=10, time_bin=10,
+                        bin_size=0, verbose=False, random_state=rs).fit(spks)
+        if rs==0:
+            Usv = model.Usv.copy()
+        embs_all[0,rs] = model.embedding
+            
+    for rs in trange(20):
+        tsne = TSNE(
+                    perplexity=30,
+                    metric="cosine",
+                    n_jobs=16,
+                    random_state=rs,
+                    verbose=False,
+                    n_components = 1,
+                    initialization = .0001 * Usv[:,:1],
+                )
+        emb = tsne.fit(Usv)   
+        embs_all[1,rs] = emb
         
+    contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], embs_all.reshape(-1, 6000, 1))
+
+    random_state = 0
+    path = Path(root) / "simulations" / f"sim_spont_{random_state}.npz"
+    dat = np.load(path, allow_pickle=True)
+    spks = dat["spks"]
+    xi_all = dat["xi_all"]
+
+    corrs_all = np.zeros((2, 20))
+
+    for rs in trange(20):
+        model = Rastermap(n_clusters=100, n_PCs=200, locality=0.,
+                        time_lag_window=0, grid_upsample=10, time_bin=10,
+                        bin_size=0, verbose=False, random_state=rs).fit(spks)
+        if rs==0:
+            Usv = model.Usv.copy()
+        corrs = (zscore(model.embedding[:,0]) * zscore(dat["xi_all"])).mean(axis=-1)
+        corrs = np.abs(corrs)
+        print(rs, corrs)
+        corrs_all[0, rs] = corrs
+            
+    for rs in trange(20):
+        tsne = TSNE(
+                    perplexity=30,
+                    metric="cosine",
+                    n_jobs=16,
+                    random_state=rs,
+                    verbose=False,
+                    n_components = 1,
+                    initialization = .0001 * Usv[:,:1],
+                )
+        emb = tsne.fit(Usv)   
+        corrs = (zscore(emb[:,0]) * zscore(dat["xi_all"])).mean(axis=-1)
+        corrs = np.abs(corrs)
+        print(rs, corrs)
+        corrs_all[1, rs] = corrs
+
+    np.savez(os.path.join(root, "simulations", "sim_0_reproducibility.npz"), 
+                corrs_all=corrs_all, embs_all=embs_all, scores_all=scores_all)
+
+def spont_simulations(root):
+    """ create power-law only simulation + benchmark """
+    for random_state in trange(10):
+        np.random.seed(random_state)
+        psth_spont, xi_spont = powerlaw_module(n_neurons=6000, alpha=1.0)
+        psth_spont /= psth_spont.mean(axis=1)[:,np.newaxis]
+        
+        # poisson firing
+        spks = psth_to_spks(psth_spont)
+        
+        # remove neurons with no firing
+        igood = spks.sum(axis=1) > 0
+        spks = spks[igood]
+        xi_spont = xi_spont[igood]
+        
+        iperm = np.random.permutation(len(spks))
+        spks = spks[iperm]
+        xi_spont = xi_spont[iperm]
+        np.savez(Path(root) / "simulations" / f"sim_spont_{random_state}.npz", spks=spks, xi_all=xi_spont)
+
+    corrs_all = np.zeros((10, 7))
+        
+    for random_state in range(10):
+        path = Path(root) / "simulations" / f"sim_spont_{random_state}.npz"
+        dat = np.load(path, allow_pickle=True)
+        spks = dat["spks"]
+
+        embs, model = simulations.run_algos(spks)
+
+        # abs correlation with sim axis
+        corrs = (zscore(embs.squeeze(), axis=1) * zscore(dat["xi_all"])).mean(axis=-1)
+        corrs = np.abs(corrs)
+        print(corrs)
+        corrs_all[random_state] = corrs
+
+        if random_state==0:
+            embs0 = embs.copy()
+            xi_all = dat["xi_all"].copy()
+            # superneurons and correlation matrices
+            spks_norm = zscore(spks, axis=1)
+            X_embs = [zscore(bin1d(spks_norm[emb[:,0].argsort()], 30, axis=0), axis=1) 
+                        for emb in embs.copy()]
+            X_embs_bin = [zscore(bin1d(X_emb, 10, axis=1), axis=1) for X_emb in X_embs]
+            cc_embs = [(X_emb @ X_emb.T) / X_emb.shape[1] for X_emb in X_embs_bin]
+
+    np.savez(os.path.join(root, "simulations", "sim_spont_performance.npz"), 
+            corrs_all=corrs_all, embs=embs0, cc_embs=cc_embs, X_embs=X_embs, xi_all=xi_all)
+    
+
+def params_rastermap(root):
+    loc, tl = np.meshgrid(np.array([0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]),
+                      np.array([0, 1, 2, 5, 10, 20]))
+    tl = tl.flatten()
+    loc = loc.flatten()
+    embs_all = []
+    scores_all = np.zeros((10, 2, len(tl)+1, 5))
+
+    for random_state in range(10):
+        print(random_state)
+        embs = []
+        dat = np.load(os.path.join(root, "simulations", f"sim_{random_state}.npz"), allow_pickle=True)
+        spks = dat["spks"]
+
+        for k, (tli, loci) in tqdm(enumerate(zip(tl, loc))):
+            if k==0:
+                model = Rastermap(n_clusters=100, n_PCs=200, locality=loci,
+                    time_lag_window=tli, time_bin=10, verbose=False).fit(spks)
+
+                X = model.X 
+                Usv = model.Usv 
+                Vsv = model.Vsv
+            else:
+                model = Rastermap(n_clusters=100, n_PCs=200, locality=loci, normalize=False, mean_time=False,
+                                time_lag_window=tli, verbose=False).fit(data=X, Usv=Usv, Vsv=Vsv)   
+                        
+            cc_nodes = model.cc.copy()
+            isort = model.isort
+            embs.append(model.embedding)
+        embs_all.append(embs)
+        contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], embs) #, mids)
+        scores_all[random_state] = np.stack((contamination_scores, triplet_scores), 
+                                                axis=0)
+    embs_all = np.array(embs_all)
+
+    np.savez(Path(root) / "simulations" / "sim_performance_tl_loc.npz", scores_all=scores_all, embs_all=embs_all,
+         loc=loc, tl=tl)
+    
+    nclust = np.array([25, 50, 75, 100, 125, 150])
+    scores_all = np.zeros((10, 2, len(nclust)+1, 5))
+    embs_all = []
+
+    for random_state in range(10):
+        print(random_state)
+        embs = []
+        dat = np.load(os.path.join(root, "simulations", f"sim_{random_state}.npz"), allow_pickle=True)
+        spks = dat["spks"]
+
+        for k, nc in tqdm(enumerate(nclust)):
+            if k==0:
+                model = Rastermap(n_clusters=nc, n_PCs=200, locality=0.8,
+                        time_lag_window=10, time_bin=10, verbose=False).fit(spks)
+                X = model.X 
+                Usv = model.Usv 
+                Vsv = model.Vsv
+            else:
+                model = Rastermap(n_clusters=nc, n_PCs=200, locality=0.8,
+                                time_lag_window=10,normalize=False, mean_time=False,
+                                verbose=False).fit(data=X, Usv=Usv, Vsv=Vsv)   
+                        
+            cc_nodes = model.cc.copy()
+            isort = model.isort
+            embs.append(model.embedding)
+        embs_all.append(embs)
+        contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], embs) #, mids)
+        scores_all[random_state] = np.stack((contamination_scores, triplet_scores), 
+                                                axis=0)
+    embs_all = np.array(embs_all)
+
+    np.savez(Path(root) / "simulations" / "sim_performance_nclust.npz", scores_all=scores_all, embs_all=embs_all,
+         nclust=nclust)
+    
+    try:
+        import scanpy as sc
+    except:
+        raise ImportError("install scanpy for leiden")
+
+    nclust_leiden = []
+    embs_all = []
+    scores_all = np.zeros((10, 2, 3, 5))
+
+    for random_state in range(10):
+        print(random_state)
+        embs = []
+        dat = np.load(os.path.join(root, "simulations", f"sim_{random_state}.npz"), allow_pickle=True)
+        spks = dat["spks"]
+
+        for k in range(2):
+            if k==0:
+                model = Rastermap(n_clusters=100, n_PCs=200, locality=0.8,
+                        time_lag_window=10, time_bin=10, verbose=False).fit(spks)
+                X = model.X 
+                Usv = model.Usv 
+                Vsv = model.Vsv
+            else:
+                adata = sc.AnnData(Usv)
+                sc.pp.neighbors(adata, n_neighbors=100, use_rep='X')
+                sc.tl.leiden(adata, resolution=3)
+                leiden_labels = np.array(adata.obs['leiden'].astype(int))
+                nc = leiden_labels.max()+1
+                U_nodes = np.array([Usv[leiden_labels==l].mean(axis=0) for l in range(nc)])
+                model = Rastermap(n_clusters=nc, n_PCs=200, locality=0.8,
+                                time_lag_window=10,normalize=False, mean_time=False,
+                                verbose=False).fit(data=X, Usv=Usv, Vsv=Vsv, U_nodes=U_nodes)
+                nclust_leiden.append(nc)
+            embs.append(model.embedding)
+        embs_all.append(embs)
+        contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], embs) #, mids)
+        scores_all[random_state] = np.stack((contamination_scores, triplet_scores), 
+                                                axis=0)
+    embs_all = np.array(embs_all)
+    nclust_leiden = np.array(nclust_leiden)              
+
+    np.savez(Path(root) / "simulations" / "sim_performance_leiden.npz", scores_all=scores_all, embs_all=embs_all,
+            nclust_leiden=nclust_leiden)

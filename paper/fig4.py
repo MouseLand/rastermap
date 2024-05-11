@@ -62,7 +62,7 @@ def panels_hippocampus(fig, grid, il, spks, pyr_cells, speed, loc2d, tcurves, is
     ax.axis("off")
 
     ### title
-    ax.text(0, 1.45, "rat hippocampus ephys recording, 1.6m linear track", 
+    ax.text(0, 1.45, "rat hippocampus ephys recording, 1.6m linear track (Grosmark & Buzsaki, 2016)", 
                     transform=ax.transAxes, fontsize="large")
     transl = mtransforms.ScaledTranslation(-15 / 72, 14/ 72, fig.dpi_scale_trans)
     il = plot_label(ltr, il, ax, transl, fs_title)
@@ -128,12 +128,14 @@ def panels_widefield(fig, grid, il, stim_times_0, stim_times_1,
                     xmin=820, xmax=1730):
     stim_times = [stim_times_0, stim_times_1, stim_times_2, stim_times_3]
 
-    titles = ["(i) widefield imaging during a decision-making task",
+    titles = ["(i) widefield imaging during a decision-making task \n      (Musall, Kaufman et al, 2019)",
                 "(ii) prediction of activity from task and behavior variables",
                 "(iii) prediction of activity from behavior variables only",
                 "(iv) difference between (ii) and (iii)"]
 
     ax = plt.subplot(grid[:,3:])
+    pos = ax.get_position().bounds 
+    ax.set_position([pos[0], pos[1]-0.01, pos[2], pos[3]])
     grid1 = matplotlib.gridspec.GridSpecFromSubplotSpec(4,5, subplot_spec=ax, 
                                                             wspace=0.25, hspace=0.2)
     ax.remove()
@@ -157,7 +159,7 @@ def panels_widefield(fig, grid, il, stim_times_0, stim_times_1,
 
     ypos_sort = ypos[isort][:ns]
     xpos_sort = xpos[isort][:ns]
-    transl = mtransforms.ScaledTranslation(-15 / 72, 10/ 72, fig.dpi_scale_trans)
+    transl = mtransforms.ScaledTranslation(-15 / 72, 22 / 72, fig.dpi_scale_trans)
     for j in range(4):
         ax = plt.subplot(grid1[j,0])
         if j==0:
@@ -401,7 +403,7 @@ def panels_fish(fig, grid1, il, sn, swimming, eyepos,
         transform=ax_stim.transAxes, ha="center")
 
     ### title
-    ax_stim.text(0, 2, "zebrafish brainwide recording", 
+    ax_stim.text(0, 2, "zebrafish brainwide recording (Chen, Mu, Hu, Kuan et al, 2018)", 
                     transform=ax_stim.transAxes, fontsize="large")
     transl = mtransforms.ScaledTranslation(-15 / 72, 14/ 72, fig.dpi_scale_trans)
     il = plot_label(ltr, il, ax_stim, transl, fs_title)

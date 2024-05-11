@@ -176,7 +176,7 @@ def tsp_fast(cc, n_iter, n_nodes, n_skip, BBt, verbose):
 
 
 def traveling_salesman(cc, n_iter=400, locality=0.0, circular=False,
-                         n_skip=None, verbose=False):
+                         n_skip=None, BBt=None, verbose=False):
     """ matches correlation matrix cc to B@B.T basis functions """
     n_nodes = (cc.shape[0])
     if n_skip is None:
@@ -186,11 +186,12 @@ def traveling_salesman(cc, n_iter=400, locality=0.0, circular=False,
     n_components = 1
 
     x = np.arange(0, 1.0, 1.0 / n_nodes)[:n_nodes]
-    BBt = compute_BBt(x, x, locality=locality, circular=circular)
-    if np.isinf(locality):
-        BBt = np.ones((n_nodes, n_nodes))
-        BBt = np.tril(np.triu(BBt, -1), 1)
-    BBt = np.triu(BBt)
+    if BBt is None:
+        BBt = compute_BBt(x, x, locality=locality, circular=circular)
+        if np.isinf(locality):
+            BBt = np.ones((n_nodes, n_nodes))
+            BBt = np.tril(np.triu(BBt, -1), 1)
+        BBt = np.triu(BBt)
 
     n_iter = np.int64(n_iter)
 

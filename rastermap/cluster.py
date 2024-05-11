@@ -115,12 +115,11 @@ def scaled_kmeans(X, n_clusters=100, n_iter=50, n_local_trials=100,
     """
     n_samples, n_features = X.shape
     # initialize with kmeans++
+    np.random.seed(random_state)
     if init == "kmeans++":
-        np.random.seed(random_state)
         X_nodes = _scaled_kmeans_init(X, n_clusters=n_clusters, 
                                         n_local_trials=n_local_trials)
     else:
-        np.random.seed(random_state)
         X_nodes = np.random.randn(n_clusters, n_features) * (X**2).sum(axis=0)**0.5
     X_nodes = X_nodes / (1e-4 + (X_nodes**2).sum(axis=1)[:, np.newaxis])**.5
     
@@ -158,7 +157,7 @@ def kmeans(X, n_clusters=100, random_state=0):
     #                            (1 + np.arange(n_features))**0.5)
     #X_nodes = X_nodes / (1e-4 + (X_nodes**2).sum(axis=1)[:,np.newaxis])**.5
     model = KMeans(n_init=1, init="k-means++", n_clusters=n_clusters,
-                   random_state=0).fit(X)
+                   random_state=random_state).fit(X)
     X_nodes = model.cluster_centers_
     X_nodes = X_nodes / (1e-10 + ((X_nodes**2).sum(axis=1))[:, np.newaxis])**.5
     imax = model.labels_

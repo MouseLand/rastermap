@@ -5,12 +5,16 @@ import time
 import numpy as np
 import warnings
 from scipy.stats import zscore
+import logging
+import sys 
 
 from .cluster import kmeans, scaled_kmeans, compute_cc_tdelay
 from .sort import traveling_salesman, compute_BBt, matrix_matching
 from .upsample import grid_upsampling
 from .utils import bin1d
 from .svd import SVD
+
+rmap_logger = logging.getLogger(__name__)
 
 def default_settings():
     """ default settings for main algorithm settings """
@@ -26,7 +30,6 @@ def default_settings():
     settings["verbose"] = True
     settings["verbose_sorting"] = False
     return settings
-
 
 def sequence_settings():
     """ good for data with sequences """
@@ -139,7 +142,7 @@ class Rastermap:
     def __init__(self, n_clusters=100, n_PCs=200, time_lag_window=0.0, locality=0.0,
                  grid_upsample=10, time_bin=0, normalize=True, mean_time=True, n_splits=0,
                  run_scaled_kmeans=True, verbose=True, verbose_sorting=False, 
-                 keep_norm_X=True, bin_size=0, symmetric=False, 
+                 keep_norm_X=True, bin_size=0, symmetric=False, random_state=0,
                  sticky=True, nc_splits=None, smoothness=1):
 
         self.n_clusters = n_clusters
@@ -154,6 +157,7 @@ class Rastermap:
         self.run_scaled_kmeans = run_scaled_kmeans
         self.verbose = verbose
         self.verbose_sorting = verbose_sorting
+        self.random_state = random_state
 
         self.keep_norm_X = keep_norm_X
         self.bin_size = bin_size                
@@ -164,8 +168,17 @@ class Rastermap:
         
         self.sorting_algorithm = "travelling_salesman"
         
+        if self.verbose:
+            logging.basicConfig(
+                level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
+                handlers=[logging.StreamHandler(sys.stdout)])
+        else:
+            logging.basicConfig(
+                level=logging.WARN, format="%(asctime)s [%(levelname)s] %(message)s",
+                handlers=[logging.StreamHandler(sys.stdout)])
+
     def fit(self, data=None, Usv=None, Vsv=None, U_nodes=None, itrain=None,
-            compute_X_embedding=False):
+            compute_X_embedding=True, BBt=None):
         """ sorts data or singular value decomposition of data by first axis
 
         can use full data matrix, or use singular value decomposition, to reduce RAM 
@@ -188,10 +201,8 @@ class Rastermap:
                         locality=0.75, time_lag_window=5).fit(spks)
         y = model.embedding # neurons x 1
         isort = model.isort
-
-        # bin over neurons
-        X_embedding = zscore(utils.bin1d(spks, bin_size=25, axis=0), axis=1)
-
+        X_embedding = model.X_embedding # neurons by time
+        
         # plot
         fig = plt.figure(figsize=(12,5))
         ax = fig.add_subplot(111)
@@ -211,6 +222,10 @@ class Rastermap:
             cluster centers in PC space, if you have precomputed them
         itrain : array, shape (n_features,) (optional, default None)
             fit embedding on timepoints itrain only
+        compute_X_emebdding : bool (optional, default True)
+            compute binning over neurons in X_embedding
+        BBt : array, shape (n_clusters, n_clusters) (optional, default None)
+            use user-specified matching matrix (not recommended for most users)
 
         Assigns
         ----------
@@ -253,10 +268,10 @@ class Rastermap:
                     warnings.warn("not renormalizing / subtracting mean, using previous normalization")
                     X = self.X 
                 else:
-                    print("normalizing data across axis=1")
+                    rmap_logger.info("normalizing data across axis=1")
                     X = data.copy() 
                     if self.time_bin > 1:
-                        print(f"binning in time with time_bin = {self.time_bin}")
+                        rmap_logger.info(f"binning in time with time_bin = {self.time_bin}")
                         X = bin1d(X, bin_size=self.time_bin, axis=1)
                     X -= X.mean(axis=1)[:,np.newaxis]
                     stdx = X.std(axis=1)
@@ -269,10 +284,10 @@ class Rastermap:
                     X = data
             if self.mean_time:
                 if hasattr(self, "X"):
-                    warnings.warn("not renormalizing / subtracting mean, using previous normalization")
+                    rmap_logger.warn("not renormalizing / subtracting mean, using previous normalization")
                     X = self.X 
                 else:
-                    print("projecting out mean along axis=0")
+                    rmap_logger.info("projecting out mean along axis=0")
                     X_mean = np.nanmean(X, axis=0, keepdims=True).T
                     X_mean /= (X_mean**2).sum()**0.5
                     w_mean = X @ X_mean
@@ -284,7 +299,7 @@ class Rastermap:
             X = self.X
             Vsv_sub = Vsv.copy()
             if self.normalize or self.mean_time:
-                warnings.warn("not renormalizing / subtracting mean, using previous normalization")
+                rmap_logger.warn("not renormalizing / subtracting mean, using previous normalization")
         else:
             if self.mean_time:
                 V_mean = Vsv.mean(axis=1, keepdims=True)
@@ -297,14 +312,13 @@ class Rastermap:
                 Vsv_sub = Vsv.copy()
             stdx = Usv.std(axis=1) if stdx is None else stdx
         if normed:
-            print(f"data normalized, {time.time()-t0:0.2f}sec")    
+            rmap_logger.info(f"data normalized, {time.time()-t0:0.2f}sec")    
 
         stdx = X.std(axis=1) if stdx is None else stdx
         igood = np.logical_and(igood, stdx > 0)
         n_samples = igood.sum() 
         n_time = data.shape[1] if data is not None else Vsv.shape[0]
-        print(f"sorting activity: {n_samples} valid samples by {n_time} timepoints")
-        
+        rmap_logger.info(f"sorting activity: {n_samples} valid samples by {n_time} timepoints")
 
         ### ------------- PCA ------------------------------------------------------ ###        
         if not hasattr(self, "Usv"):
@@ -317,7 +331,7 @@ class Rastermap:
                 self.Usv = Usv
                 self.n_PCs = Usv.shape[1]
                 pc_time = time.time() - tic
-                print(f"n_PCs = {self.n_PCs} computed, {time.time()-t0:0.2f}sec")    
+                rmap_logger.info(f"n_PCs = {self.n_PCs} computed, {time.time()-t0:0.2f}sec")    
             elif Usv is not None:
                 self.Usv = Usv
                 pc_time = 0
@@ -328,7 +342,7 @@ class Rastermap:
                 U = self.Usv.copy() / self.sv
                 self.Vsv = X.T @ U 
             elif Vsv is not None:
-                self.Vsv = Vsv_sub
+                self.Vsv = Vsv
 
         ### ------------- clustering ----------------------------------------------- ###
         if self.run_scaled_kmeans:
@@ -343,7 +357,7 @@ class Rastermap:
                 warnings.warn("""data has <= 50 samples, \n
                                 going to skip clustering and sort samples""")
             elif (self.Usv.shape[0] <= 200 and self.n_clusters is None):
-                print("skipping clustering, n_clusters is None")
+                rmap_logger.info("skipping clustering, n_clusters is None")
             U_nodes = self.Usv[igood].copy()
             imax = np.arange(0, U_nodes.shape[0])
         elif self.n_clusters is None:
@@ -352,7 +366,7 @@ class Rastermap:
             raise ValueError("n_clusters cannot be greater than 200")
         elif not hasattr(self, "U_nodes") and U_nodes is not None:
             # use user input for clusters
-            print("using cluster input from user")
+            rmap_logger.info("using cluster input from user")
             cu = self.Usv[igood] @ U_nodes.T
             imax = cu.argmax(axis=1)
         elif hasattr(self, "U_nodes") and self.U_nodes is not None:
@@ -368,8 +382,9 @@ class Rastermap:
         else:
             # run clustering
             self.n_clusters = min(self.Usv.shape[0]//2, self.n_clusters)
-            U_nodes, imax = kmeans_func(self.Usv[igood], n_clusters=self.n_clusters)
-            print(f"{U_nodes.shape[0]} clusters computed, time {time.time() - t0:0.2f}sec")
+            U_nodes = kmeans_func(self.Usv[igood], n_clusters=self.n_clusters,
+                                  random_state=self.random_state)[0]
+            rmap_logger.info(f"{U_nodes.shape[0]} clusters computed, time {time.time() - t0:0.2f}sec")
 
         # compute correlation matrix across clusters
         if self.time_lag_window > 0:
@@ -382,7 +397,7 @@ class Rastermap:
         ### ---------------- sorting ----------------------------------------------- ###
         cc, inds = traveling_salesman(cc, verbose=self.verbose_sorting, 
                                        locality=self.locality,
-                                        n_skip=None)[:2]
+                                        n_skip=None, BBt=BBt)[:2]
         U_nodes = U_nodes[inds]
         ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
         self.cc = cc
@@ -427,7 +442,7 @@ class Rastermap:
                 ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
             Y_nodes = np.arange(0, U_nodes.shape[0])[:, np.newaxis]
 
-        print(f"clusters sorted, time {time.time() - t0:0.2f}sec")
+        rmap_logger.info(f"clusters sorted, time {time.time() - t0:0.2f}sec")
         
         ### ---------------- upsample ---------------------------------------------- ###
         self.n_clusters = U_nodes.shape[0]
@@ -439,7 +454,7 @@ class Rastermap:
             Y, corr, g, Xrec = grid_upsampling(self.Usv[igood], U_nodes, Y_nodes, n_X=self.n_X,
                                             n_neighbors=n_neighbors,
                                             e_neighbor=e_neighbor)
-            print(f"clusters upsampled, time {time.time() - t0:0.2f}sec")
+            rmap_logger.info(f"clusters upsampled, time {time.time() - t0:0.2f}sec")
         else:
             if len(U_nodes) == n_samples:
                 Y = np.zeros(n_samples, "int")
@@ -477,7 +492,7 @@ class Rastermap:
                 bin_size = max(1, n_samples // 500)
             self.X_embedding = zscore(bin1d(X[igood][self.isort], bin_size, axis=0), axis=1)
 
-        print(f"rastermap complete, time {time.time() - t0:0.2f}sec")
+        rmap_logger.info(f"rastermap complete, time {time.time() - t0:0.2f}sec")
 
         self.runtime = time.time() - t0
         self.pc_time = pc_time
