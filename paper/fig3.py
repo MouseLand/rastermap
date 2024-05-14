@@ -301,11 +301,13 @@ def suppfig_locality(root, save_figure=True):
     ccs_vr = d["ccs_vr"]
     ccs_spont = d["ccs_spont"]
     localities = d["localities"]
+    scores_vr = d["scores_vr"]
+    scores_spont = d["scores_spont"]
 
-    fig = plt.figure(figsize=(14,5))
-    grid = plt.GridSpec(2,5, figure=fig, left=0.02, right=0.99, top=0.88, bottom=0.01, 
-                                wspace = 0.2, hspace = 0.4)
-    transl = mtransforms.ScaledTranslation(-15 / 72, 25 / 72, fig.dpi_scale_trans)
+    fig = plt.figure(figsize=(14,6))
+    grid = plt.GridSpec(2,5, figure=fig, left=0.01, right=0.99, top=0.86, bottom=0.01, 
+                                wspace = 0.2, hspace = 0.45)
+    transl = mtransforms.ScaledTranslation(-15 / 72, 38 / 72, fig.dpi_scale_trans)
     il = 0
 
     xmin = 185 
@@ -319,18 +321,25 @@ def suppfig_locality(root, save_figure=True):
     tstrs = ["neural activity in virtual reality", "spontaneous neural activity"]
     for j in range(2):
         ccs = ccs_vr.copy() if j==0 else ccs_spont.copy()
+        scores = scores_vr.copy() if j==0 else scores_spont.copy()
         for k in range(5):
             ax = plt.subplot(grid[j, k])
-            im = ax.imshow(ccs[k], vmin=-vmax, vmax=vmax, cmap="RdBu_r")
+            cc = ccs[k].copy()
+            cc -= np.diag(np.diag(cc))
+            im = ax.imshow(cc, vmin=-vmax, vmax=vmax, cmap="RdBu_r")
             ax.axis("off")
-            ax.text(0.5, 1.05, f"locality = {localities[k]}", transform=ax.transAxes,
-                    fontsize="medium", ha="center")
+            
             if k==0:
+                ax.text(0., 1.05, f"locality = {localities[k]}\nscores (global / local): {scores[k][0]:.2f} / {scores[k][1]:.2f}", transform=ax.transAxes,
+                    fontsize="medium")#, ha="center")
                 il = plot_label(ltr, il, ax, transl, fs_title)
                 ax.set_title(f"{tstrs[j]} - asymmetric similarity matrix", 
-                            y=1.15)
+                            y=1.22)
                 cax = ax.inset_axes([1.05, 0.55, 0.05, 0.3])
                 plt.colorbar(im, cax=cax)
+            else:
+                ax.text(0., 1.05, f"locality = {localities[k]}\nscores: {scores[k][0]:.2f} / {scores[k][1]:.2f}", transform=ax.transAxes,
+                    fontsize="medium")#, ha="center")
 
     if save_figure:
         fig.savefig(os.path.join(root, "figures", "suppfig_asym.pdf"))

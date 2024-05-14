@@ -13,6 +13,7 @@ from rastermap.utils import bin1d
 from rastermap import Rastermap
 from tqdm import trange, tqdm
 import sys, os
+from openTSNE import TSNE
 
 #sys.path.insert(0, '/github/rastermap/paper/')
 import metrics
@@ -184,7 +185,7 @@ def sequence_module(n_neurons=1000, n_time=50000):
     return psth, xi, seq_times
 
 
-def make_full_simulation(n_per_module=1000, random_state=0):
+def make_full_simulation(n_per_module=1000, random_state=0, add_spont=True):
     np.random.seed(random_state)
     modules = [stim_tuning_module,
                 stim_sustained_module,
@@ -205,12 +206,17 @@ def make_full_simulation(n_per_module=1000, random_state=0):
 
     # compute spont
     n_spont = 2 * n_per_module
-    psth_spont, xi_spont = powerlaw_module(n_neurons=
-                                            psth.shape[0] + n_spont)
+    ntot = n_spont + psth.shape[0] if add_spont else n_spont
+    psth_spont, xi_spont = powerlaw_module(n_neurons=ntot)
     psth_spont /= psth_spont.mean(axis=1)[:,np.newaxis]
 
     # add shared noise (spont stats)
-    psth_all = psth.copy() + psth_spont[:-n_spont]
+    if add_spont:
+        #amp_spont = 0.25 * np.random.rand(psth.shape[0])[:,np.newaxis]
+        #psth_all = (1-amp_spont) * psth.copy() + amp_spont * psth_spont[:-n_spont]
+        psth_all = psth.copy() + 0.75 * psth_spont[:-n_spont]
+    else:
+        psth_all = psth
 
     # concatenate with spont
     psth_spont_spec = psth_spont[-n_spont:].copy()
@@ -222,7 +228,7 @@ def make_full_simulation(n_per_module=1000, random_state=0):
 
     # independent noise
     spks += np.random.poisson(0.03, size=spks.shape)
-
+    
     iperm = np.random.permutation(len(spks))
     spks = spks[iperm]
     xi_all = xi_all[iperm]
@@ -383,7 +389,7 @@ def run_algos(spks, time_lag_window=0, locality=0):
     return embs, model
 
 def embedding_performance(root, save=True):
-    # 6000 neurons in simulation with 6 modules
+    # 6000 neurons in simulation with 5 modules
     embs_all = np.zeros((10, 7, 6000, 1))
     scores_all = np.zeros((10, 2, 8, 5))
     algos = ["rastermap", "tSNE", "UMAP", "isomap", "laplacian\neigenmaps", "hierarchical\nclustering", "PCA"]
@@ -392,7 +398,7 @@ def embedding_performance(root, save=True):
         path = os.path.join(root, "simulations", f"sim_{random_state}.npz")
         dat = np.load(path, allow_pickle=True)
         spks = dat["spks"]
-        embs, model = run_algos(path)
+        embs, model = run_algos(spks, time_lag_window=10, locality=0.8)
     
         # benchmarks
         contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], 
@@ -499,6 +505,7 @@ def repro_algs(root):
         embs_all[1,rs] = emb
         
     contamination_scores, triplet_scores = metrics.benchmarks(dat["xi_all"], embs_all.reshape(-1, 6000, 1))
+    scores_all = np.stack((contamination_scores, triplet_scores), axis=0)
 
     random_state = 0
     path = Path(root) / "simulations" / f"sim_spont_{random_state}.npz"
@@ -565,7 +572,7 @@ def spont_simulations(root):
         dat = np.load(path, allow_pickle=True)
         spks = dat["spks"]
 
-        embs, model = simulations.run_algos(spks)
+        embs, model = run_algos(spks)
 
         # abs correlation with sim axis
         corrs = (zscore(embs.squeeze(), axis=1) * zscore(dat["xi_all"])).mean(axis=-1)

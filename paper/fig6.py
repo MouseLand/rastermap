@@ -146,8 +146,7 @@ def fig6(root, alldat, save_figure=True):
         ax.set_xticklabels(["0", "1", "2"])
 
     transl = mtransforms.ScaledTranslation(-40 / 72, 6 / 72, fig.dpi_scale_trans)
-
-
+    
     labels = ["reaction time (sec.)", "reward",  "licking", "wheel movement", 
               "face motion", "pupil speed", "trial # (norm.)", ""]
     jy = [0, 1, 3, 3, 3, 3, 2, 3]

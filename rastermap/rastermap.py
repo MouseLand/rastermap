@@ -395,9 +395,10 @@ class Rastermap:
             cc = U_nodes @ U_nodes.T
 
         ### ---------------- sorting ----------------------------------------------- ###
-        cc, inds = traveling_salesman(cc, verbose=self.verbose_sorting, 
-                                       locality=self.locality,
-                                        n_skip=None, BBt=BBt)[:2]
+        cc, inds, BBt = traveling_salesman(cc, verbose=self.verbose_sorting, 
+                                            locality=self.locality,
+                                            n_skip=None, BBt=BBt)[:3]
+        self.BBt = BBt
         U_nodes = U_nodes[inds]
         ineurons = (self.Usv[igood] @ U_nodes.T).argmax(axis=1)
         self.cc = cc

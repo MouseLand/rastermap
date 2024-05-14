@@ -212,7 +212,7 @@ def traveling_salesman(cc, n_iter=400, locality=0.0, circular=False,
         flipped = np.append(flipped, flipped2[:iter_completed])
         inds = inds[inds2]
 
-    return cc, inds, seg_len, start_pos, end_pos, flipped
+    return cc, inds, BBt, seg_len, start_pos, end_pos, flipped
 
 
 @njit("int32[:] (int64, int64, int64, int64, int64)", nogil=True, cache=True)
@@ -356,13 +356,12 @@ def compute_BBt_mask(xi, yi):
     gaussian[(xi[:, np.newaxis] - yi) == 0] = 0
     return gaussian
 
-
 def compute_BBt(xi, yi, locality=0, circular=False, alpha=1):
     """ can change alpha but only if not splitting """
-    if locality > 0:
-        BBt0 = compute_BBt(xi, yi, locality=0)
-        BBt_norm = BBt0.sum()
-        BBt_mask_norm = compute_BBt_mask(xi, yi).sum()
+    #if locality > 0:
+    #    BBt0 = compute_BBt(xi, yi, locality=0)
+    #    BBt_norm = BBt0.sum()
+    #    BBt_mask_norm = compute_BBt_mask(xi, yi).sum()
     eps = 1e-3
     
     if not circular:
@@ -386,11 +385,16 @@ def compute_BBt(xi, yi, locality=0, circular=False, alpha=1):
         BBt = np.zeros((len(xi), len(yi)), "float32")
         for k in range(len(xi)):
             BBt[k] = np.roll(BBt0, -len(xi)//2 + k)
+    
+    BBt_norm = BBt.mean()
+    BBt /= BBt_norm
+        
     if locality > 0:
         BBt_mask = compute_BBt_mask(xi, yi)
         # need to make BBt and BBt_mask on same scale
-        BBt /= BBt_norm
+        BBt_mask_norm = BBt_mask.mean()
         BBt_mask /= BBt_mask_norm
         BBt = BBt * (1 - locality) + BBt_mask * locality
-        BBt *= BBt_norm
+        #BBt *= BBt_norm
+    
     return BBt

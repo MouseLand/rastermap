@@ -40,7 +40,7 @@ def panels_schematic(fig, grid, il, cc_tdelay, tshifts, BBt_log, BBt_travel,
     ax_kmeans_img.axis("off")
 
     # plot example crosscorr
-    c0, c1 = 5, 7
+    c0, c1 = 12, 14
     ax_crosscorr.plot(tshifts, cc_tdelay[c0,c1], color=[0.5,0.5,0.5], zorder=1)
     ax_crosscorr.set_ylabel("corr")
     ax_crosscorr.set_xlabel("time lag ($\delta$t)")
@@ -95,12 +95,12 @@ def panels_schematic(fig, grid, il, cc_tdelay, tshifts, BBt_log, BBt_travel,
     pos = ax.get_position().bounds
     xi = np.arange(0, nshow, 1, "float32") / nshow
     BBt_log = compute_BBt(xi, xi)
+    BBt_log /= BBt_log.mean()
     BBt_log = np.triu(BBt_log)
-    BBt_log /= BBt_log.sum()
     BBt_travel = compute_BBt_mask(xi, xi)
+    BBt_travel /= BBt_travel.mean() 
     BBt_travel = np.triu(BBt_travel)
-    BBt_travel /= BBt_travel.sum() 
-    vmax = 2e-2
+    vmax = 5
     for i,mat in enumerate([BBt_log, BBt_travel]):
         axi = fig.add_axes([pos[0]+dx*0.2+i*dx*1, 
                             pos[1]+pos[3]*0.3+0.02, pos[2]*0.5, pos[3]*0.5])
@@ -152,6 +152,7 @@ def panels_schematic(fig, grid, il, cc_tdelay, tshifts, BBt_log, BBt_travel,
     il = plot_label(ltr, il, ax, transl, fs_title)
     for i in range(3):
         nshow=20
+        c0 = 10
         du = 0.4
         p = ax.plot(np.linspace(0, len(U_upsampled[c0:c0+nshow*10,i]), 
                                             len(U_nodes[c0:c0+nshow+1,i])), 
@@ -163,7 +164,7 @@ def panels_schematic(fig, grid, il, cc_tdelay, tshifts, BBt_log, BBt_travel,
                 color=p[0].get_color(), lw=1)
         ax.text(20*10, du*(2-i) + du*0.05 + U_nodes[c0:c0+nshow,i].max(), f"PC {i+1:d}", 
                          color=p[0].get_color(), ha="right")
-    ax.set_ylim([-du*0.8,du*2.4])
+    ax.set_ylim([-du*0.5,du*2.])
     ax.axis("off")
     ax.text(0,0.1, "clusters sorted x", transform=ax.transAxes)
     ax.text(0,0., "upsampled nodes -", transform=ax.transAxes)
@@ -194,7 +195,7 @@ def panels_raster(fig, grid, il, yratio, X_embs, cc_embs, div_map=None, mod_name
         #ax.text(0.05, 1.02, titles[k], transform=ax.transAxes, ha="left", fontsize="large")
         ax.set_title(titles[k])
         if k==0 and mod_names is not None: 
-            mod_names_sort = np.array(mod_names.copy())[np.array([3, 4, 0, 2, 1])]#[2,0,3,4,1])]
+            mod_names_sort = np.array(mod_names.copy())[np.array([1, 2, 3, 0, 4])]
             # create bar with colors 
             cax = fig.add_axes([pos[0]+pos[2]*1.01, pos[1], pos[2]*0.01, pos[3]])
             cax.imshow(emb_cols[:,np.newaxis], aspect="auto")
@@ -240,7 +241,7 @@ def panels_raster(fig, grid, il, yratio, X_embs, cc_embs, div_map=None, mod_name
 
 def panels_responses(grid, transl, il, div_map, seqcurves0, seqcurves1, tcurves, xresp, 
                      emb_cols, mod_names):
-    mod_names_sort = np.array(mod_names.copy())[np.array([3, 4, 0, 2, 1])]
+    mod_names_sort = np.array(mod_names.copy())[np.array([1, 2, 3, 0, 4])]
     ax = plt.subplot(grid[1:3, 4])
     pos = ax.get_position().bounds
     ax.set_position([pos[0]-0.02, pos[1]+pos[3]*0.1, pos[2]+0.03, pos[3]*0.82])
@@ -249,7 +250,8 @@ def panels_responses(grid, transl, il, div_map, seqcurves0, seqcurves1, tcurves,
                                                         wspace=0.1, hspace=0.6)
     ax.remove()
 
-    ids = [3, 2, 0, 4]#[0, 1, 2, 4]
+    #ids = [3, 2, 0, 4]#[0, 1, 2, 4]
+    ids = [1, 3, 2, 0]
     nsp = [4, 3, 4, 4]
     xlabels = ["position", "stim id", "position", "time (sec.)"]
     for a in range(4):
@@ -284,10 +286,11 @@ def panels_responses(grid, transl, il, div_map, seqcurves0, seqcurves1, tcurves,
                     ha="center", fontsize="large")
     return il 
 
-def panels_embs(grid, transl, il, xi_all, embs_all, alg_cols, mod_names=None, y=3):
+def panels_embs(grid, transl, il, xi_all, embs_all, alg_cols, mod_names=None, y=3,
+                title="benchmarking embedding algorithms"):
     ax = plt.subplot(grid[y, :3])
     pos = ax.get_position().bounds
-    ax.set_position([pos[0]+0.01, pos[1]-0.02, pos[2]-0.02, pos[3]])
+    ax.set_position([pos[0]-0.01, pos[1]-0.02, pos[2]-0.0, pos[3]])
     ax.remove()
     grid1 = matplotlib.gridspec.GridSpecFromSubplotSpec(1, 7 + (mod_names is not None), subplot_spec=ax, 
                                                     wspace=0.11, hspace=0.2)
@@ -295,7 +298,7 @@ def panels_embs(grid, transl, il, xi_all, embs_all, alg_cols, mod_names=None, y=
     if mod_names is not None:
         ax = plt.subplot(grid1[0])
         il = plot_label(ltr, il, ax, transl, fs_title)
-        ax.text(0, 7000, "benchmarking embedding algorithms", fontsize="large")
+        ax.text(0, 7000, title, fontsize="large")
         ht=ax.text(-1500, 3000, "ground-truth", va="center")
         ht.set_rotation(90)
         xip = metrics.emb_to_idx(xi_all.copy())
@@ -322,7 +325,7 @@ def panels_embs(grid, transl, il, xi_all, embs_all, alg_cols, mod_names=None, y=
                 ax.plot([0, len(xip)], 6000 - ((i+1) * 1000 * np.ones(2)), "--", color="k", lw=0.5)
         elif k==0:
             il = plot_label(ltr, il, ax, transl, fs_title)
-            ax.text(0, 7000, "benchmarking embedding algorithms", fontsize="large")
+            ax.text(0, 7000, title, fontsize="large")
             ht=ax.text(-1500, 3000, "ground-truth", va="center")
             ht.set_rotation(90)
         ax.set_yticks([])
@@ -337,13 +340,13 @@ def panels_embs(grid, transl, il, xi_all, embs_all, alg_cols, mod_names=None, y=
         
     return il
 
-def panels_scores(grid, transl, il, scores_all, alg_cols, mod_names):
+def panels_scores(grid, transl, il, scores_all, alg_cols, mod_names, y=3, x=3):
     ts = 100 * scores_all[:,1].mean(axis=0)
     ts_sem = 100 * scores_all[:,1].std(axis=0) / (scores_all.shape[0]-1)**0.5
     cs = 100 * scores_all[:,0].mean(axis=0)
     cs_sem = 100 * scores_all[:,0].std(axis=0) / (scores_all.shape[0]-1)**0.5
 
-    ax = plt.subplot(grid[3,3])
+    ax = plt.subplot(grid[y,x])
     il = plot_label(ltr, il, ax, transl, fs_title)
     for k in range(7):
         ax.errorbar(np.arange(5), ts[k], ts_sem[k], lw=2,
@@ -351,12 +354,12 @@ def panels_scores(grid, transl, il, scores_all, alg_cols, mod_names):
     ax.plot(100 * np.ones(5) / 3., color="k", linestyle="--")
     ax.text(0, 33, "chance", va="top")
     ax.set_ylabel("% correct triplets")
-    ax.set_ylim([28, 83])
+    ax.set_ylim([28, 88 if ts.max() < 88 else 91])
     ax.set_xticks(np.arange(0, 5))
     ax.set_xticklabels(mod_names, 
                         rotation=30, ha="right", rotation_mode="anchor")
 
-    ax = plt.subplot(grid[3,4])
+    ax = plt.subplot(grid[y,x+1])
     il = plot_label(ltr, il, ax, transl, fs_title)
     for k in range(7):
         ax.errorbar(np.arange(5), cs[k], cs_sem[k], lw=2, 
@@ -384,7 +387,8 @@ def _fig1(kmeans_img, xi_all, cc_tdelay, tshifts, BBt_log, BBt_travel,
     # divide up plot into modules
     #div_map = [[0, 35], [35, 63], [67, 102], [106, 172], [174, 196]]
     #mod_names = ["tuning", "sustained", "sequence 1", "sequence 2", "power-law"]
-    div_map = [[5, 42], [43, 108], [109, 136], [136, 170], [174, 199]]
+    #div_map = [[5, 42], [43, 108], [109, 136], [136, 170], [174, 199]]
+    div_map = [[0, 29], [29,64], [65,101], [101, 130], [130,199]]
     
     il = 0
     il = panels_schematic(fig, grid, il, cc_tdelay, tshifts, BBt_log, BBt_travel, 
@@ -415,9 +419,7 @@ def fig1(root, save_figure=True):
 
     fig = _fig1(kmeans_img, **d1, **d2);
     if save_figure:
-        fig.savefig(os.path.join(root, "figures", "fig1.pdf"), dpi=200)
-
-            
+        fig.savefig(os.path.join(root, "figures", "fig1.pdf"), dpi=200)            
 
 def panel_mnn(ax, mnn_all, knn, cols):
     ms = 100 * mnn_all.mean(axis=0)
@@ -426,7 +428,7 @@ def panel_mnn(ax, mnn_all, knn, cols):
     for k in range(len(ms)):
         ax.errorbar(knn/2000*100, ms[k], ms_sem[k], lw=2,
                     color=cols[k], zorder=0 if k>0 else 5)
-    ax.set_ylim([0, 63])
+    ax.set_ylim([0, 68])
     ax.set_ylabel("% neighbors preserved")
     ax.set_xlabel("top n % of neighbors")
 
@@ -464,7 +466,7 @@ def panels_scores_tsne_umap(fig, grid, il, transl, scores_all, mnn_all, knn,
     ax.plot(100 * np.ones(5) / 3., color="k", linestyle="--")
     ax.text(0, 33, "chance", va="top")
     ax.set_ylabel("% correct triplets")
-    ax.set_ylim([28, 83])
+    ax.set_ylim([28, 88])
     ax.set_xticks(np.arange(0, 5))
     ax.set_xticklabels(mod_names, 
                         rotation=30, ha="right", rotation_mode="anchor")
@@ -519,7 +521,6 @@ def suppfig_scores(root, save_figure=True):
                     ha="left", va="top", color=alg_cols[k])
     ax.axis("off")
 
-
     scores_rmap = d2["scores_all"][:,:,0]
     mnn_rmap = dneigh["mnn_all"][:,0]
     knn = dneigh["knn"]
@@ -551,23 +552,23 @@ def suppfig_spont(root, save_fig=True):
     corrs_all = dat["corrs_all"]
     xi_all = dat["xi_all"]
     il = 0
-    fig = plt.figure(figsize=(14,8))
-    yratio = 14 / 8
-    grid = plt.GridSpec(3,6, figure=fig, left=0.02, right=0.97, top=0.95, bottom=0.09, 
-                        wspace = 0.35, hspace = 0.25)
+    fig = plt.figure(figsize=(14,10))
+    yratio = 14 / 10
+    grid = plt.GridSpec(4,6, figure=fig, left=0.03, right=0.99, top=0.96, bottom=0.09, 
+                        wspace = 0.35, hspace = 0.35)
 
     ### gray background
     ax = plt.subplot(grid[:2, 3:])
     pos = ax.get_position().bounds
-    ax.set_position([pos[0]-0.01, pos[1]-0.01, pos[2]*1.08, pos[3]*1.06])
+    ax.set_position([pos[0]-0.01, pos[1]-0.01, pos[2]*1.03, pos[3]*1.06])
     pos = ax.get_position().bounds
     ax.spines["left"].set_visible(0)
     ax.spines["bottom"].set_visible(0)
     ax.patch.set_facecolor(0.9 * np.ones(3))
     ax.set_xticks([])
     ax.set_yticks([])
-    xx = 0.835
-    ax = fig.add_subplot([xx, 0.07, pos[2]+pos[0]-xx, 0.4])
+    xx = 0.86
+    ax = fig.add_subplot([xx, 0.3, pos[2]+pos[0]-xx, 0.4])
     ax.spines["left"].set_visible(0)
     ax.spines["bottom"].set_visible(0)
     ax.patch.set_facecolor(0.9 * np.ones(3))
@@ -575,7 +576,7 @@ def suppfig_spont(root, save_fig=True):
     ax.set_yticks([])
 
     transl = mtransforms.ScaledTranslation(-15 / 72, 7 / 72, fig.dpi_scale_trans)
-    titles = [" simulated neurons sorted by rastermap", " simulated neurons sorted by t-SNE"]
+    titles = [" power-law only simulation, sorted by rastermap", " sorted by t-SNE"]
     nn = X_embs[0].shape[0]
     for k in range(2):
         ax = plt.subplot(grid[k,0:3])
@@ -623,24 +624,50 @@ def suppfig_spont(root, save_fig=True):
         ax.invert_yaxis()
         ax.axis("off")
 
-    transl = mtransforms.ScaledTranslation(-18 / 72, 25 / 72, fig.dpi_scale_trans)
-    il = panels_embs(grid, transl, il, xi_all, embs, alg_cols, mod_names=None, y=2)
+    transl = mtransforms.ScaledTranslation(-12 / 72, 25 / 72, fig.dpi_scale_trans)
+    il = panels_embs(grid, transl, il, xi_all, embs, alg_cols, 
+                     mod_names=None, y=2, title="embedding sortings, power-law only")
 
-    transl = mtransforms.ScaledTranslation(-40 / 72, 1 / 72, fig.dpi_scale_trans)
-    ax = plt.subplot(grid[-1, -3:-1])
+    transl = mtransforms.ScaledTranslation(-60 / 72, 1 / 72, fig.dpi_scale_trans)
+    ax = plt.subplot(grid[2, -3:-1])
     il = plot_label(ltr, il, ax, transl, fs_title)
     pos = ax.get_position().bounds
-    ax.set_position([pos[0]+0.01, pos[1]+0.015, pos[2], pos[3]])
+    ax.set_position([pos[0]+0.01, pos[1]+0.0, pos[2]*1.06, pos[3]])
     for k in range(7):
         ax.scatter(np.ones(10)*k, corrs_all[:,k], s=15, color=alg_cols[k])
         ax.plot(k + np.array([-0.3, 0.3]), corrs_all[:,k].mean() * np.ones(2), 
                 color=alg_cols[k], lw=2)
-        ax.text(k, -0.05, alg_names[k], color=alg_cols[k], rotation=90, fontsize="small", 
-                va="top", ha="center")
+        if k==4 or k==5:
+            ax.text(k-0.2, -0.03, alg_names[k], color=alg_cols[k], rotation=30, 
+                fontsize="small", va="top", ha="center")
+        else:
+            ax.text(k, -0.06, alg_names[k], color=alg_cols[k], rotation=0, 
+                fontsize="small", va="top", ha="center")
     ax.set_ylabel("correlation w/ ground-truth")
     ax.set_xticks(np.arange(0, 7))
     ax.set_xticklabels([])
     plt.ylim([-0.01, 1.01])
+
+    ax = plt.subplot(grid[-1, :])
+    pos = ax.get_position().bounds
+    ax.set_position([pos[0]-0.0, pos[1]-pos[3]*0.1, pos[2], pos[3]])
+    ax.axis("off")
+    grid1 = matplotlib.gridspec.GridSpecFromSubplotSpec(1,5, subplot_spec=ax, 
+                                                        wspace=0.5, hspace=0.)
+    ax.remove()
+
+
+    dat = np.load(os.path.join(root, "simulations", "sim_no_add_spont_performance.npz"))
+    scores_all = dat["scores_all"]
+    embs = dat["embs_all"][0]
+    xi_all = dat["xi_all"]
+    transl = mtransforms.ScaledTranslation(-13 / 72, 25 / 72, fig.dpi_scale_trans)
+    il = panels_embs(grid1, transl, il, xi_all, embs, alg_cols, 
+                     mod_names=mod_names, y=0, title="embedding sortings, no power-law noise")
+    
+    transl = mtransforms.ScaledTranslation(-30 / 72, 5 / 72, fig.dpi_scale_trans)
+    panels_scores(grid1, transl, il, scores_all, alg_cols, mod_names, y=0)
+    
 
     if save_fig:
         fig.savefig(os.path.join(root, "figures", "suppfig_spont.pdf"), dpi=200)
@@ -660,11 +687,11 @@ def suppfig_repro(root, save_fig=True):
     il = plot_label(ltr, il, ax, transl, fs_title)
     for k in range(2):
         ax.scatter(np.tile(np.arange(5)[:,np.newaxis], (1,20)) + np.random.randn(5,20)*0.05 + (k-0.5)*0.3, 
-                    100 * scores_all[k*20:(k+1)*20,1].T, 
+                    100 * scores_all[1, k*20:(k+1)*20].T, 
                     s=15, color=alg_cols[k])
         #ax.errorbar(np.arange(5), ts[k], ts_sem[k], lw=1,
         #            color=alg_cols[k], zorder=0 if k>0 else 5)
-        ax.text(-0.3, 80-k*8, alg_names[k], color=alg_cols[k])
+        ax.text(-0.3, 83-k*6, alg_names[k], color=alg_cols[k])
     ax.plot(100 * np.ones(5) / 3., color="k", linestyle="--")
     ax.text(0, 33, "chance", va="top")
     ax.set_ylabel("% correct triplets")
@@ -678,7 +705,7 @@ def suppfig_repro(root, save_fig=True):
     ax = plt.subplot(grid[0,1])
     for k in range(2):
         ax.scatter(np.tile(np.arange(5)[:,np.newaxis], (1,20)) + np.random.randn(5,20)*0.05 + (k-0.5)*0.3, 
-                    100 * scores_all[k*20:(k+1)*20,0].T, 
+                    100 * scores_all[0, k*20:(k+1)*20].T, 
                     s=15, color=alg_cols[k])
     ax.plot(100 * np.array([5./6, 5./6, 5./6, 5./6, 2./3]), color="k", linestyle="--")
     ax.text(0, 85, "chance")
@@ -722,7 +749,7 @@ def suppfig_params(root, save_fig=True):
                         wspace = 0.35, hspace = 0.6)
 
     vmin = [28, 0]
-    vmax = [83, 85]
+    vmax = [88, 85]
 
     transl = mtransforms.ScaledTranslation(-35 / 72, 15 / 72, fig.dpi_scale_trans)
 
@@ -779,14 +806,13 @@ def suppfig_params(root, save_fig=True):
             ax.set_xticklabels([str(t) for t in np.unique(loc)], rotation=90)
             ax.set_yticklabels([str(t) for t in np.unique(tl)])
             if j==0:
-                ax.text(0.7, 1.3, tstr[k], transform=ax.transAxes)
-                cax = ax.inset_axes([0.95, 1.2, 0.3, 0.05])
+                ax.text(1.55, 1.3, tstr[k], transform=ax.transAxes, ha="center")
+                cax = ax.inset_axes([1.4, 1.2, 0.3, 0.05])
                 plt.colorbar(im, cax=cax, orientation="horizontal")
-                if k==1:
-                    ax.set_xlabel("locality")
-                else:
-                    il = plot_label(ltr, il, ax, transl, fs_title)
+                ax.set_xlabel("locality")
                 ax.set_ylabel("time_lag_window")
+                if k==0:
+                    il = plot_label(ltr, il, ax, transl, fs_title)
 
     if save_fig:
         fig.savefig(os.path.join(root, "figures", "suppfig_params.pdf"), dpi=200)
