@@ -126,16 +126,14 @@ Short example code snippet for running rastermap:
 ```
 import numpy as np
 import matplotlib.pyplot as plt
-from rastermap import Rastermap, utils
-from scipy.stats import zscore
+from rastermap import Rastermap
 
 # spks is neurons by time
 spks = np.load("spks.npy").astype("float32")
-spks = zscore(spks, axis=1)
 
 # fit rastermap
 model = Rastermap(n_PCs=200, n_clusters=100, 
-                  locality=0.75, time_lag_window=5).fit(spks, compute_X_embedding=True)
+                  locality=0.75, time_lag_window=5).fit(spks)
 y = model.embedding # neurons x 1
 isort = model.isort
 
