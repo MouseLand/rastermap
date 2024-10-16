@@ -45,7 +45,7 @@ Linux, Windows and Mac OS are supported for running the code. For running the gr
 
 ### Instructions
 
-Recommended to install an [Anaconda](https://www.anaconda.com/download/) distribution of Python -- Choose **Python 3.x** and your operating system. Note you might need to use an anaconda prompt (windows) if you did not add anaconda to the path. Open an anaconda prompt / command prompt with **python 3** in the path, then:
+We recommend to install a [miniforge](https://github.com/conda-forge/miniforge) (conda-based) distribution of Python. Note you might need to use an anaconda prompt (windows) if you did not add anaconda to the path. Open an anaconda prompt / command prompt with **python 3** in the path, then:
 
 ~~~sh
 pip install rastermap
@@ -59,13 +59,12 @@ pip install rastermap[gui]
 Rastermap has only a few dependencies so you may not need to make a special environment for it 
 (e.g. it should work in a `suite2p` or `facemap` environment), but if the pip install above does not work,
  please follow these instructions:
-
-1. Open an anaconda prompt / command prompt with `conda` for **python 3** in the path.
-2. Create a new environment with `conda create --name rastermap python=3.8`. Python 3.9 and 3.10 will likely work fine as well.
+ 
+1. Open an anaconda prompt / command prompt which has `conda` for **python 3** in the path
+3. Create a new environment with `conda create --name rastermap python=3.9`. We recommend python 3.9, but python 3.8, 3.9 and 3.11 will also work.
 4. To activate this new environment, run `conda activate rastermap`
-5. To install the minimal version of rastermap, run `pip install rastermap`.  
-6. To install rastermap and the GUI, run `pip install rastermap[gui]`. If you're on a zsh server, you may need to use ' ' around the rastermap[gui] call: `pip install 'rastermap[gui]'`.
-
+5. (option 1) To install rastermap with the GUI, run `python -m pip install rastermap[gui]`.  If you're on a zsh server, you may need to use ' ': `python -m pip install 'rastermap[gui]'`.
+6. (option 2) To install rastermap without the GUI, run `python -m pip install rastermap`. 
 To upgrade rastermap (package [here](https://pypi.org/project/rastermap/)), run the following in the environment:
 
 ~~~sh
