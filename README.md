@@ -17,6 +17,28 @@ Rastermap is a discovery algorithm for neural data. The algorithm was written by
 
 Stringer C., Zhong L., Syeda A., Du F., Kesa M., & Pachitariu M. (2024). Rastermap: a discovery method for neural population recordings. *Nature Neuroscience*. https://doi.org/10.1038/s41593-024-01783-4.
 
+Table of Contents
+=================
+
+* [Rastermap](#rastermap)
+      * [Example notebooks](#example-notebooks)
+* [Installation](#installation)
+   * [Local installation (&lt; 2 minutes)](#local-installation--2-minutes)
+      * [System requirements](#system-requirements)
+      * [Instructions](#instructions)
+      * [Dependencies](#dependencies)
+* [Using rastermap](#using-rastermap)
+   * [GUI](#gui)
+   * [In a notebook](#in-a-notebook)
+   * [From the command line](#from-the-command-line)
+   * [From MATLAB](#from-matlab)
+* [Inputs](#inputs)
+* [Settings](#settings)
+* [Outputs](#outputs)
+* [License](#license)
+
+### Example notebooks
+
 Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for running it easily. Rastermap can also be run in a jupyter notebook locally or on google colab, see these demos:
 * [rastermap_largescale.ipynb](notebooks/rastermap_largescale.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_largescale.ipynb) shows how to use it with large-scale data from mouse cortex (> 200 neurons) 
 * [rastermap_singleneurons.ipynb](notebooks/rastermap_singleneurons.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_singleneurons.ipynb) shows how to use it with small to medium sized data (< 200 neurons), in this case recorded from rat hippocampus 
