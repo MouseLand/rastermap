@@ -15,26 +15,32 @@ def mainmenu(parent):
 
     file_menu = main_menu.addMenu("&File")
 
-    loadMat = QAction("&Load data matrix", parent)
+    loadMat = QAction("&Load data matrix (neurons by time)", parent)
     loadMat.setShortcut("Ctrl+L")
     loadMat.triggered.connect(lambda: io.load_mat(parent, name=None))
     parent.addAction(loadMat)
     file_menu.addAction(loadMat)
 
-    parent.loadXY = QAction("&Load xy(z) positions of neurons", parent)
+    loadSt = QAction("Load spike_times and spike_&Clusters", parent)
+    loadSt.setShortcut("Ctrl+C")
+    loadSt.triggered.connect(lambda: io.load_st_clu(parent, name=None))
+    parent.addAction(loadSt)
+    file_menu.addAction(loadSt)
+
+    parent.loadXY = QAction("Load &XY(z) positions of neurons", parent)
     parent.loadXY.setShortcut("Ctrl+X")
     parent.loadXY.triggered.connect(lambda: io.load_neuron_pos(parent))
     parent.addAction(parent.loadXY)
     file_menu.addAction(parent.loadXY)
 
     # load Z-stack
-    parent.loadProc = QAction("&Load z-stack (mean images)", parent)
+    parent.loadProc = QAction("Load &Z-stack (mean images)", parent)
     parent.loadProc.setShortcut("Ctrl+Z")
     parent.loadProc.triggered.connect(lambda: io.load_zstack(parent, name=None))
     parent.addAction(parent.loadProc)
     file_menu.addAction(parent.loadProc)
 
-    parent.loadNd = QAction("Load &n-d variable (times or cont.)", parent)
+    parent.loadNd = QAction("Load &N-d variable (times or cont.)", parent)
     parent.loadNd.setShortcut("Ctrl+N")
     parent.loadNd.triggered.connect(lambda: io.get_behav_data(parent))
     parent.loadNd.setEnabled(False)

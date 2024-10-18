@@ -82,7 +82,10 @@ class RunWindow(QDialog):
         ops_path = os.path.join(os.getcwd(), "rmap_ops.npy")
         np.save(ops_path, self.ops)
         print("Running rastermap with command:")
-        cmd = f"-u -W ignore -m rastermap --ops {ops_path} --S {parent.fname}"
+        if parent.from_spike_times:
+            cmd = f"-u -W ignore -m rastermap --ops {ops_path} --spike_times {parent.fname} --spike_clusters {parent.fname_cluid} --st_bin {parent.st_bin}"
+        else:
+            cmd = f"-u -W ignore -m rastermap --ops {ops_path} --S {parent.fname}"
         if parent.file_iscell is not None:
             cmd += f" --iscell {parent.file_iscell}"
         print("python " + cmd)

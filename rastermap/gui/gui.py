@@ -178,6 +178,7 @@ class MainW(QMainWindow):
         # Default variables
         self.tpos = -0.5
         self.tsize = 1
+        self.from_spike_times = False
         self.reset_variables()
 
         self.init_time_roi()

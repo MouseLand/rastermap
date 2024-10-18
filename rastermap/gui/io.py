@@ -4,12 +4,13 @@ Copright © 2023 Howard Hughes Medical Institute, Authored by Carsen Stringer an
 import os
 import numpy as np
 from qtpy import QtGui, QtCore, QtWidgets
-from qtpy.QtWidgets import QFileDialog, QInputDialog, QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox
+from qtpy.QtWidgets import QFileDialog, QDialog, QInputDialog, QMainWindow, QApplication, QWidget, QScrollBar, QSlider, QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QLineEdit, QMessageBox, QGroupBox
 import pyqtgraph as pg
 from scipy.stats import zscore
+from scipy.sparse import csr_array
 import scipy.io as sio
 from . import guiparts
-from ..io import _load_iscell, _load_stat, load_activity
+from ..io import _load_iscell, _load_stat, load_activity, load_spike_times
 
 def _load_activity_gui(parent, X, Usv, Vsv, xy):
     parent.reset_variables()
@@ -54,6 +55,66 @@ def _load_activity_gui(parent, X, Usv, Vsv, xy):
     parent.sorting = np.arange(0, parent.n_samples).astype(np.int64)
     _load_sp(parent)
     
+
+class SpikeTimeLoad(QDialog):
+    def __init__(self, parent=None):
+        super().__init__()
+        self.parent = parent
+        self.layout = QGridLayout(self)
+        self.files, self.file_labels = [], []
+        lbl = ["spike_times", "spike_clusters"]
+        for j in range(2):
+            self.files.append(QPushButton(f"Choose {lbl[j]} file", self))
+            self.files[-1].clicked.connect(lambda state, idx=j: self.get_file(idx))
+            self.layout.addWidget(self.files[-1], j, 0, 1, 1)
+            self.file_labels.append(QLabel("", self))
+            self.layout.addWidget(self.file_labels[-1], j, 1, 1, 1)
+
+        # time bin size lineedit
+        self.time_bin = QLineEdit("100", self)
+        self.layout.addWidget(self.time_bin, 2, 1, 1, 1)
+        self.layout.addWidget(QLabel("Time bin size (in millisec.)", self), 2, 0, 1, 1)
+
+        # Submit button
+        self.submit_button = QPushButton("Submit", self)
+        self.submit_button.clicked.connect(self.submit)
+        self.layout.addWidget(self.submit_button, 3, 0, 1, 2)
+
+        self.setWindowTitle("spike time input")
+        self.show()
+
+    def get_file(self, j):
+        name = QFileDialog.getOpenFileName(self, "Open *.npy or *.mat",
+                                           filter="*.npy *.mat")
+        self.file_labels[j].setText(name[0])
+        
+    def submit(self):
+        if not self.file_labels[0].text() or not self.file_labels[1].text():
+            QMessageBox.critical(self, 'Error', 'Both files are required!')
+        else:
+            fname = self.file_labels[0].text()
+            fname_cluid = self.file_labels[1].text()
+            st_bin = float(self.time_bin.text())
+            st_bin = min(5000, max(5, st_bin))
+            print(f"setting bin size to {st_bin} for visualization")
+            _load_spike_times(self.parent, fname, fname_cluid, st_bin)
+
+def _load_spike_times(parent, fname, fname_cluid, st_bin):
+    spks = load_spike_times(fname, fname_cluid, st_bin)
+    parent.fname = fname 
+    parent.fname_cluid = fname_cluid
+    parent.st_bin = st_bin
+    parent.from_spike_times = True
+    _load_activity_gui(parent, spks, None, None, None)
+
+def load_st_clu(parent, name=None):
+    """ load spike times of neurons (*.npy or *.mat) """
+    if name is None:
+        st = SpikeTimeLoad(parent)
+        st.exec_()
+    
+
+        
 def load_mat(parent, name=None):
     """ load data matrix of neurons by time (*.npy or *.mat)
     
@@ -361,13 +422,27 @@ def load_proc(parent, name=None):
         else:
             print(f"ERROR: {parent.proc['filename']} not found")
             return
+        
+        if parent.proc["filename_cluid"]:
+            if os.path.exists(parent.proc["filename_cluid"]):
+                parent.fname_cluid = parent.proc["filename_cluid"]
+            elif os.path.exists(os.path.join(foldername, filename)):
+                parent.fname_cluid = os.path.join(foldername, filename)
+            else:
+                print(f"ERROR: {parent.proc['filename_cluid']} not found")
+                return
+            parent.st_bin = parent.proc["st_bin"]
+        
 
         isort = parent.proc["isort"]
         y = parent.proc["embedding"]
         ops = parent.proc["ops"]
         user_clusters = parent.proc.get("user_clusters", None)
-        
-        X, Usv, Vsv, xy = load_activity(parent.fname)
+        if parent.proc["filename_cluid"]:
+            Usv, Vsv, xy = None, None, None
+            X = load_spike_times(parent.fname, parent.fname_cluid, parent.st_bin)
+        else:
+            X, Usv, Vsv, xy = load_activity(parent.fname)
         _load_activity_gui(parent, X, Usv, Vsv, xy)
         
     except Exception as e:

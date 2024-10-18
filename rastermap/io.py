@@ -5,6 +5,7 @@ import os, warnings
 import numpy as np
 import scipy.io as sio
 from scipy.stats import zscore
+from scipy.sparse import csr_array
 
 def _load_dict(dat, keys):
     X, Usv, Vsv, xpos, ypos, xy = None, None, None, None, None, None
@@ -156,6 +157,16 @@ def load_activity(filename):
     
     return X, Usv, Vsv, xy
 
+def load_spike_times(fname, fname_cluid, st_bin=100):
+    print("Loading " + fname)
+    st = np.load(fname).squeeze()
+    clu = np.load(fname_cluid).squeeze()
+    if len(st) != len(clu):
+        raise ValueError("spike times and clusters must have same length")
+    spks = csr_array((np.ones(len(st), "uint8"), 
+                    (clu, np.floor(st / st_bin * 1000).astype("int"))))
+    spks = spks.todense().astype("float32")
+    return spks
 
 def _cell_center(voxel_mask):
     x = np.median(np.array([v[0] for v in voxel_mask]))

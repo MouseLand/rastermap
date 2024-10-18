@@ -6,7 +6,7 @@ import numpy as np
 import argparse
 import os
 from rastermap import Rastermap
-from rastermap.io import load_activity
+from rastermap.io import load_activity, load_spike_times
 
 try:
     from rastermap.gui import gui
@@ -24,6 +24,9 @@ except Exception as err:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="spikes")
     parser.add_argument("--S", default=[], type=str, help="spiking matrix")
+    parser.add_argument("--spike_times", default=[], type=str, help="spike_times.npy")
+    parser.add_argument("--spike_clusters", default=[], type=str, help="spike_clusters.npy")
+    parser.add_argument("--st_bin", default=100, type=float, help="bin size in milliseconds for spike times")
     parser.add_argument("--proc", default=[], type=str,
                         help="processed data file 'embedding.npy'")
     parser.add_argument("--ops", default=[], type=str, help="options file 'ops.npy'")
@@ -31,8 +34,13 @@ if __name__ == "__main__":
                         help="which cells to select for processing")
     args = parser.parse_args()
 
-    if len(args.ops) > 0 and len(args.S) > 0:
-        X, Usv, Vsv, xy = load_activity(args.S)
+    if len(args.ops) > 0 and (len(args.S) > 0 or 
+            (len(args.spike_times) > 0 and len(args.spike_clusters) > 0)):
+        if len(args.S) > 0:
+            X, Usv, Vsv, xy = load_activity(args.S)
+        else:
+            Usv, Vsv, xy = None, None, None 
+            X = load_spike_times(args.spike_times, args.spike_clusters, args.st_bin)
         ops = np.load(args.ops, allow_pickle=True).item()
         if len(args.iscell) > 0:
             iscell = np.load(args.iscell)
@@ -62,14 +70,16 @@ if __name__ == "__main__":
         model.fit(data=X, Usv=Usv, Vsv=Vsv)
 
         proc = {
-            "filename": args.S,
-            "save_path": os.path.split(args.S)[0],
+            "filename": args.S if len(args.S) > 0 else args.spike_times,
+            "filename_cluid": args.spike_clusters if args.spike_clusters else None,
+            "st_bin": args.st_bin if args.spike_clusters else None,
+            "save_path": os.path.split(args.S)[0] if args.S else os.path.split(args.spike_times)[0],
             "isort": model.isort,
             "embedding": model.embedding,
             "user_clusters": None,
             "ops": ops,
         }
-        basename, fname = os.path.split(args.S)
+        basename, fname = os.path.split(args.S) if args.S else os.path.split(args.spike_times)
         fname = os.path.splitext(fname)[0]
         try:
             np.save(os.path.join(basename, f"{fname}_embedding.npy"), proc)

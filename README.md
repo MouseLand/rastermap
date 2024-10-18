@@ -198,6 +198,18 @@ Most of the time you will input to `Rastermap().fit` a matrix of neurons by time
 * **itrain** : array, shape (n_features,) (optional, default None)
     fit embedding on timepoints itrain only
 
+If you have a `spike_times.npy` and `spike_clusters.npy`, create your time-binned data 
+matrix with, where the bin size `st_bin` is in milliseconds (assuming your spike times are in seconds):
+
+```
+from rastermap import io 
+
+# bin spike times into neurons by time matrix
+data = io.load_spike_times("spike_times.npy", "spike_clusters.npy", st_bin=100)
+```
+
+You can also load these matrices into the GUI with the `File > Load spike_times...` option.
+
 # Settings
 
 These are inputs to the `Rastermap` class initialization, the settings are sorted in order of importance 
