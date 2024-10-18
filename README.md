@@ -53,10 +53,6 @@ Here is what the output looks like for a segment of a mesoscope recording in a m
 
 <img src="https://www.suite2p.org/static/images/rastermap_spont.png" width="800" alt="random sorting and rastermap sorting of spontaneous activity"/>
 
-Here is what the output looks like for a recording of wholebrain neural activity in a larval zebrafish from Chen, Mu, Hu, Kuan et al 2018 (dataset [here](https://figshare.com/articles/Whole-brain_light-sheet_imaging_data/7272617/1)). The plot on the left shows the sorted activity, and the right plot is the 2D positions of the neurons in the tissue, divided into 18 clusters according to their 1D position in the Rastermap embedding:
-
-<img src="https://www.suite2p.org/static/images/rastermap_zebrafish.PNG" width="800" alt="wholebrain neural activity from a zebrafish sorted by rastermap"/>
-
 # Installation
 
 ## Local installation (< 2 minutes)
