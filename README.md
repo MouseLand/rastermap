@@ -21,7 +21,7 @@ Table of Contents
 =================
 
 * [Rastermap](#rastermap)
-      * [Example notebooks](#example-notebooks)
+    * [Example notebooks](#example-notebooks)
 * [Installation](#installation)
    * [Local installation (&lt; 2 minutes)](#local-installation--2-minutes)
       * [System requirements](#system-requirements)
@@ -37,7 +37,7 @@ Table of Contents
 * [Outputs](#outputs)
 * [License](#license)
 
-### Example notebooks
+## Example notebooks
 
 Rastermap runs in python 3.8+ and has a graphical user interface (GUI) for running it easily. Rastermap can also be run in a jupyter notebook locally or on google colab, see these demos:
 * [rastermap_largescale.ipynb](notebooks/rastermap_largescale.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_largescale.ipynb) shows how to use it with large-scale data from mouse cortex (> 200 neurons) 
