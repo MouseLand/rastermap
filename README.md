@@ -15,6 +15,10 @@
 
 Rastermap is a discovery algorithm for neural data. The algorithm was written by Carsen Stringer and Marius Pachitariu. For support,  please open an [issue](https://github.com/MouseLand/rastermap/issues). Please see install instructions [below](README.md/#Installation). Check out the [**paper**](https://www.nature.com/articles/s41593-024-01783-4) and the [**tutorial video**](https://youtu.be/oQHq7yUWn2k) for more info. Rastermap runs in python 3.8+ and has a [**graphical user interface (GUI)**](#gui) for running it easily.
 
+Here is what the output looks like for 34,000 neurons recorded simultaneously in mouse cortex during spontaneous activity, compared to random neural sorting:
+
+<img src="https://www.suite2p.org/static/images/rastermap_spont.png" width="600" alt="random sorting and rastermap sorting of spontaneous activity"/>
+
 **If you use Rastermap or analysis code in this repo in your work, please cite the paper:**
 Stringer C., Zhong L., Syeda A., Du F., Kesa M., & Pachitariu M. (2024). Rastermap: a discovery method for neural population recordings. *Nature Neuroscience*. https://doi.org/10.1038/s41593-024-01783-4.
 
@@ -47,11 +51,7 @@ Table of Contents
 * [rastermap_interactive.ipynb](notebooks/rastermap_interactive.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/rastermap_interactive.ipynb) allows running Rastermap in an interactive way without a local installation
 * [tutorial.ipynb](notebooks/tutorial.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MouseLand/rastermap/blob/main/notebooks/tutorial.ipynb) is a guided tutorial for integrating rastermap and facemap to visualize behavioral representations. See the student/teacher versions [here](https://github.com/MouseLand/course-materials/tree/main/behavior_encoding).
 
-Also all notebooks to analyze the data and create the figures in the paper are [here](paper/). All data available [here](https://osf.io/xn4cm/). 
-
-Here is what the output looks like for a segment of a mesoscope recording in a mouse during spontaneous activity (3.2Hz sampling rate), compared to random neural sorting:
-
-<img src="https://www.suite2p.org/static/images/rastermap_spont.png" width="800" alt="random sorting and rastermap sorting of spontaneous activity"/>
+Also all notebooks to analyze the data and create the figures in the paper are [here](paper/).
 
 # Installation
 
