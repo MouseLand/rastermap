@@ -17,7 +17,7 @@ Rastermap is a discovery algorithm for neural data. The algorithm was written by
 
 Here is what the output looks like for 34,000 neurons recorded simultaneously in mouse cortex during spontaneous activity, compared to random neural sorting:
 
-<img src="https://www.suite2p.org/static/images/rastermap_spont.png" width="600" alt="random sorting and rastermap sorting of spontaneous activity"/>
+<img src="https://github.com/MouseLand/rastermap/releases/download/v1.0/rastermap_spont.png" width="600" alt="random sorting and rastermap sorting of spontaneous activity"/>
 
 **If you use Rastermap or analysis code in this repo in your work, please cite the paper:**
 Stringer C., Zhong L., Syeda A., Du F., Kesa M., & Pachitariu M. (2024). Rastermap: a discovery method for neural population recordings. *Nature Neuroscience*. https://doi.org/10.1038/s41593-024-01783-4.
@@ -120,19 +120,19 @@ GUI examples:
 
 zebrafish:
 
-<img src="https://www.suite2p.org/static/images/fish.gif" width="600" alt="wholebrain neural activity from a zebrafish sorted by rastermap"/>
+<img src="https://github.com/MouseLand/rastermap/releases/download/v1.0/fish.gif" width="600" alt="wholebrain neural activity from a zebrafish sorted by rastermap"/>
 
 mouse sensorimotor activity:
 
-<img src="https://www.suite2p.org/static/images/spont.gif" width="600" alt="sensorimotor neural activity from a mouse sorted by rastermap"/>
+<img src="https://github.com/MouseLand/rastermap/releases/download/v1.0/spont.gif" width="600" alt="sensorimotor neural activity from a mouse sorted by rastermap"/>
 
 rat hippocampus:
 
-<img src="https://www.suite2p.org/static/images/hippocampus.gif" width="600" alt="hippocampal neural activity from a rat sorted by rastermap"/>
+<img src="https://github.com/MouseLand/rastermap/releases/download/v1.0/hippocampus.gif" width="600" alt="hippocampal neural activity from a rat sorted by rastermap"/>
 
 mouse widefield:
 
-<img src="https://www.suite2p.org/static/images/widefield.gif" width="600" alt="widefield neural activity from a mouse sorted by rastermap"/>
+<img src="https://github.com/MouseLand/rastermap/releases/download/v1.0/widefield.gif" width="600" alt="widefield neural activity from a mouse sorted by rastermap"/>
 
 
 ## In a notebook
