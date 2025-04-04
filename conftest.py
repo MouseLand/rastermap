@@ -51,7 +51,7 @@ def test_file():
     ddir.mkdir(exist_ok=True)
     data_dir = ddir.joinpath('data')
     data_dir.mkdir(exist_ok=True)
-    url = "http://www.suite2p.org/static/test_data/neuropop_test_data.npz"
+    url = "https://osf.io/download/67f008f2f74150d8738b8257/"
     test_file = str(data_dir.joinpath("neuropop_test_data.npz"))
     if not os.path.exists(test_file):
         download_url_to_file(url, test_file)
