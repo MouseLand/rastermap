@@ -23,7 +23,7 @@ jupyter/__pycache__/
 .ipynb_checkpoints/
 __pycache__/
 dist/
-suite2p.egg-info/
+*.egg-info/
 build/
 suite2p/classifiers/classifier_user.npy
 suite2p/ops/ops_user.npy
