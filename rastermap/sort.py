@@ -197,7 +197,8 @@ def traveling_salesman(cc, n_iter=400, locality=0.0, circular=False,
 
     cc, inds, seg_len, start_pos, end_pos, flipped = tsp_fast(
         cc, n_iter, n_nodes, n_skip, BBt.astype(np.float32), verbose)
-    iter_completed = np.nonzero(seg_len == -1)[0][0]
+    nz = np.nonzero(seg_len == -1)[0]
+    iter_completed = nz[0] if nz.size > 0 else n_iter
     seg_len = seg_len[:iter_completed]
     start_pos = start_pos[:iter_completed]
     end_pos = end_pos[:iter_completed]
@@ -205,7 +206,8 @@ def traveling_salesman(cc, n_iter=400, locality=0.0, circular=False,
     if n_skip > 1:
         cc, inds2, seg_len2, start_pos2, end_pos2, flipped2 = tsp_fast(
             cc, n_iter, n_nodes, 1, BBt.astype(np.float32), verbose)
-        iter_completed = np.nonzero(seg_len2 == -1)[0][0]
+        nz = np.nonzero(seg_len2 == -1)[0]
+        iter_completed = nz[0] if nz.size > 0 else n_iter
         seg_len = np.append(seg_len, seg_len2[:iter_completed])
         start_pos = np.append(start_pos, start_pos2[:iter_completed])
         end_pos = np.append(end_pos, end_pos2[:iter_completed])
