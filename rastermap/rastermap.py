@@ -44,7 +44,7 @@ def highd_settings():
     settings = default_settings()
     settings["n_clusters"] = 100
     settings["n_splits"] = 3
-    settings["nPCs"] = 400
+    settings["n_PCs"] = 400
     return settings
 
 
